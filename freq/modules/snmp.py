@@ -28,6 +28,7 @@ import tempfile
 from freq.core import fmt
 from freq.core.config import FreqConfig
 from freq.core import log as logger
+from freq.core.packages import install_cmd
 
 
 # ---------------------------------------------------------------------------
@@ -960,15 +961,18 @@ def _linux_snmpd_script(target, auth):
     auth_proto = _snmp_conf_value(auth.get("auth_protocol") or "SHA")
     priv_proto = _snmp_conf_value(auth.get("priv_protocol") or "AES")
     ip = _snmp_conf_value(target.get("ip"))
+    apt_install = install_cmd("snmp snmpd", pkg_manager="apt")
+    dnf_install = install_cmd("net-snmp net-snmp-utils", pkg_manager="dnf")
+    yum_install = install_cmd("net-snmp net-snmp-utils", pkg_manager="yum")
     return f"""set -eu
 export DEBIAN_FRONTEND=noninteractive
 if command -v apt-get >/dev/null 2>&1; then
   timeout 120 apt-get update
-  timeout 180 apt-get install -y snmp snmpd
+  timeout 180 {apt_install}
 elif command -v dnf >/dev/null 2>&1; then
-  timeout 180 dnf install -y net-snmp net-snmp-utils
+  timeout 180 {dnf_install}
 elif command -v yum >/dev/null 2>&1; then
-  timeout 180 yum install -y net-snmp net-snmp-utils
+  timeout 180 {yum_install}
 else
   echo "unsupported package manager for snmpd" >&2
   exit 42

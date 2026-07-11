@@ -109,7 +109,9 @@ class TestLoginAuthContract(unittest.TestCase):
     def test_login_uses_secure_token(self):
         """Session tokens must use secrets.token_urlsafe."""
         handler = self._auth_src().split("def handle_auth_login")[1].split("\ndef ")[0]
-        self.assertIn("token_urlsafe", handler)
+        self.assertIn("establish_session", handler)
+        helper = self._auth_src().split("def establish_session")[1].split("\ndef ")[0]
+        self.assertIn("token_urlsafe", helper)
 
 
 class TestRateLimiting(unittest.TestCase):
@@ -137,14 +139,18 @@ class TestSetupPasswordStorage(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
             src = f.read()
         handler = src.split("def _serve_setup_create_admin")[1].split("def _serve_")[0]
-        self.assertIn("hash_password", handler.lower(),
+        helper = src.split("def _setup_store_admin_password")[1].split("def _setup_")[0]
+        self.assertIn("_setup_store_admin_password", handler)
+        self.assertIn("_hash_password", helper,
                        "Setup must hash password before storage")
 
     def test_setup_stores_in_vault(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
             src = f.read()
         handler = src.split("def _serve_setup_create_admin")[1].split("def _serve_")[0]
-        self.assertIn("vault_set", handler,
+        helper = src.split("def _setup_store_admin_password")[1].split("def _setup_")[0]
+        self.assertIn("_setup_store_admin_password", handler)
+        self.assertIn("vault_set", helper,
                        "Setup must store hash in vault")
 
     def test_no_plaintext_password_in_users_conf(self):

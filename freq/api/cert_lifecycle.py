@@ -50,6 +50,36 @@ def _truthy(value, default=False):
     return str(value).lower() not in ("0", "false", "no", "off", "")
 
 
+def _reverse_proxy_upstream_settings(body):
+    scheme = str(
+        body.get("reverse_proxy_upstream_scheme")
+        or body.get("upstream_scheme")
+        or "http"
+    ).strip().lower()
+    if scheme not in ("http", "https"):
+        raise ValueError("reverse_proxy_upstream_scheme must be http or https")
+    verify = _truthy(
+        body.get("reverse_proxy_upstream_tls_verify", body.get("upstream_tls_verify")),
+        scheme == "https",
+    )
+    origin_host = str(body.get("dashboard_origin_host") or body.get("origin_host") or "").strip()
+    origin_port_raw = body.get("dashboard_origin_port", body.get("origin_port", 8888))
+    try:
+        origin_port = int(origin_port_raw or 8888)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("dashboard_origin_port must be an integer") from exc
+    if origin_port < 1 or origin_port > 65535:
+        raise ValueError("dashboard_origin_port must be between 1 and 65535")
+    dashboard_hostname = str(body.get("dashboard_hostname") or "").strip().lower()
+    return {
+        "reverse_proxy_upstream_scheme": scheme,
+        "reverse_proxy_upstream_tls_verify": verify,
+        "dashboard_origin_host": origin_host,
+        "dashboard_origin_port": origin_port,
+        "dashboard_hostname": dashboard_hostname,
+    }
+
+
 def _parse_stdout(payload):
     text = (payload or "").strip()
     if not text:
@@ -86,7 +116,14 @@ def _targets_from_request(cfg, base_domain, body, settings):
     if targets:
         return _cert_targets_from_catalog(targets, base_domain, settings.get("reverse_proxy_host", "")), "service_catalog"
     infer_targets = _truthy(body.get("infer_targets"), True)
-    return (_infer_cert_targets(cfg, base_domain) if infer_targets else []), "inferred" if infer_targets else "none"
+    if not infer_targets:
+        return [], "none"
+    previous = getattr(cfg, "certificates", {})
+    try:
+        cfg.certificates = settings
+        return _infer_cert_targets(cfg, base_domain), "inferred"
+    finally:
+        cfg.certificates = previous
 
 
 def _normalize_cidrs(values):
@@ -264,6 +301,12 @@ def handle_cert_adopt_existing(handler):
         json_response(handler, {"error": f"certificate key not found: {key_path}"}, 400)
         return
 
+    try:
+        upstream = _reverse_proxy_upstream_settings(body)
+    except ValueError as exc:
+        json_response(handler, {"error": str(exc)}, 400)
+        return
+
     cfg = load_config()
     try:
         settings = dict(DEFAULT_CERT_SETTINGS)
@@ -278,6 +321,7 @@ def handle_cert_adopt_existing(handler):
                 "renewal_owner": renewal_owner,
             }
         )
+        settings.update(upstream)
         if fullchain and key_path:
             settings["cert_fullchain_path"] = fullchain
             settings["cert_key_path"] = key_path
@@ -477,6 +521,12 @@ def handle_cert_bootstrap(handler):
         json_response(handler, {"error": f"Cloudflare token file not found: {source_path}"}, 400)
         return
 
+    try:
+        upstream = _reverse_proxy_upstream_settings(body)
+    except ValueError as exc:
+        json_response(handler, {"error": str(exc)}, 400)
+        return
+
     cfg = load_config()
     try:
         zone = _discover_cloudflare_zone_id(source_path, base_domain)
@@ -497,6 +547,7 @@ def handle_cert_bootstrap(handler):
                 "reverse_proxy_host": reverse_proxy_host,
             }
         )
+        settings.update(upstream)
         targets, target_source = _targets_from_request(cfg, base_domain, body, settings)
         result = {
             "ok": True,

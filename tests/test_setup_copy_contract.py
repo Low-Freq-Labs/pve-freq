@@ -106,6 +106,9 @@ class TestSetupHtmlCopy(unittest.TestCase):
         self.assertIn("Adopt existing SSL", src)
         self.assertIn("Bootstrap new SSL after init", src)
         self.assertIn("Cloudflare token path", src)
+        self.assertIn("Dashboard upstream host", src)
+        self.assertIn("Upstream protocol", src)
+        self.assertIn("Upstream TLS verification", src)
 
 
 class TestSetupJsCopy(unittest.TestCase):
@@ -139,6 +142,10 @@ class TestSetupJsCopy(unittest.TestCase):
         self.assertIn("/api/cert/lifecycle/reconcile", src)
         self.assertIn("cert_targets", src)
         self.assertIn("target_source", src)
+        self.assertIn("reverse_proxy_upstream_scheme", src)
+        self.assertIn("reverse_proxy_upstream_tls_verify", src)
+        self.assertIn("dashboard_origin_host", src)
+        self.assertIn("defaultDashboardOriginHost", src)
 
     def test_js_preserves_credential_path_fields(self):
         """Path-mode credentials must remain path fields for the backend."""
@@ -164,6 +171,28 @@ class TestSetupJsCopy(unittest.TestCase):
         for phrase in banned:
             self.assertNotIn(phrase, src,
                               f"Setup JS must not use hobbyist phrase: {phrase}")
+
+    def test_create_admin_failure_does_not_continue_to_init(self):
+        """Setup must stop when the first operator session cannot be created."""
+        src = self._src()
+        self.assertIn("throw err;", src)
+        self.assertNotIn("Continuing to init/start", src)
+        self.assertNotIn("backend admin auth will be final truth", src)
+
+    def test_setup_js_captures_csrf_for_post_admin_calls(self):
+        """Setup page owns its CSRF token because it does not load app.js."""
+        src = self._src()
+        self.assertIn("setupCsrfToken", src)
+        self.assertIn("X-Freq-CSRF", src)
+        self.assertIn("rememberSetupAuth(data)", src)
+
+    def test_setup_post_json_has_timeout_and_operator_failure_state(self):
+        """Setup must not leave the browser stuck forever on create-admin."""
+        src = self._src()
+        self.assertIn("AbortController", src)
+        self.assertIn("function getJson", src)
+        self.assertIn("timed out after", src)
+        self.assertIn("operator session failed", src)
 
 
 class TestSetupDeviceCredentialWriter(unittest.TestCase):

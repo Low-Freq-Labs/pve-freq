@@ -31,7 +31,11 @@ class TestLoginEndpointContract(unittest.TestCase):
     def test_returns_token_on_success(self):
         src = self._handler_src()
         self.assertIn("token", src)
-        self.assertIn("token_urlsafe", src)
+        self.assertIn("establish_session", src)
+        with open(os.path.join(REPO_ROOT, "freq/api/auth.py")) as f:
+            auth_src = f.read()
+        session_helper = auth_src.split("def establish_session")[1].split("\ndef ")[0]
+        self.assertIn("token_urlsafe", session_helper)
 
     def test_returns_role(self):
         src = self._handler_src()

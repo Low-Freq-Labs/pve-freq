@@ -900,6 +900,7 @@ def load_hosts_toml(path: str) -> list:
                 ip=entry.get("ip", ""),
                 label=entry.get("label", ""),
                 htype=entry.get("type", "linux"),
+                display_name=entry.get("display_name", "") or entry.get("name", ""),
                 groups=entry.get("groups", ""),
                 vmid=_safe_int(entry.get("vmid", 0), 0),
                 managed=managed,
@@ -917,27 +918,33 @@ def save_hosts_toml(path: str, hosts: list) -> None:
 
     Overwrites the file. Each host becomes a [[host]] entry.
     """
+    def toml_string(value) -> str:
+        text = str(value or "")
+        return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
     lines = ["# FREQ Fleet Registry\n", "# Managed by freq — do not edit while freq is running\n\n"]
     for h in hosts:
         lines.append("[[host]]\n")
-        lines.append(f'ip = "{h.ip}"\n')
-        lines.append(f'label = "{h.label}"\n')
-        lines.append(f'type = "{h.htype}"\n')
+        lines.append(f"ip = {toml_string(h.ip)}\n")
+        lines.append(f"label = {toml_string(h.label)}\n")
+        lines.append(f"type = {toml_string(h.htype)}\n")
+        if getattr(h, "display_name", ""):
+            lines.append(f"display_name = {toml_string(h.display_name)}\n")
         if h.groups:
-            lines.append(f'groups = "{h.groups}"\n')
+            lines.append(f"groups = {toml_string(h.groups)}\n")
         if h.vmid:
             lines.append(f"vmid = {h.vmid}\n")
         if not getattr(h, "managed", True):
             lines.append("managed = false\n")
         if h.all_ips:
-            ips_str = ", ".join(f'"{ip}"' for ip in h.all_ips)
+            ips_str = ", ".join(toml_string(ip) for ip in h.all_ips)
             lines.append(f"all_ips = [{ips_str}]\n")
         if getattr(h, "hostname", ""):
-            lines.append(f'hostname = "{h.hostname}"\n')
+            lines.append(f"hostname = {toml_string(h.hostname)}\n")
         if getattr(h, "service_tag", ""):
-            lines.append(f'service_tag = "{h.service_tag}"\n')
+            lines.append(f"service_tag = {toml_string(h.service_tag)}\n")
         if getattr(h, "identity_source", ""):
-            lines.append(f'identity_source = "{h.identity_source}"\n')
+            lines.append(f"identity_source = {toml_string(h.identity_source)}\n")
         lines.append("\n")
     with open(path, "w") as f:
         f.writelines(lines)
@@ -945,28 +952,34 @@ def save_hosts_toml(path: str, hosts: list) -> None:
 
 def append_host_toml(path: str, host) -> None:
     """Append a single host entry to the TOML hosts file."""
+    def toml_string(value) -> str:
+        text = str(value or "")
+        return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
     lines = []
     if not os.path.isfile(path):
         lines.append("# FREQ Fleet Registry\n\n")
     lines.append("[[host]]\n")
-    lines.append(f'ip = "{host.ip}"\n')
-    lines.append(f'label = "{host.label}"\n')
-    lines.append(f'type = "{host.htype}"\n')
+    lines.append(f"ip = {toml_string(host.ip)}\n")
+    lines.append(f"label = {toml_string(host.label)}\n")
+    lines.append(f"type = {toml_string(host.htype)}\n")
+    if getattr(host, "display_name", ""):
+        lines.append(f"display_name = {toml_string(host.display_name)}\n")
     if host.groups:
-        lines.append(f'groups = "{host.groups}"\n')
+        lines.append(f"groups = {toml_string(host.groups)}\n")
     if host.vmid:
         lines.append(f"vmid = {host.vmid}\n")
     if not getattr(host, "managed", True):
         lines.append("managed = false\n")
     if host.all_ips:
-        ips_str = ", ".join(f'"{ip}"' for ip in host.all_ips)
+        ips_str = ", ".join(toml_string(ip) for ip in host.all_ips)
         lines.append(f"all_ips = [{ips_str}]\n")
     if getattr(host, "hostname", ""):
-        lines.append(f'hostname = "{host.hostname}"\n')
+        lines.append(f"hostname = {toml_string(host.hostname)}\n")
     if getattr(host, "service_tag", ""):
-        lines.append(f'service_tag = "{host.service_tag}"\n')
+        lines.append(f"service_tag = {toml_string(host.service_tag)}\n")
     if getattr(host, "identity_source", ""):
-        lines.append(f'identity_source = "{host.identity_source}"\n')
+        lines.append(f"identity_source = {toml_string(host.identity_source)}\n")
     lines.append("\n")
     with open(path, "a") as f:
         f.writelines(lines)
@@ -1222,6 +1235,7 @@ def load_fleet_boundaries(path: str) -> FleetBoundaries:
                 ip=info.get("ip", ""),
                 label=info.get("label", ""),
                 device_type=info.get("type", "unknown"),
+                display_name=info.get("display_name", "") or info.get("name", ""),
                 tier=info.get("tier", "probe"),
                 detail=info.get("detail", ""),
                 groups=info.get("groups", ""),

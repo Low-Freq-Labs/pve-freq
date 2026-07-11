@@ -19,6 +19,7 @@
   var phaseLog = document.getElementById('phase-log');
   var progressState = document.getElementById('progress-state');
   var progressPhase = document.getElementById('progress-phase');
+  var setupCsrfToken = '';
 
   function $(id){return document.getElementById(id);}
   function val(id){var el=$(id);return el ? el.value.trim() : '';}
@@ -38,11 +39,23 @@
   function splitList(s){
     return String(s || '').split(',').map(function(v){return v.trim();}).filter(Boolean);
   }
-  function targetFromHostname(hostname,baseDomain,mode){
+  function boolSelect(id,defaultValue){
+    var raw = val(id);
+    if(!raw){return defaultValue;}
+    return raw !== 'false' && raw !== '0' && raw !== 'no' && raw !== 'off';
+  }
+  function defaultDashboardOriginHost(){
+    return window.location && window.location.hostname ? window.location.hostname : '';
+  }
+  function defaultDashboardOriginPort(){
+    if(window.location && window.location.port){return window.location.port;}
+    return '8888';
+  }
+  function targetFromHostname(hostname,baseDomain,mode,origin){
     var h = String(hostname || '').trim().toLowerCase();
     var suffix = baseDomain ? '.' + String(baseDomain).toLowerCase() : '';
     var subdomain = suffix && h.endsWith(suffix) ? h.slice(0,-suffix.length) : '';
-    return {
+    var target = {
       name: subdomain || h,
       hostname: h,
       subdomain: subdomain,
@@ -50,10 +63,17 @@
       enabled: true,
       scope: 'web-init'
     };
+    if(origin && mode === 'behind-proxy'){
+      target.origin_ip = origin.host || '';
+      target.origin_port = Number(origin.port || 8888);
+      target.origin_scheme = origin.scheme || 'http';
+      target.origin_tls_verify = !!origin.tlsVerify;
+    }
+    return target;
   }
-  function certTargets(hostnames,baseDomain,mode){
+  function certTargets(hostnames,baseDomain,mode,origin){
     return (hostnames || []).map(function(hostname){
-      return targetFromHostname(hostname,baseDomain,mode);
+      return targetFromHostname(hostname,baseDomain,mode,origin);
     });
   }
   function setError(msg){
@@ -66,12 +86,19 @@
     phaseLog.scrollTop = phaseLog.scrollHeight;
   }
 
+  function rememberSetupAuth(data){
+    data = data || {};
+    if(typeof data.csrf_token === 'string' && data.csrf_token){
+      setupCsrfToken = data.csrf_token;
+    }
+  }
+
   function addNode(data){
     var row = document.createElement('div');
     row.className = 'list-row node-row';
     row.innerHTML =
       '<label>Node name<input type="text" class="node-name" placeholder="pve01" value="'+esc(data && data.name || '')+'"></label>'+
-      '<label>Node IP<input type="text" class="node-ip" placeholder="10.25.255.26" value="'+esc(data && data.ip || '')+'"></label>'+
+      '<label>Node IP<input type="text" class="node-ip" placeholder="192.168.10.26" value="'+esc(data && data.ip || '')+'"></label>'+
       '<button class="icon-btn" type="button" data-action="remove-row" aria-label="Remove PVE node">x</button>';
     nodeList.appendChild(row);
   }
@@ -97,6 +124,12 @@
     document.querySelectorAll('[data-ssl-fields]').forEach(function(el){
       el.hidden = el.getAttribute('data-ssl-fields') !== mode;
     });
+  }
+  function seedSslDefaults(){
+    var originHost = $('ssl-dashboard-origin-host');
+    var originPort = $('ssl-dashboard-origin-port');
+    if(originHost && !originHost.value){originHost.value = defaultDashboardOriginHost();}
+    if(originPort && !originPort.value){originPort.value = defaultDashboardOriginPort();}
   }
 
   function collectNodes(){
@@ -225,6 +258,10 @@
           base_domain: val('ssl-adopt-domain'),
           cert_source: val('ssl-adopt-source'),
           reverse_proxy_host: val('ssl-proxy-host'),
+          reverse_proxy_upstream_scheme: val('ssl-upstream-scheme') || 'http',
+          reverse_proxy_upstream_tls_verify: boolSelect('ssl-upstream-tls-verify', true),
+          dashboard_origin_host: val('ssl-dashboard-origin-host') || defaultDashboardOriginHost(),
+          dashboard_origin_port: val('ssl-dashboard-origin-port') || defaultDashboardOriginPort(),
           cert_fullchain_path: val('ssl-fullchain-path'),
           cert_key_path: val('ssl-key-path'),
           target_hostnames: splitList(val('ssl-targets')),
@@ -262,6 +299,10 @@
         !payload.ssl.adopt_existing.reverse_proxy_host){
         return 'Existing SSL reverse-proxy mode requires the proxy host.';
       }
+      if(payload.ssl.adopt_existing.cert_source === 'reverse-proxy' &&
+        !payload.ssl.adopt_existing.dashboard_origin_host){
+        return 'Existing SSL reverse-proxy mode requires the dashboard upstream host.';
+      }
     }
     if(payload.ssl.mode === 'bootstrap-new'){
       if(!payload.ssl.bootstrap_new.base_domain){return 'New SSL bootstrap requires a base domain.';}
@@ -270,12 +311,23 @@
     return '';
   }
 
-  function postJson(url,payload){
+  function postJson(url,payload,timeoutMs){
+    var headers = {'Content-Type':'application/json'};
+    if(setupCsrfToken){
+      headers['X-Freq-CSRF'] = setupCsrfToken;
+    }
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = null;
+    var limit = timeoutMs || 30000;
+    if(controller){
+      timer = window.setTimeout(function(){controller.abort();}, limit);
+    }
     return fetch(url,{
       method:'POST',
       credentials:'same-origin',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload)
+      headers:headers,
+      body:JSON.stringify(payload),
+      signal: controller ? controller.signal : undefined
     }).then(function(r){
       return r.text().then(function(text){
         var data = {};
@@ -287,6 +339,44 @@
         }
         return data;
       });
+    }).catch(function(err){
+      if(err && err.name === 'AbortError'){
+        throw new Error(url+' timed out after '+Math.round(limit / 1000)+'s');
+      }
+      throw err;
+    }).finally(function(){
+      if(timer){window.clearTimeout(timer);}
+    });
+  }
+
+  function getJson(url,timeoutMs){
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = null;
+    var limit = timeoutMs || 15000;
+    if(controller){
+      timer = window.setTimeout(function(){controller.abort();}, limit);
+    }
+    return fetch(url,{
+      credentials:'same-origin',
+      signal: controller ? controller.signal : undefined
+    }).then(function(r){
+      return r.text().then(function(text){
+        var data = {};
+        try{data = text ? JSON.parse(text) : {};}catch(e){data = {raw:text};}
+        if(!r.ok){
+          var msg = url+' returned HTTP '+r.status;
+          if(data && data.error){msg += ': '+data.error;}
+          throw new Error(msg);
+        }
+        return data;
+      });
+    }).catch(function(err){
+      if(err && err.name === 'AbortError'){
+        throw new Error(url+' timed out after '+Math.round(limit / 1000)+'s');
+      }
+      throw err;
+    }).finally(function(){
+      if(timer){window.clearTimeout(timer);}
     });
   }
 
@@ -297,12 +387,15 @@
       password: payload.operator.password_source === 'path' ? '' : payload.operator.password,
       password_file: payload.operator.password_source === 'path' ? payload.operator.password : ''
     }).then(function(data){
+      rememberSetupAuth(data);
+      if(!data.session_started){
+        throw new Error('Setup admin session was not started.');
+      }
       appendLog('Operator session ready: '+(data.user || payload.operator.username)+'.');
       return data;
     }).catch(function(err){
       appendLog('Operator create-admin did not complete: '+String(err.message || err));
-      appendLog('Continuing to init/start; backend admin auth will be final truth.');
-      return {warning:String(err.message || err)};
+      throw err;
     });
   }
 
@@ -314,16 +407,27 @@
     if(payload.ssl.mode === 'adopt-existing'){
       appendLog('SSL choice: adopting existing ownership via '+API.certAdopt+'.');
       var adoptMode = payload.ssl.adopt_existing.cert_source === 'reverse-proxy' ? 'behind-proxy' : 'direct';
+      var adoptOrigin = {
+        host: payload.ssl.adopt_existing.dashboard_origin_host,
+        port: payload.ssl.adopt_existing.dashboard_origin_port,
+        scheme: payload.ssl.adopt_existing.reverse_proxy_upstream_scheme,
+        tlsVerify: payload.ssl.adopt_existing.reverse_proxy_upstream_tls_verify
+      };
       var adoptTargets = certTargets(
         payload.ssl.adopt_existing.target_hostnames,
         payload.ssl.adopt_existing.base_domain,
-        adoptMode
+        adoptMode,
+        adoptOrigin
       );
       return postJson(API.certAdopt,{
         base_domain: payload.ssl.adopt_existing.base_domain,
         cert_fullchain_path: payload.ssl.adopt_existing.cert_source === 'managed-paths' ? payload.ssl.adopt_existing.cert_fullchain_path : '',
         cert_key_path: payload.ssl.adopt_existing.cert_source === 'managed-paths' ? payload.ssl.adopt_existing.cert_key_path : '',
         reverse_proxy_host: payload.ssl.adopt_existing.reverse_proxy_host,
+        reverse_proxy_upstream_scheme: payload.ssl.adopt_existing.reverse_proxy_upstream_scheme,
+        reverse_proxy_upstream_tls_verify: payload.ssl.adopt_existing.reverse_proxy_upstream_tls_verify,
+        dashboard_origin_host: payload.ssl.adopt_existing.dashboard_origin_host,
+        dashboard_origin_port: payload.ssl.adopt_existing.dashboard_origin_port,
         renewal_owner: payload.ssl.adopt_existing.renewal_owner,
         cert_targets: adoptTargets,
         targets: adoptTargets,
@@ -355,7 +459,7 @@
   }
 
   function refreshCertTruth(){
-    return fetch(API.certReconcile,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(data){
+    return getJson(API.certReconcile).then(function(data){
       appendLog('SSL served-cert truth: '+JSON.stringify(data.summary || data));
       return data;
     }).catch(function(err){
@@ -365,7 +469,7 @@
   }
 
   function refreshStatus(){
-    fetch(API.status,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(data){
+    getJson(API.status).then(function(data){
       $('setup-health').textContent = data.setup_health || 'unknown';
       $('setup-reason').textContent = data.setup_reason || 'No setup reason returned.';
       if(data.initialized){
@@ -408,8 +512,8 @@
       pollRun();
     }).catch(function(err){
       progressState.textContent = 'blocked';
-      progressPhase.textContent = 'backend contract missing';
       var msg = String(err.message || err);
+      progressPhase.textContent = msg.indexOf(API.createAdmin) !== -1 ? 'operator session failed' : 'backend contract missing';
       if(msg.indexOf(API.start) !== -1){
         msg += '. Required: accept the flat zero-state-web-init-v1 payload, stage browser-entered secrets to 0600 temp files/vault, launch freq init --headless, expose '+API.runStatus+' with {running,job:{state,pid,lines,returncode,initialized}}, then mark success only when /api/setup/status reports initialized/configured.';
       }
@@ -421,7 +525,7 @@
   }
 
   function pollRun(){
-    fetch(API.runStatus,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(data){
+    getJson(API.runStatus).then(function(data){
       var job = data.job || {};
       var state = data.state || job.state || (data.running ? 'running' : 'idle');
       var logTail = data.log_tail || job.lines || [];
@@ -468,6 +572,7 @@
 
   addNode({name:'pve01',ip:''});
   addDevice({});
+  seedSslDefaults();
   showSslFields();
   refreshStatus();
 })();

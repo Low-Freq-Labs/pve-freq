@@ -50,6 +50,7 @@ except ModuleNotFoundError:
 from freq.core import audit, fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
+from freq.core.host_scope import managed_probe_hosts
 from freq.core.ssh import PLATFORM_SSH
 
 
@@ -918,23 +919,40 @@ def _post_init_runtime_owner(svc_name):
     """Return the local user that must own runtime state after init.
 
     Bare-metal installs usually run the dashboard as the managed service
-    account. Docker Web Init is different: the dashboard runs as the image's
-    non-root runtime user, then sudo launches init as root to create the fleet
-    service account. In that path, persistent conf/data must remain readable by
-    the dashboard runtime user or the freshly-seeded vault becomes unusable.
+    account. Web Init does not change that on bare metal: setup may launch
+    init through a bootstrap account, but the final systemd service still
+    serves as cfg.ssh_service_account.
+
+    Container Web Init is different: the dashboard runs as the image's non-root
+    runtime user, then sudo launches init as root to create the fleet service
+    account. In that path, persistent conf/data must remain readable by the
+    dashboard runtime user or the freshly-seeded vault becomes unusable.
     """
     if os.environ.get("FREQ_WEB_INIT") == "1":
-        sudo_user = os.environ.get("SUDO_USER", "").strip()
-        if sudo_user and sudo_user != "root":
-            return sudo_user
-        sudo_uid = os.environ.get("SUDO_UID", "").strip()
-        if sudo_uid:
-            try:
-                import pwd
+        try:
+            r = subprocess.run(
+                ["systemctl", "show", "freq-serve.service", "-p", "User", "--value"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            service_user = (r.stdout or "").strip()
+            if r.returncode == 0 and service_user:
+                return service_user
+        except (OSError, subprocess.SubprocessError):
+            pass
+        if _is_container_runtime():
+            sudo_user = os.environ.get("SUDO_USER", "").strip()
+            if sudo_user and sudo_user != "root":
+                return sudo_user
+            sudo_uid = os.environ.get("SUDO_UID", "").strip()
+            if sudo_uid:
+                try:
+                    import pwd
 
-                return pwd.getpwuid(int(sudo_uid)).pw_name
-            except (KeyError, ValueError, OSError):
-                pass
+                    return pwd.getpwuid(int(sudo_uid)).pw_name
+                except (KeyError, ValueError, OSError):
+                    pass
     return svc_name
 
 
@@ -1842,7 +1860,9 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     # data/chaos and any other canonical subdir the dashboard writes into.
     svc_name = ctx["svc_name"]
     runtime_owner = _post_init_runtime_owner(svc_name)
-    _ensure_post_init_runtime_state_ownership(cfg, svc_name)
+    if not _ensure_post_init_runtime_state_ownership(cfg, svc_name):
+        fmt.step_fail("Post-init runtime ownership could not be applied")
+        return 1
     # Keep the other canonical paths (keys, vault, log, conf) chowned too —
     # these may live outside data_dir on some install layouts.
     for d in [cfg.key_dir, cfg.vault_file, cfg.log_dir, cfg.conf_dir]:
@@ -2055,7 +2075,39 @@ INIT_GENERATED_WATCHDOG_FILES = (
     "/var/lib/freq-watchdog/state.json",
 )
 
+INIT_GENERATED_LOCAL_USERS = (
+    "freq-watch",
+)
+
 INIT_RUNTIME_CACHE_KEEP = {".gitignore", ".gitkeep"}
+
+
+def _stop_generated_watchdog_runtime():
+    """Stop watchdog runtime before deleting reset state it can recreate."""
+    for cmd in (
+        ["systemctl", "disable", "--now", "freq-watchdog.service"],
+        ["systemctl", "stop", "freq-watchdog.service"],
+        ["pkill", "-f", "python3 -m freq watchdog run"],
+        ["pkill", "-f", "freq watchdog run"],
+    ):
+        _run(cmd, timeout=10)
+
+
+def _remove_generated_local_users():
+    """Remove local helper users created by init-managed services."""
+    for username in INIT_GENERATED_LOCAL_USERS:
+        rc, _, _ = _run(["id", username], timeout=5)
+        if rc != 0:
+            fmt.step_ok(f"Generated local user already clean: {username}")
+            continue
+        _run(["pkill", "-u", username], timeout=5)
+        time.sleep(0.5)
+        _run(["pkill", "-9", "-u", username], timeout=5)
+        rc_del, _, err_del = _run(["userdel", "-r", username], timeout=15)
+        if rc_del == 0:
+            fmt.step_ok(f"Generated local user removed: {username}")
+        else:
+            fmt.step_warn(f"Generated local user cleanup failed: {username}: {err_del[:120]}")
 
 
 def _remove_init_file(path, label, *, missing_ok=False):
@@ -2082,6 +2134,9 @@ def _clear_generated_runtime_truth_state(cfg):
     not allowed to inherit old health, doctor, watchdog, alert, or probe cache
     output and then show that as current truth after a fresh install.
     """
+    _stop_generated_watchdog_runtime()
+    _remove_generated_local_users()
+
     cache_dir = os.path.join(cfg.data_dir, "cache")
     if os.path.isdir(cache_dir):
         removed = 0
@@ -2111,6 +2166,13 @@ def _clear_generated_runtime_truth_state(cfg):
             f"Watchdog state {os.path.basename(state_path)}",
             missing_ok=True,
         )
+    watch_dir = os.path.dirname(INIT_GENERATED_WATCHDOG_FILES[0]) if INIT_GENERATED_WATCHDOG_FILES else ""
+    if watch_dir and os.path.isdir(watch_dir):
+        try:
+            os.rmdir(watch_dir)
+            fmt.step_ok(f"Watchdog state dir removed: {watch_dir}")
+        except OSError:
+            pass
 
 
 def _reset_local_init_state(cfg, *, remove_live_config=False):
@@ -2486,7 +2548,7 @@ def _phase_configure(cfg, args=None):
     elif cfg.cluster_name:
         fmt.step_ok(f"Cluster: {cfg.cluster_name}")
     elif not headless:
-        name = _input("Cluster name (optional, e.g. dc01, homelab)")
+        name = _input("Cluster name (optional, e.g. site01, homelab)")
         if name:
             content = _update_toml_value(content, "cluster_name", name)
             cfg.cluster_name = name
@@ -5350,6 +5412,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 
     ok = fail = 0
     deployed_ips = set()  # Track IPs we deployed to — Phase 12 uses this
+    failed_ips = set()
     legacy_passwords = set()
 
     # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user)
@@ -5382,6 +5445,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     audit.record_change(h.ip, "deploy_user", before, after)
                 else:
                     fail += 1
+                    failed_ips.add(h.ip)
         else:
             # Interactive mode
             linux_user = _input("Deploy as user (root or sudo account)", "root")
@@ -5409,6 +5473,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                             audit.record_change(h.ip, "deploy_user", before, after)
                         else:
                             fail += 1
+                            failed_ips.add(h.ip)
             else:
                 fmt.step_warn("Skipping Linux hosts")
 
@@ -5431,6 +5496,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                             f"create and verify {ctx.get('svc_name', 'the service account')} over SSH."
                         )
                         fail += 1
+                        failed_ips.add(h.ip)
                         continue
                     tn_user = tn_creds["user"]
                     tn_pass = tn_creds.get("password", "")
@@ -5444,6 +5510,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 else:
                     fmt.step_fail(f"No SSH deployment credentials for TrueNAS '{h.label}'")
                     fail += 1
+                    failed_ips.add(h.ip)
                     continue
 
                 before = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
@@ -5454,6 +5521,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     audit.record_change(h.ip, "deploy_user", before, after)
                 else:
                     fail += 1
+                    failed_ips.add(h.ip)
         else:
             fmt.line(f"  {fmt.C.DIM}How to authenticate to TrueNAS?{fmt.C.RESET}")
             fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
@@ -5477,6 +5545,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                             audit.record_change(h.ip, "deploy_user", before, after)
                         else:
                             fail += 1
+                            failed_ips.add(h.ip)
             else:
                 fmt.step_warn("Skipping TrueNAS hosts")
 
@@ -5504,6 +5573,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     audit.record_change(h.ip, "deploy_user", before, after)
                 else:
                     fail += 1
+                    failed_ips.add(h.ip)
         elif has_bootstrap:
             # Bootstrap mode for pfSense — use bootstrap key
             pf_user = bootstrap_user or "admin"
@@ -5521,6 +5591,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     audit.record_change(h.ip, "deploy_user", before, after)
                 else:
                     fail += 1
+                    failed_ips.add(h.ip)
         else:
             fmt.line(f"  {fmt.C.DIM}How to authenticate to pfSense?{fmt.C.RESET}")
             fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
@@ -5543,6 +5614,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                             audit.record_change(h.ip, "deploy_user", before, after)
                         else:
                             fail += 1
+                            failed_ips.add(h.ip)
             else:
                 fmt.step_warn("Skipping pfSense hosts")
 
@@ -5569,6 +5641,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     legacy_passwords.add(creds["password"])
                 else:
                     fail += 1
+                    failed_ips.add(h.ip)
 
         # Remaining devices — bootstrap key or interactive
         if dev_without_creds:
@@ -5584,6 +5657,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                         deployed_ips.add(h.ip)
                     else:
                         fail += 1
+                        failed_ips.add(h.ip)
             else:
                 fmt.line(f"  {fmt.C.DIM}How to authenticate to iDRAC/switch?{fmt.C.RESET}")
                 fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
@@ -5612,6 +5686,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                                 legacy_passwords.add(dev_pass)
                             else:
                                 fail += 1
+                                failed_ips.add(h.ip)
                 else:
                     fmt.step_warn("Skipping device hosts")
 
@@ -5626,6 +5701,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 
     # Store deployed IPs for Phase 12 — deployed hosts MUST pass verification
     ctx["deployed_ips"] = deployed_ips
+    ctx["fleet_deploy_failed_ips"] = failed_ips
     ctx["fleet_deploy_failures"] = fail
 
     fmt.blank()
@@ -5866,7 +5942,12 @@ def _phase_fleet_configure(cfg, ctx):
                 ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [ssh_target]
 
                 # Test connectivity first
-                rc, _, err = _run(ssh_cmd + ["echo ok"], timeout=QUICK_CHECK_TIMEOUT)
+                rc, _, err = _run_ssh_with_stale_hostkey_retry(
+                    ssh_cmd + ["echo ok"],
+                    QUICK_CHECK_TIMEOUT,
+                    svc_name,
+                    h.ip,
+                )
                 if rc != 0:
                     agent_fail += 1
                     failed_agents.append(f"{h.label} ({h.ip}) connect rc={rc}: {_ssh_error_msg(rc, err)}")
@@ -6299,8 +6380,7 @@ def _phase_fleet_configure(cfg, ctx):
         fmt.line(f"  {fmt.C.BOLD}Notifications{fmt.C.RESET}")
         fmt.blank()
         fmt.line(f"  {fmt.C.DIM}FREQ can alert you via Discord, Slack, Telegram, email, ntfy, and more.{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}Configure later in freq.toml [notifications] section.{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}Or run: freq configure notifications{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Configure later from the web Settings area after the dashboard starts.{fmt.C.RESET}")
 
     # ── 9k: Dashboard Service ─────────────────────────────────────
     fmt.blank()
@@ -6348,13 +6428,18 @@ def _phase_fleet_configure(cfg, ctx):
                 f.write(service_unit)
             _run(["systemctl", "daemon-reload"])
             _run(["systemctl", "enable", "freq-serve"])
-            # Actually start the service — don't make the user guess
-            rc_start, _, _ = _run(["systemctl", "start", "freq-serve"])
-            if rc_start == 0:
-                fmt.step_ok(f"Dashboard running on port {dashboard_port}")
+            web_init_handoff = os.environ.get("FREQ_WEB_INIT") == "1"
+            if web_init_handoff:
+                rc_start = 0
+                fmt.step_ok(f"Dashboard service installed (handoff will start port {dashboard_port})")
             else:
-                fmt.step_ok(f"Dashboard service installed (port {dashboard_port})")
-                fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-serve{fmt.C.RESET}")
+                # Actually start the service — don't make the user guess
+                rc_start, _, _ = _run(["systemctl", "start", "freq-serve"])
+                if rc_start == 0:
+                    fmt.step_ok(f"Dashboard running on port {dashboard_port}")
+                else:
+                    fmt.step_ok(f"Dashboard service installed (port {dashboard_port})")
+                    fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-serve{fmt.C.RESET}")
             audit.record("deploy_service", "local", "success", service="freq-serve")
         except OSError as e:
             fmt.step_warn(f"Could not install dashboard service: {e}")
@@ -8311,9 +8396,60 @@ def _skip_reason(err):
         if "password" in err_l:
             return "auth failed (wrong password or password auth disabled)"
         return "auth failed (key or password rejected)"
-    if "host key verification" in err_l:
+    if "host key verification" in err_l or "remote host identification has changed" in err_l:
         return "host key mismatch"
     return "SSH error"
+
+
+def _is_host_key_mismatch(err):
+    text = (err or "").lower()
+    return (
+        "remote host identification has changed" in text
+        or "host key verification failed" in text
+        or ("offending" in text and "known_hosts" in text)
+    )
+
+
+def _known_hosts_paths_for_init(svc_name):
+    paths = []
+    for home in (os.path.expanduser("~"), "/root"):
+        if home and home != "~":
+            paths.append(os.path.join(home, ".ssh", "known_hosts"))
+    if svc_name:
+        try:
+            import pwd
+
+            paths.append(os.path.join(pwd.getpwnam(svc_name).pw_dir, ".ssh", "known_hosts"))
+        except (KeyError, OSError):
+            paths.append(os.path.join("/home", svc_name, ".ssh", "known_hosts"))
+    unique = []
+    seen = set()
+    for path in paths:
+        if path and path not in seen:
+            seen.add(path)
+            unique.append(path)
+    return unique
+
+
+def _forget_stale_known_host_for_init(svc_name, ip):
+    """Remove stale host-key entries while init is establishing trust."""
+    changed = False
+    for known_hosts in _known_hosts_paths_for_init(svc_name):
+        if not os.path.isdir(os.path.dirname(known_hosts)):
+            continue
+        rc, _, _ = _run(["ssh-keygen", "-R", ip, "-f", known_hosts], timeout=5)
+        changed = changed or rc == 0
+    if changed:
+        fmt.step_warn(f"{ip}: stale SSH host key removed; retrying trust establishment")
+    return changed
+
+
+def _run_ssh_with_stale_hostkey_retry(cmd, timeout, svc_name, ip):
+    rc, out, err = _run(cmd, timeout=timeout)
+    if rc != 0 and _is_host_key_mismatch(f"{out}\n{err}"):
+        if _forget_stale_known_host_for_init(svc_name, ip):
+            rc, out, err = _run(cmd, timeout=timeout)
+    return rc, out, err
 
 
 def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
@@ -8408,7 +8544,7 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
         + [f"{svc_name}@{ip}", verify_cmd]
     )
 
-    rc, out, err = _run(ssh_cmd, timeout=VERIFY_TIMEOUT)
+    rc, out, err = _run_ssh_with_stale_hostkey_retry(ssh_cmd, VERIFY_TIMEOUT, svc_name, ip)
     # iDRAC has a 2-session SSH limit — retry once after a short wait
     if rc != 0 and htype in ("idrac", "switch") and "no more sessions" in (out + err).lower():
         time.sleep(5)
@@ -8425,10 +8561,10 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
                 + extra_opts
                 + [f"{svc_name}@{ip}", verify_cmd]
             )
-            rc, out, err = _run(sshpass_cmd, timeout=VERIFY_TIMEOUT)
+            rc, out, err = _run_ssh_with_stale_hostkey_retry(sshpass_cmd, VERIFY_TIMEOUT, svc_name, ip)
             if rc != 0 and "no more sessions" in (out + err).lower():
                 time.sleep(5)
-                rc, out, err = _run(sshpass_cmd, timeout=VERIFY_TIMEOUT)
+                rc, out, err = _run_ssh_with_stale_hostkey_retry(sshpass_cmd, VERIFY_TIMEOUT, svc_name, ip)
 
     return rc == 0, (err or out)
 
@@ -8528,12 +8664,13 @@ def _phase_verify(cfg, ctx):
     # hosts × 20s worst-case timeout = 440s; with 8 workers + 60s cap, the
     # phase completes in bounded time even when some hosts are slow. Stragglers
     # are reported as "Phase 12 timeout" instead of hanging init.
-    deployed_ips = ctx.get("deployed_ips", set())
+    deployed_ips = set(ctx.get("deployed_ips", set()) or set())
+    deploy_failed_ips = set(ctx.get("fleet_deploy_failed_ips", set()) or set())
+    deploy_failed_verified_ips = set()
     if cfg.hosts:
         import concurrent.futures
         pve_set = set(cfg.pve_nodes) if cfg.pve_nodes else set()
-        fleet_hosts = [h for h in cfg.hosts if h.ip not in pve_set
-                       and getattr(h, "managed", True)]
+        fleet_hosts = [h for h in managed_probe_hosts(cfg) if h.ip not in pve_set]
 
         def _label_for(h):
             if h.htype in ("linux", "pve", "docker", "truenas"):
@@ -8548,13 +8685,6 @@ def _phase_verify(cfg, ctx):
             label = _label_for(h)
             if label is None:
                 return (h, None, None, None)
-            # skip verify
-            # for hosts that were NOT deployed this run. Trying to verify
-            # as freq-admin on a host where deploy was skipped (e.g., bad
-            # device credentials) produces misleading "Permission denied"
-            # instead of the truthful "deployment was skipped."
-            if h.ip not in deployed_ips:
-                return (h, label, None, "not deployed this run")
             try:
                 ok, err = _verify_host(h.ip, h.htype, svc_name, verify_key, rsa_file, cfg=cfg)
                 return (h, label, ok, err)
@@ -8596,21 +8726,19 @@ def _phase_verify(cfg, ctx):
                 fmt.step_warn(f"Fleet {h.label} ({h.ip}): unknown type '{h.htype}' (skipped)")
                 warns += 1
                 continue
-            if ok is None:
-                # Host was not deployed this run — skip verify with honest message
-                fmt.step_warn(f"Fleet {h.label} ({h.ip}): {err or 'not deployed'} (verify skipped)")
-                warns += 1
-                continue
             if ok:
                 _check(check_label, True)
+                if h.ip in deploy_failed_ips:
+                    deploy_failed_verified_ips.add(h.ip)
             elif h.ip in deployed_ips:
                 # We JUST deployed to this host — auth/skip errors are real failures
                 _check(f"{check_label} — {_skip_reason(err)}", False)
+            elif h.ip in deploy_failed_ips:
+                _check(f"{check_label} — deploy failed and verification still failed: {_skip_reason(err)}", False)
             elif _is_skip_error(err):
-                fmt.step_warn(f"Fleet {h.label} ({h.ip}): {_skip_reason(err)} (skipped)")
-                warns += 1
+                _check(f"{check_label} — managed host not verified: {_skip_reason(err)}", False)
             else:
-                _check(check_label, False)
+                _check(f"{check_label} — managed host verification failed: {_skip_reason(err)}", False)
 
     # ── Enhanced checks (new phases) ──
 
@@ -8749,12 +8877,14 @@ def _phase_verify(cfg, ctx):
 
         health_cmd = remote_agent_health_command(agent_port)
         for h in agent_hosts:
-            rc_agent, out_agent, err_agent = _run(
+            rc_agent, out_agent, err_agent = _run_ssh_with_stale_hostkey_retry(
                 ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
                  "-o", "StrictHostKeyChecking=accept-new",
                  "-i", key_file, f"{svc_name}@{h.ip}",
                  health_cmd],
                 timeout=QUICK_CHECK_TIMEOUT,
+                svc_name=svc_name,
+                ip=h.ip,
             )
             if rc_agent == 0 and "ok" in out_agent.lower():
                 agent_ok += 1
@@ -8781,7 +8911,26 @@ def _phase_verify(cfg, ctx):
     _check("Dashboard readiness: token + hosts + nodes", dashboard_ready)
 
     fleet_deploy_failures = int(ctx.get("fleet_deploy_failures", 0) or 0)
-    if fleet_deploy_failures:
+    if deploy_failed_ips:
+        unresolved_deploy_failures = sorted(deploy_failed_ips - deploy_failed_verified_ips)
+        recovered_deploy_failures = sorted(deploy_failed_verified_ips)
+        ctx["fleet_deploy_failures"] = len(unresolved_deploy_failures)
+        ctx["fleet_deploy_unresolved_failed_ips"] = unresolved_deploy_failures
+        ctx["fleet_deploy_recovered_failed_ips"] = recovered_deploy_failures
+        if unresolved_deploy_failures:
+            formatted = ", ".join(unresolved_deploy_failures)
+            _check(
+                f"Phase 8 fleet deployment: 0 unresolved failed hosts "
+                f"(saw {len(unresolved_deploy_failures)}: {formatted})",
+                False,
+            )
+        elif recovered_deploy_failures:
+            warns += 1
+            fmt.step_warn(
+                "Phase 8 fleet deployment had transient failure(s) recovered by "
+                f"verification: {', '.join(recovered_deploy_failures)}"
+            )
+    elif fleet_deploy_failures:
         _check(f"Phase 8 fleet deployment: 0 failed hosts (saw {fleet_deploy_failures})", False)
     unexpected_out_of_contract_vmids = sorted(set(ctx.get("unexpected_out_of_contract_vmids", []) or []))
     if unexpected_out_of_contract_vmids:
@@ -8821,6 +8970,8 @@ def _phase_verify(cfg, ctx):
                 "warns": warns,
                 "failed_checks": [],
                 "fleet_deploy_failures": int(ctx.get("fleet_deploy_failures", 0) or 0),
+                "fleet_deploy_recovered_failed_ips": list(ctx.get("fleet_deploy_recovered_failed_ips", []) or []),
+                "fleet_deploy_unresolved_failed_ips": list(ctx.get("fleet_deploy_unresolved_failed_ips", []) or []),
                 "out_of_contract_vmids": sorted(set(ctx.get("out_of_contract_vmids", []) or [])),
                 "unexpected_out_of_contract_vmids": sorted(
                     set(ctx.get("unexpected_out_of_contract_vmids", []) or [])
@@ -8849,6 +9000,8 @@ def _phase_verify(cfg, ctx):
                 "warns": warns,
                 "failed_checks": failed_checks,
                 "fleet_deploy_failures": int(ctx.get("fleet_deploy_failures", 0) or 0),
+                "fleet_deploy_recovered_failed_ips": list(ctx.get("fleet_deploy_recovered_failed_ips", []) or []),
+                "fleet_deploy_unresolved_failed_ips": list(ctx.get("fleet_deploy_unresolved_failed_ips", []) or []),
                 "out_of_contract_vmids": sorted(set(ctx.get("out_of_contract_vmids", []) or [])),
                 "unexpected_out_of_contract_vmids": sorted(
                     set(ctx.get("unexpected_out_of_contract_vmids", []) or [])
@@ -9015,7 +9168,12 @@ def _scan_fleet(cfg):
             and getattr(h, "managed", True)
             and not _inventory_only_reason(cfg, {}, h)
         ):
-            all_hosts.append({"label": h.label, "ip": h.ip, "htype": h.htype})
+            all_hosts.append({
+                "label": h.label,
+                "ip": h.ip,
+                "htype": h.htype,
+                "vmid": int(getattr(h, "vmid", 0) or 0),
+            })
 
     ok_list = []
     fail_list = []
@@ -9309,6 +9467,7 @@ def _init_fix(cfg, args):
         "rsa_key_path": rsa_file,
         "rsa_pubkey": rsa_pubkey,
     }
+    _populate_fix_vmid_node_map(cfg, ctx)
 
     if not ctx["pubkey"] and not ctx["rsa_pubkey"]:
         fmt.step_fail("No FREQ public key found")
@@ -9416,7 +9575,18 @@ def _init_fix(cfg, args):
         for h in linux_broken:
             fmt.blank()
             fmt.line(f"  {fmt.C.BOLD}{h['label']}{fmt.C.RESET} ({h['ip']}) [{h['htype']}]")
-            if _deploy_to_host_dispatch(h["ip"], h["htype"], ctx, auth_pass, auth_key, auth_user):
+            deployed = _deploy_to_host_dispatch(h["ip"], h["htype"], ctx, auth_pass, auth_key, auth_user)
+            if not deployed:
+                vmid = int(h.get("vmid", 0) or 0)
+                ga_node_ip = ctx.get("vmid_node_map", {}).get(vmid) if vmid else None
+                if ga_node_ip and h["htype"] in ("linux", "docker", "truenas"):
+                    fmt.step_warn(
+                        f"{h['label']}: bootstrap repair failed — trying guest agent fallback"
+                    )
+                    deployed = _deploy_via_guest_agent(
+                        cfg, ctx, vmid, ga_node_ip, h["ip"], h["label"], h["htype"]
+                    )
+            if deployed:
                 # Verify it worked
                 ok, _ = _verify_host(h["ip"], h["htype"], svc_name, key_file, rsa_file, cfg=cfg)
                 if ok:
@@ -9545,6 +9715,38 @@ def _init_fix(cfg, args):
     fmt.blank()
     fmt.footer()
     return 0 if failed == 0 else 1
+
+
+def _populate_fix_vmid_node_map(cfg, ctx):
+    """Populate VMID -> PVE node IP for init --fix guest-agent repair."""
+    node_to_ip = {}
+    for idx, name in enumerate(getattr(cfg, "pve_node_names", []) or []):
+        if idx < len(getattr(cfg, "pve_nodes", []) or []):
+            node_to_ip[str(name)] = cfg.pve_nodes[idx]
+    for ip in getattr(cfg, "pve_nodes", []) or []:
+        node_to_ip.setdefault(str(ip), ip)
+
+    resources = _fetch_pve_resources(cfg)
+    if not resources:
+        inv_path = os.path.join(cfg.conf_dir, "pve-inventory.toml")
+        if os.path.isfile(inv_path):
+            try:
+                from freq.core.config import load_toml
+
+                resources = load_toml(inv_path).get("resource", [])
+            except Exception:
+                resources = []
+
+    vmid_node_map = ctx.setdefault("vmid_node_map", {})
+    for item in resources or []:
+        try:
+            vmid = int(item.get("vmid", 0) or 0)
+        except (TypeError, ValueError):
+            vmid = 0
+        node = str(item.get("node", "") or "")
+        node_ip = node_to_ip.get(node) or node_to_ip.get(node.lower())
+        if vmid and node_ip:
+            vmid_node_map[vmid] = node_ip
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -10158,8 +10360,8 @@ def cmd_configure(cfg: FreqConfig, pack, args) -> int:
         fmt.line(f"  {fmt.C.GRAY}{label:>16}:{fmt.C.RESET}  {value}")
 
     fmt.blank()
-    fmt.line(f"  {fmt.C.GRAY}Edit {os.path.join(cfg.conf_dir, 'freq.toml')} to change settings.{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.GRAY}Then run 'freq doctor' to verify.{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.GRAY}Use the web Settings area for product-owned changes.{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.GRAY}Then run 'freq doctor' to verify service health.{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0
@@ -10463,7 +10665,9 @@ def _init_headless(cfg, args):
     # from the dashboard service account failed with PermissionError.
     # Run the same helper the interactive path uses so both flows
     # pre-create + chown every canonical post-init subdir.
-    _ensure_post_init_runtime_state_ownership(cfg, ctx["svc_name"])
+    if not _ensure_post_init_runtime_state_ownership(cfg, ctx["svc_name"]):
+        fmt.step_fail("Post-init runtime ownership could not be applied")
+        return 1
 
     # Config files must not be world-writable (init runs as root, umask may be 000)
     if cfg.conf_dir and os.path.exists(cfg.conf_dir):
@@ -10860,6 +11064,13 @@ def _headless_fleet_deploy(
 
     ok = fail = skip = 0
     deployed_ips = ctx.setdefault("deployed_ips", set())
+    if not isinstance(deployed_ips, set):
+        deployed_ips = set(deployed_ips)
+        ctx["deployed_ips"] = deployed_ips
+    failed_ips = ctx.setdefault("fleet_deploy_failed_ips", set())
+    if not isinstance(failed_ips, set):
+        failed_ips = set(failed_ips)
+        ctx["fleet_deploy_failed_ips"] = failed_ips
     for t in targets:
         ip = t["ip"]
         label = t["label"]
@@ -10880,6 +11091,7 @@ def _headless_fleet_deploy(
                         f"create and verify {ctx.get('svc_name', 'the service account')} over SSH."
                     )
                     fail += 1
+                    failed_ips.add(ip)
                     continue
                 auth_user = tn_creds["user"]
                 auth_pass = tn_creds.get("password", "")
@@ -11021,13 +11233,16 @@ def _headless_fleet_deploy(
                 else:
                     fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
                     fail += 1
+                    failed_ips.add(ip)
                 continue
 
         if _deploy_to_host_dispatch(ip, htype, ctx, auth_pass, auth_key, auth_user):
             ok += 1
             deployed_ips.add(ip)
+            failed_ips.discard(ip)
         else:
             fail += 1
+            failed_ips.add(ip)
 
     # Persist the SERVICE ACCOUNT password for ongoing iDRAC/switch SSH access.
     # After deploy, the device has ctx["svc_name"] configured with ctx["svc_pass"] as
@@ -11054,4 +11269,5 @@ def _headless_fleet_deploy(
     )
     ctx["fleet_deploy_ok"] = ok
     ctx["fleet_deploy_failures"] = fail
+    ctx["fleet_deploy_failed_ips"] = failed_ips
     ctx["fleet_deploy_skips"] = skip

@@ -179,6 +179,8 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/v1/net/snmp/setup/plan` | Plan SNMP enablement without mutating devices |
 | POST | `/api/v1/net/snmp/setup/credentials` | Store SNMPv3 credential secrets in managed files |
 | POST | `/api/v1/net/snmp/setup/apply` | Dry-run or confirmed bounded SNMP setup across selected devices |
+| POST | `/api/snmp/setup/credentials` | Compatibility alias for managed SNMPv3 credential storage |
+| POST | `/api/snmp/setup/apply` | Compatibility alias for bounded SNMP setup execution |
 | GET | `/api/v1/net/snmp/setup/status` | Last SNMP setup run status and per-host results |
 | GET | `/api/cost` | Fleet cost estimates |
 | GET | `/api/cost/config` | Cost configuration |

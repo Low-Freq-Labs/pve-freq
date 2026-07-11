@@ -185,9 +185,10 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertIn("templates", data)
         self.assertIn("vlans", data)
         self.assertIn("network_profiles", data)
-        self.assertEqual(data["schema_version"], 3)
+        self.assertEqual(data["schema_version"], 4)
         self.assertEqual(data["network_policy"]["primary_input"], "network_profile")
         self.assertEqual(data["network_policy"]["bridge_input"], "advanced")
+        self.assertFalse(data["network_policy"]["site_inference"])
         self.assertEqual(data["vlans"][0]["gateway"], "10.25.255.1")
         self.assertTrue(data["vlans"][0]["gateway_in_subnet"])
         self.assertEqual(data["cpu"]["default"], cfg.vm_cpu)
@@ -600,7 +601,7 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertEqual(result["plan"]["networks"][1]["cidr"], "10.25.66.44/24")
         self.assertEqual(result["plan"]["network"], result["plan"]["networks"][0])
 
-    def test_vm_create_plan_infers_dc01_single_gateway_nic_policy(self):
+    def test_vm_create_plan_applies_configured_single_gateway_nic_policy(self):
         from freq.core.types import VLAN
 
         cfg = self._cfg()
@@ -611,6 +612,11 @@ class TestVmApiTrust(unittest.TestCase):
             VLAN(id=5, name="public", subnet="10.25.5.0/24", prefix="10.25.5", gateway="10.25.5.1"),
             VLAN(id=66, name="dirty", subnet="10.25.66.0/24", prefix="10.25.66", gateway="10.25.66.1"),
         ]
+        cfg.vm_gateway_rules = {
+            "mode": "single_egress",
+            "internet_vlans": ["5", "66"],
+            "no_default_gateway_vlans": ["10", "25", "2550"],
+        }
 
         with patch("freq.api.vm._candidate_ip_available", return_value=True):
             result = vm_api._vm_create_plan(
@@ -643,6 +649,7 @@ class TestVmApiTrust(unittest.TestCase):
             VLAN(id=25, name="storage", subnet="10.25.25.0/24", prefix="10.25.25", gateway="10.25.25.1"),
             VLAN(id=66, name="dirty", subnet="10.25.66.0/24", prefix="10.25.66", gateway="10.25.66.1"),
         ]
+        cfg.vm_gateway_rules = {"internet_vlans": ["5", "66"]}
 
         with patch("freq.api.vm._candidate_ip_available", return_value=True):
             result = vm_api._vm_create_plan(
@@ -660,7 +667,7 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertFalse(result["ok"], result)
         self.assertTrue(any("multiple internet-egress" in err for err in result["errors"]))
 
-    def test_vm_create_options_derives_observed_network_catalog(self):
+    def test_vm_create_options_does_not_infer_network_catalog_from_private_ips(self):
         from freq.core.types import Host
 
         cfg = self._cfg()
@@ -673,10 +680,10 @@ class TestVmApiTrust(unittest.TestCase):
         with patch("freq.api.vm._get_fleet_vms", return_value=[]):
             payload = vm_api._vm_create_options_payload(cfg)
 
-        vlan_ids = {row["id"] for row in payload["vlans"]}
-        self.assertTrue({2550, 25, 10, 5, 66}.issubset(vlan_ids))
-        self.assertEqual(payload["network_policy"]["gateway_source"], "single_egress")
-        self.assertEqual(set(payload["network_policy"]["internet_vlans"]), {"5", "66"})
+        self.assertEqual(payload["vlans"], [])
+        self.assertEqual(payload["network_profiles"], [])
+        self.assertTrue(payload["network_policy"]["network_setup_required"])
+        self.assertFalse(payload["network_policy"]["site_inference"])
 
     def test_vm_create_job_writes_all_requested_nics(self):
         cfg = self._cfg()

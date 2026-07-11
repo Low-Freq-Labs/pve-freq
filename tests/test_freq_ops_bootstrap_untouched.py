@@ -312,6 +312,10 @@ class TestNoActiveCodeReferencesFreqOpsAsServiceAccount(unittest.TestCase):
             "freq/modules/init_cmd.py",
             '("Phase 2", "Cluster Config + VLAN Discovery", "PVE nodes, gateway, bootstrap auth as root/freq-ops, discover VLANs"),',
         ),
+        (
+            "freq/modules/init_cmd.py",
+            'ssh_prefix = "/home/freq-ops/.ssh/"',
+        ),
     }
 
     def test_no_freq_ops_in_active_product_runtime_code(self):

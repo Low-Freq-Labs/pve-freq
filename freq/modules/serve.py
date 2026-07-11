@@ -86,6 +86,233 @@ IDRAC_SESSION_GAP_SECONDS = 2.0
 _idrac_last_session_at = 0.0
 
 
+def _physical_ip_sort_key(ip: str):
+    try:
+        return tuple(int(part) for part in str(ip or "").split("."))
+    except ValueError:
+        return (999, 999, 999, 999)
+
+
+def _generic_physical_label(label, dtype):
+    label = str(label or "").strip().lower()
+    dtype = str(dtype or "").strip().lower()
+    if not label:
+        return True
+    if label == dtype:
+        return True
+    if re.match(r"^(bmc|idrac|ilo|ipmi)[-_]?\d+$", label):
+        return True
+    if re.match(r"^\d+\.\d+\.\d+\.\d+$", label):
+        return True
+    return False
+
+
+def _bmc_display_prefix(dtype):
+    dtype = str(dtype or "").strip().lower()
+    if dtype == "idrac":
+        return "iDRAC"
+    if dtype == "ilo":
+        return "iLO"
+    if dtype == "ipmi":
+        return "IPMI"
+    return "BMC"
+
+
+def _node_display_name(name):
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(name or "").strip()).strip("-_.")
+    return cleaned.upper()
+
+
+def _operator_physical_display_label(cfg, dev, identity_label=""):
+    display_name = getattr(dev, "display_name", "") or ""
+    if display_name:
+        return display_name
+    dtype = (getattr(dev, "device_type", "") or "").strip().lower()
+    label = getattr(dev, "label", "") or ""
+    if not _generic_physical_label(label, dtype):
+        return label
+    if identity_label:
+        return identity_label
+    if dtype in {"idrac", "bmc", "ilo", "ipmi"}:
+        prefix = _bmc_display_prefix(dtype)
+        fb = getattr(cfg, "fleet_boundaries", None)
+        physical = getattr(fb, "physical", {}) if fb else {}
+        bmc_devices = [
+            item
+            for item in physical.values()
+            if (getattr(item, "device_type", "") or "").strip().lower() in {"idrac", "bmc", "ilo", "ipmi"}
+            and (getattr(item, "scope", "core") or "core").strip().lower() != "lab"
+        ]
+        bmc_devices.sort(key=lambda item: (_physical_ip_sort_key(getattr(item, "ip", "")), getattr(item, "key", "")))
+
+        pve_nodes = getattr(fb, "pve_nodes", {}) if fb else {}
+        node_items = [(name, getattr(node, "ip", "")) for name, node in pve_nodes.items()]
+        if not node_items:
+            names = list(getattr(cfg, "pve_node_names", []) or [])
+            for idx, ip in enumerate(getattr(cfg, "pve_nodes", []) or []):
+                node_items.append((names[idx] if idx < len(names) and names[idx] else f"pve{idx + 1:02d}", ip))
+        node_items.sort(key=lambda item: (_physical_ip_sort_key(item[1]), item[0]))
+
+        dev_ip = getattr(dev, "ip", "") or ""
+        dev_idx = next(
+            (idx for idx, item in enumerate(bmc_devices) if item is dev or (getattr(item, "ip", "") or "") == dev_ip),
+            -1,
+        )
+        if 0 <= dev_idx < len(node_items):
+            return f"{prefix}-{_node_display_name(node_items[dev_idx][0])}"
+
+        fallback = getattr(dev, "hostname", "") or getattr(dev, "service_tag", "") or ""
+        if fallback:
+            return f"{prefix}-{_node_display_name(fallback)}"
+        if dev_ip:
+            return f"{prefix}-{dev_ip.rsplit('.', 1)[-1]}"
+    return label
+
+
+def _resolve_pfsense_target(cfg, target=""):
+    """Resolve a pfSense/opnsense target by label/key/IP.
+
+    Default remains the core firewall. Lab firewalls must be selected
+    explicitly so a lab card never queries production by accident.
+    """
+    from freq.core.types import PhysicalDevice
+
+    def _first_description_ip(text):
+        for ip in re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", str(text or "")):
+            parts = ip.split(".")
+            try:
+                if all(0 <= int(part) <= 255 for part in parts):
+                    return ip
+            except ValueError:
+                continue
+        return ""
+
+    def _inventory_target():
+        if not target_l:
+            return None
+        inv_path = os.path.join(getattr(cfg, "conf_dir", ""), "pve-inventory.toml")
+        inv = load_toml(inv_path)
+        resources = inv.get("resource", []) if isinstance(inv, dict) else []
+        for resource in resources:
+            if not isinstance(resource, dict):
+                continue
+            name = str(resource.get("name") or "")
+            vmid = str(resource.get("vmid") or "")
+            node = str(resource.get("node") or "")
+            tags = str(resource.get("tags") or "")
+            identity = " ".join((name, vmid, node, tags)).lower()
+            if "pfsense" not in identity and "opnsense" not in identity:
+                continue
+            description = str(resource.get("description") or "")
+            fb = getattr(cfg, "fleet_boundaries", None)
+            node_info = getattr(fb, "pve_nodes", {}).get(node) if fb else None
+            node_ip = getattr(node_info, "ip", "") if node_info else ""
+            if node_ip and vmid:
+                try:
+                    from freq.modules.pve import _pve_call
+
+                    vm_cfg, ok = _pve_call(
+                        cfg,
+                        node_ip,
+                        api_endpoint=f"/nodes/{node}/qemu/{vmid}/config",
+                        ssh_command=f"pvesh get /nodes/{node}/qemu/{vmid}/config --output-format json",
+                        timeout=10,
+                    )
+                    if ok and isinstance(vm_cfg, dict):
+                        description = str(vm_cfg.get("description") or description)
+                except Exception:
+                    pass
+            ip = _first_description_ip(description)
+            if not ip:
+                continue
+            if target_l not in " ".join((identity, description.lower(), ip)):
+                continue
+            return PhysicalDevice(
+                key=name or f"vm-{vmid}",
+                ip=ip,
+                label=name or f"vm-{vmid}",
+                device_type="opnsense" if "opnsense" in identity else "pfsense",
+                tier="probe",
+                detail="Firewall",
+                groups="lab" if "lab" in identity else "",
+                scope="lab" if "lab" in identity else "core",
+            )
+        return None
+
+    target_l = str(target or "").strip().lower()
+    devices = []
+    for key, dev in getattr(getattr(cfg, "fleet_boundaries", None), "physical", {}).items():
+        if getattr(dev, "device_type", "") in ("pfsense", "opnsense"):
+            if not getattr(dev, "key", ""):
+                dev.key = key
+            devices.append(dev)
+
+    for host in getattr(cfg, "hosts", []):
+        host_type = (getattr(host, "htype", "") or getattr(host, "type", "") or "").lower()
+        label = getattr(host, "label", "") or getattr(host, "hostname", "")
+        identity = " ".join(
+            str(x or "")
+            for x in (
+                label,
+                getattr(host, "display_name", ""),
+                getattr(host, "hostname", ""),
+                getattr(host, "ip", ""),
+                getattr(host, "vmid", ""),
+                getattr(host, "groups", ""),
+                " ".join(getattr(host, "all_ips", []) or []),
+            )
+        ).lower()
+        is_firewall = host_type in ("pfsense", "opnsense") or "pfsense" in identity or "opnsense" in identity
+        if not is_firewall or not getattr(host, "ip", ""):
+            continue
+        devices.append(
+            PhysicalDevice(
+                key=label or getattr(host, "ip", ""),
+                ip=getattr(host, "ip", ""),
+                label=getattr(host, "display_name", "") or label or getattr(host, "ip", ""),
+                device_type="opnsense" if "opnsense" in identity else "pfsense",
+                tier="probe",
+                detail="Firewall",
+                groups=getattr(host, "groups", ""),
+                scope="lab" if "lab" in identity else "core",
+                hostname=getattr(host, "hostname", ""),
+                display_name=getattr(host, "display_name", ""),
+            )
+        )
+
+    if target_l:
+        for dev in devices:
+            hay = " ".join(
+                str(x or "")
+                for x in (
+                    getattr(dev, "key", ""),
+                    getattr(dev, "label", ""),
+                    getattr(dev, "ip", ""),
+                    getattr(dev, "display_name", ""),
+                )
+            ).lower()
+            if target_l in hay:
+                return dev
+        inv_target = _inventory_target()
+        if inv_target:
+            return inv_target
+        return None
+    core = [dev for dev in devices if getattr(dev, "scope", "core") != "lab"]
+    if core:
+        return core[0]
+    if getattr(cfg, "pfsense_ip", ""):
+        return PhysicalDevice(
+            key="pfsense",
+            ip=cfg.pfsense_ip,
+            label="firewall",
+            device_type="pfsense",
+            scope="core",
+        )
+    if devices:
+        return devices[0]
+    return None
+
+
 def _redact_device_command_output(output: str) -> str:
     """Strip secrets from raw device CLI output before it reaches the UI."""
     text = str(output or "")
@@ -1588,14 +1815,15 @@ def _bg_probe_fleet_overview():
         reachable = _physical_reachable(dev)
         identity = _snmp_identity_for_physical(dev, reachable)
         dtype = getattr(dev, "device_type", "")
-        display_label = dev.label
+        display_name = getattr(dev, "display_name", "") or ""
         identity_label = _identity_label(identity, dtype)
-        if identity_label and _generic_physical_label(dev.label, dtype):
-            display_label = identity_label
+        display_label = _operator_physical_display_label(cfg, dev, identity_label)
         item = {
             "key": dev.key,
             "ip": dev.ip,
             "label": dev.label,
+            "raw_label": dev.label,
+            "display_name": display_name,
             "display_label": display_label,
             "identity_label": identity_label,
             "type": dev.device_type,
@@ -1620,11 +1848,15 @@ def _bg_probe_fleet_overview():
                 physical.append(f.result())
             except Exception:
                 dev = futures[f]
+                display_name = getattr(dev, "display_name", "") or ""
                 physical.append(
                     {
                         "key": dev.key,
                         "ip": dev.ip,
                         "label": dev.label,
+                        "raw_label": dev.label,
+                        "display_name": display_name,
+                        "display_label": _operator_physical_display_label(cfg, dev),
                         "type": dev.device_type,
                         "tier": dev.tier,
                         "detail": dev.detail,
@@ -1702,8 +1934,6 @@ def _bg_probe_fleet_overview():
 
     # VM NIC data — batch per node
     vlan_id_to_name = {v.id: v.name for v in cfg.vlans}
-    if 2550 not in vlan_id_to_name:
-        vlan_id_to_name[2550] = "MGMT"
     vm_nics = {}
     node_vmids = {}
     for v in vm_list:
@@ -2882,6 +3112,42 @@ def _allow_setup_admin_window(handler):
         handler._json_response({"error": err}, 403)
         return False
     return True
+
+
+def _setup_store_admin_password(cfg, username, password):
+    """Store and verify setup admin password before users.conf changes."""
+    pw_hash = _hash_password(password)
+    try:
+        if not os.path.exists(cfg.vault_file):
+            if not vault_init(cfg):
+                return "Failed to initialize password vault"
+        if not vault_set(cfg, "auth", f"password_{username}", pw_hash):
+            return "Failed to store password in vault"
+        if not vault_get(cfg, "auth", f"password_{username}"):
+            return "Password storage verification failed"
+    except Exception as e:
+        return str(e)
+    return ""
+
+
+def _setup_session_payload(handler, username, role="admin", **extra):
+    """Create setup session and include the CSRF token setup.js needs."""
+    from freq.api.auth import _auth_lock, _auth_tokens, establish_session
+
+    token = establish_session(handler, username, role)
+    csrf_token = ""
+    with _auth_lock:
+        csrf_token = (_auth_tokens.get(token) or {}).get("csrf_token", "")
+    payload = {
+        "ok": True,
+        "user": username,
+        "role": role,
+        "session_started": True,
+        "csrf_token": csrf_token,
+        "auth_mode": "cookie",
+    }
+    payload.update(extra)
+    return payload
 
 
 def _setup_init_snapshot():
@@ -4520,16 +4786,43 @@ a:hover{{text-decoration:underline}}
             users = _load_users(cfg)
             user = next((u for u in users if u.get("username") == username), None)
             stored_hash = vault_get(cfg, "auth", f"password_{username}") if user else ""
-            if not user or user.get("role") != "admin" or not stored_hash or not _verify_password(password, stored_hash):
+            if not user or user.get("role") != "admin":
+                password_hashes = []
+                for existing in users:
+                    existing_name = existing.get("username", "")
+                    if existing_name:
+                        password_hashes.append(bool(vault_get(cfg, "auth", f"password_{existing_name}")))
+                if users and not any(password_hashes):
+                    store_error = _setup_store_admin_password(cfg, username, password)
+                    if store_error:
+                        self._json_response({"error": f"Failed to store password: {store_error}"}, 500)
+                        return
+                    repaired_users = [{"username": username, "role": "admin", "groups": ""}]
+                    save_error = _save_users_error(cfg, repaired_users)
+                    if save_error:
+                        self._json_response({"error": f"Failed to save user: {save_error}"}, 500)
+                        return
+                    self._json_response(_setup_session_payload(
+                        self, username, "admin", resumed=True, repaired=True, replaced_passwordless_user=True
+                    ))
+                    return
+                self._json_response({"error": "Setup admin session resume failed"}, 403)
+                return
+            if not stored_hash:
+                store_error = _setup_store_admin_password(cfg, username, password)
+                if store_error:
+                    self._json_response({"error": f"Failed to store password: {store_error}"}, 500)
+                    return
+                self._json_response(_setup_session_payload(self, username, "admin", resumed=True, repaired=True))
+                return
+            if not _verify_password(password, stored_hash):
                 self._json_response({"error": "Setup admin session resume failed"}, 403)
                 return
             try:
-                from freq.api.auth import establish_session
-
-                establish_session(self, username, "admin")
+                self._json_response(_setup_session_payload(self, username, "admin", resumed=True))
             except Exception as e:
                 logger.warn(f"setup_create_admin_resume_session_failed: {e}")
-            self._json_response({"ok": True, "user": username, "role": "admin", "session_started": True, "resumed": True})
+                self._json_response({"error": "Setup admin session resume failed"}, 500)
             return
 
         if not username or not password:
@@ -4567,6 +4860,11 @@ a:hover{{text-decoration:underline}}
                 self._json_response({"error": f"User '{username}' already exists"}, 409)
                 return
 
+            store_error = _setup_store_admin_password(cfg, username, password)
+            if store_error:
+                self._json_response({"error": f"Failed to store password: {store_error}"}, 500)
+                return
+
             users.append({"username": username, "role": "admin", "groups": ""})
             os.makedirs(cfg.conf_dir, exist_ok=True)
             save_error = _save_users_error(cfg, users)
@@ -4574,23 +4872,11 @@ a:hover{{text-decoration:underline}}
                 self._json_response({"error": f"Failed to save user: {save_error}"}, 500)
                 return
 
-            # Store password hash in vault
-            pw_hash = _hash_password(password)
             try:
-                if not os.path.exists(cfg.vault_file):
-                    vault_init(cfg)
-                vault_set(cfg, "auth", f"password_{username}", pw_hash)
-            except Exception as e:
-                self._json_response({"error": f"Failed to store password: {e}"}, 500)
-                return
-
-            try:
-                from freq.api.auth import establish_session
-
-                establish_session(self, username, "admin")
+                self._json_response(_setup_session_payload(self, username, "admin"))
             except Exception as e:
                 logger.warn(f"setup_create_admin_session_failed: {e}")
-            self._json_response({"ok": True, "user": username, "role": "admin", "session_started": True})
+                self._json_response({"error": "Setup admin session creation failed"}, 500)
         finally:
             _setup_lock.release()
 
@@ -5323,11 +5609,14 @@ a:hover{{text-decoration:underline}}
         cfg = load_config()
         params = _parse_query(self)
         action = params.get("action", ["status"])[0]
+        target_name = params.get("target", [""])[0]
 
-        pf_ip = cfg.pfsense_ip
-        if not pf_ip:
-            self._json_response({"error": "pfSense IP not configured", "data": {}}, 400)
+        target = _resolve_pfsense_target(cfg, target_name)
+        if not target:
+            self._json_response({"error": "pfSense target not configured", "data": {}, "target": target_name}, 400)
             return
+        pf_ip = target.ip
+        pf_label = getattr(target, "label", "") or getattr(target, "key", "") or "firewall"
 
         actions = {
             "status": (
@@ -5531,7 +5820,10 @@ a:hover{{text-decoration:underline}}
         self._json_response(
             {
                 "action": action,
+                "target": pf_label,
+                "label": pf_label,
                 "host": pf_ip,
+                "ip": pf_ip,
                 "reachable": r.returncode == 0,
                 "auth_failed": auth_failed,
                 "probe_method": "ssh_auth_failed" if auth_failed else ("ssh" if r.returncode == 0 else "ssh_failed"),
@@ -6473,37 +6765,37 @@ a:hover{{text-decoration:underline}}
                 cats[name]["range_start"] = info["range_start"]
             if "range_end" in info:
                 cats[name]["range_end"] = info["range_end"]
+
+        def _physical_admin_payload(d):
+            display_name = getattr(d, "display_name", "") or ""
+            return {
+                "ip": d.ip,
+                "label": d.label,
+                "raw_label": d.label,
+                "display_name": display_name,
+                "display_label": _operator_physical_display_label(cfg, d),
+                "type": d.device_type,
+                "tier": d.tier,
+                "detail": d.detail,
+                "groups": d.groups,
+                "scope": d.scope,
+            }
+
         self._json_response(
             {
                 "tiers": fb.tiers,
                 "categories": cats,
-                "physical": {
-                    k: {
-                        "ip": d.ip,
-                        "label": d.label,
-                        "type": d.device_type,
-                        "tier": d.tier,
-                        "detail": d.detail,
-                        "groups": d.groups,
-                        "scope": d.scope,
-                    }
-                    for k, d in fb.physical.items()
-                },
-                "core_physical": {
-                    k: {"ip": d.ip, "label": d.label, "type": d.device_type, "tier": d.tier, "detail": d.detail, "groups": d.groups, "scope": d.scope}
-                    for k, d in fb.physical.items()
-                    if d.scope != "lab"
-                },
-                "lab_physical": {
-                    k: {"ip": d.ip, "label": d.label, "type": d.device_type, "tier": d.tier, "detail": d.detail, "groups": d.groups, "scope": d.scope}
-                    for k, d in fb.physical.items()
-                    if d.scope == "lab"
-                },
+                "physical": {k: _physical_admin_payload(d) for k, d in fb.physical.items()},
+                "core_physical": {k: _physical_admin_payload(d) for k, d in fb.physical.items() if d.scope != "lab"},
+                "lab_physical": {k: _physical_admin_payload(d) for k, d in fb.physical.items() if d.scope == "lab"},
                 "pve_nodes": {k: {"ip": n.ip, "detail": n.detail} for k, n in fb.pve_nodes.items()},
                 "hosts": [
                     {
                         "ip": h.ip,
                         "label": h.label,
+                        "raw_label": h.label,
+                        "display_name": getattr(h, "display_name", "") or "",
+                        "display_label": getattr(h, "display_name", "") or h.label,
                         "type": h.htype,
                         "groups": h.groups,
                         "vmid": getattr(h, "vmid", 0),
@@ -6594,6 +6886,27 @@ a:hover{{text-decoration:underline}}
                 return
             self._update_fb_toml(fb_path, "update_range", cat_name=cat_name, range_start=rs, range_end=re)
             self._json_response({"ok": True, "action": action})
+
+        elif action == "update_physical_identity":
+            device_key = params.get("device", [""])[0]
+            if not device_key:
+                self._json_response({"error": "device required"}, 400)
+                return
+            if device_key not in cfg.fleet_boundaries.physical:
+                self._json_response({"error": f"Unknown physical device: {device_key}"}, 404)
+                return
+            updates = {}
+            for key in ("display_name", "detail", "groups", "type", "scope"):
+                if key in params:
+                    updates[key] = params.get(key, [""])[0].strip()
+            if "scope" in updates and updates["scope"].lower() not in {"core", "lab"}:
+                self._json_response({"error": "scope must be core or lab"}, 400)
+                return
+            if not updates:
+                self._json_response({"error": "at least one identity field required"}, 400)
+                return
+            self._update_fb_toml(fb_path, "update_physical_identity", device_key=device_key, updates=updates)
+            self._json_response({"ok": True, "action": action, "device": device_key, "updates": updates})
 
         elif action == "update_physical_scope":
             device_key = params.get("device", [""])[0]
@@ -6733,10 +7046,19 @@ a:hover{{text-decoration:underline}}
                     additions.append(f"range_end = {re_val}\n")
                 lines[insert_at or len(lines):insert_at or len(lines)] = additions
 
-        elif op == "update_physical_scope":
-            device_key, scope = kw["device_key"], kw["scope"]
+        elif op in {"update_physical_scope", "update_physical_identity"}:
+            device_key = kw["device_key"]
+            updates = dict(kw.get("updates", {}))
+            if op == "update_physical_scope":
+                updates = {"scope": kw["scope"]}
             in_physical = False
             inline_pat = re.compile(rf"^(\s*{re.escape(device_key)}\s*=\s*\{{)(.*)(\}}\s*)$")
+            key_map = {"type": "type", "display_name": "display_name", "detail": "detail", "groups": "groups", "scope": "scope"}
+
+            def toml_value(value):
+                text = str(value or "")
+                return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
             for i, line in enumerate(lines):
                 stripped = line.strip()
                 if stripped == "[physical]":
@@ -6750,13 +7072,17 @@ a:hover{{text-decoration:underline}}
                 if not m:
                     continue
                 body = m.group(2)
-                if re.search(r"\bscope\s*=", body):
-                    body = re.sub(r'\bscope\s*=\s*"[^"]*"', f'scope = "{scope}"', body)
-                else:
-                    body = body.rstrip()
-                    if body and not body.endswith(","):
-                        body += ","
-                    body += f' scope = "{scope}"'
+                for update_key, value in updates.items():
+                    toml_key = key_map.get(update_key)
+                    if not toml_key:
+                        continue
+                    if re.search(rf"\b{re.escape(toml_key)}\s*=", body):
+                        body = re.sub(rf'\b{re.escape(toml_key)}\s*=\s*"[^"]*"', f"{toml_key} = {toml_value(value)}", body)
+                    else:
+                        body = body.rstrip()
+                        if body and not body.endswith(","):
+                            body += ","
+                        body += f" {toml_key} = {toml_value(value)}"
                 lines[i] = f"{m.group(1)}{body}{m.group(3)}\n"
                 break
 
@@ -6800,6 +7126,7 @@ a:hover{{text-decoration:underline}}
         label = params.get("label", [""])[0]
         new_type = params.get("type", [""])[0]
         new_groups = params.get("groups", [""])[0] if "groups" in params else None
+        new_display_name = params.get("display_name", [""])[0] if "display_name" in params else None
         new_managed = params.get("managed", [None])[0] if "managed" in params else None
         if not label:
             self._json_response({"error": "label required"}, 400)
@@ -6814,6 +7141,8 @@ a:hover{{text-decoration:underline}}
             host.htype = new_type
         if new_groups is not None:
             host.groups = new_groups
+        if new_display_name is not None:
+            host.display_name = new_display_name.strip()
         if new_managed is not None:
             host.managed = str(new_managed).strip().lower() in {"1", "true", "yes", "on", "managed"}
 
@@ -6830,6 +7159,9 @@ a:hover{{text-decoration:underline}}
             {
                 "ok": True,
                 "label": host.label,
+                "raw_label": host.label,
+                "display_name": getattr(host, "display_name", "") or "",
+                "display_label": getattr(host, "display_name", "") or host.label,
                 "type": host.htype,
                 "groups": host.groups,
                 "managed": bool(host.managed),

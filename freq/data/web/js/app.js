@@ -640,10 +640,11 @@ document.addEventListener('click',function(e){
     if(a==='ctTerminal'){openTerminal('ct',da.dataset.ctid||'', '', da.dataset.label||('CT '+(da.dataset.ctid||'')));return;}
     if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)_authFetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags),{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
     if(a==='openVmInfo'){openVmInfo(da.dataset.label,'',+da.dataset.vmid);return;}
+    if(a==='openHost'){openHost(da.dataset.label||g);return;}
     if(a==='openVmCreateForNode'){openVmCreateForNode(da.dataset.node||g);return;}
     if(a==='openInfraDevice'){
       _uiLog('infra_card_click',{message:'open infra '+(da.dataset.label||''),source:'core_systems',label:da.dataset.label||'',infraType:da.dataset.infraType||'',ip:da.dataset.ip||''});
-      openCard('infra',{label:da.dataset.label,infraType:da.dataset.infraType,ip:da.dataset.ip});
+      openCard('infra',{label:da.dataset.label,display_name:da.dataset.displayName||'',display_label:da.dataset.displayLabel||'',raw_label:da.dataset.rawLabel||da.dataset.label,infraType:da.dataset.infraType,ip:da.dataset.ip});
       return;
     }
     if(a==='infraRead'){_runInfraAction(da.dataset.infraType||'',da.dataset.arg||'status',da.dataset.target||'');return;}
@@ -1866,7 +1867,7 @@ var WIDGET_REGISTRY=[
     g+='<div id="hw-physical-cards" class="cards" style="--card-track:220px"></div>';
     el.innerHTML=g;
     /* Populate physical device cards as individual grid items */
-    var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'var(--text)',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'}; pc+='<div class="host-card" data-host-id="'+h.label.toLowerCase()+'"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+h.label.toUpperCase()+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>·</span><span>'+h.role+'</span></div></div><div class="divider-light"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton h-60" ></div></div></div></div>';});
+    var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'var(--text)',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'};var dl=_displayName(h);var secondary=_secondaryIdentity(h); pc+='<div class="host-card" data-host-id="'+h.label.toLowerCase()+'"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+_esc(dl.toUpperCase())+'</h3><div class="host-meta">'+(secondary?'<span>'+_esc(secondary)+'</span><span>·</span>':'')+'<span>'+_esc(h.role)+'</span></div></div><div class="divider-light"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton h-60" ></div></div></div></div>';});
     var pcd=document.getElementById('hw-physical-cards');if(pcd)pcd.innerHTML=pc;
     _loadWidgetOverview();
   }},
@@ -2258,7 +2259,7 @@ function _loadWidgetOverview(){
 }
 var VIEW_SECTIONS={
   home:[],
-  fleet:['fleet-sec-stats','fleet-sec-infra','fleet-lab-section'],
+  fleet:['fleet-sec-stats','fleet-sec-infra','fleet-lab-section','fleet-sec-network-topology','fleet-sec-network-monitoring'],
   docker:['docker-sec-containers'],
   security:['sec-risk','sec-policies'],
   'sec-hardening':['sec-audit','sec-harden'],
@@ -2428,7 +2429,7 @@ var _viewCleanup=[];
 function _onViewCleanup(fn){_viewCleanup.push(fn);}
 function _runViewCleanup(){_viewCleanup.forEach(function(fn){try{fn();}catch(e){}});_viewCleanup=[];}
 var VIEW_IDS=['home','fleet','network','docker','security','sec-hardening','sec-access','sec-compliance','firewall','certs','vpn','vault','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings'];
-var VIEW_ALIASES={security:'certs','sec-hardening':'certs','sec-access':'certs','sec-compliance':'certs',firewall:'fleet',vpn:'certs',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools'};
+var VIEW_ALIASES={security:'certs','sec-hardening':'certs','sec-access':'certs','sec-compliance':'certs',network:'fleet',firewall:'fleet',vpn:'certs',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools'};
 var VIEW_TITLES={home:'HOME',fleet:'FLEET',network:'NETWORK',docker:'DOCKER',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',vault:'VAULT',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS'};
 var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},vault:function(){loadVaultCredentials()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
 /* Nav grouping — maps sub-views to their parent nav button */
@@ -2606,7 +2607,7 @@ function _silentHealthRefresh(){
         var _age=hd.age_seconds?Math.round(hd.age_seconds)+'s':'unknown';
         /* Prefer the backend's own reason — Rick's probe_reason carries
          * the actionable detail like '1/22 auth_failed (worst: nexus —
-         * ssh auth rejected: freq-admin@10.25.255.8)' which beats any
+         * ssh auth rejected: service-account@example-host)' which beats any
          * generic message we could construct here. Also accept legacy
          * .reason if a future variant returns it. */
         var _why=hd.probe_reason||hd.reason||(psBad?ps+' ('+_age+')':structReason);
@@ -3377,7 +3378,7 @@ function loadFleetPage(){
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
-  loadMetricsQuick();startPveMetrics();
+  loadMetricsQuick();startPveMetrics();loadNetworkPage();
   _vmCreatePrewarmOptions();
   /* Overview cards — render immediately if cached, otherwise fetch */
   if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
@@ -3449,11 +3450,11 @@ function _initFleetData(fo){
     var cores=n.cores||0;
     var ramGB=n.ram_gb||0;
     if(!ramGB){(n.detail||'').split(' \u00b7 ').forEach(function(p){var m=p.match(/^(\d+)GB$/);if(m)ramGB=parseInt(m[1]);});}
-    PROD_HOSTS.push({label:n.name,ip:n.ip,type:'pve',role:'HYPERVISOR',cores:cores,ram:ramGB?ramGB+'GB':'-',vlans:['MGMT'],detail:n.detail||''});
+    PROD_HOSTS.push({label:n.name,raw_label:n.raw_label||n.name,display_name:n.display_name||'',display_label:n.display_label||n.display_name||n.name,ip:n.ip,type:'pve',role:'HYPERVISOR',cores:cores,ram:ramGB?ramGB+'GB':'-',vlans:['MGMT'],detail:n.detail||''});
   });
   _normalizeFleetPhysical(fo);
   (fo.core_physical||[]).forEach(function(p){
-    var h={label:p.label,ip:p.ip,type:p.type,role:(p.detail||p.type).split(' · ')[0].toUpperCase(),cores:0,ram:'-',vlans:['MGMT'],detail:p.detail||''};
+    var h={label:p.label,raw_label:p.raw_label||p.label,display_name:p.display_name||'',display_label:p.display_label||p.display_name||p.label,ip:p.ip,type:p.type,role:(p.detail||p.type).split(' · ')[0].toUpperCase(),cores:0,ram:'-',vlans:['MGMT'],detail:p.detail||''};
     var da=_DEVICE_ACTIONS[p.type];
     if(da){h.actions=da.actions;h.outId=p.type==='idrac'?'idrac-out'+(++_idracOutCount>1?_idracOutCount:''):da.outId;}
     PROD_HOSTS.push(h);
@@ -4480,7 +4481,7 @@ function _certCloudflareTokenPanel(plan,onboarding){
   var zone=token.zone_id||(token.zone&&token.zone.zone_id)||(token.zone&&token.zone.name)||detection.cloudflare_zone_id||settings.cloudflare_zone_id||'';
   var endpoint=policy.store_endpoint||API.CERT_CLOUDFLARE_TOKEN;
   var h='<div class="cert-token-panel '+(ready?'is-ready':'is-needed')+'">';
-  h+='<div class="cert-token-head"><div><h4>Cloudflare Token</h4><p>Write-only DNS token intake for direct provisioning. Adopt Existing SSL does not need this for externally managed DC01 certificates.</p></div>'+_certLevelBadge(ready?'ok':'warning',ready?'stored':'not stored')+'</div>';
+  h+='<div class="cert-token-head"><div><h4>Cloudflare Token</h4><p>Write-only DNS token intake for direct provisioning. Adopt Existing SSL does not need this for externally managed certificates.</p></div>'+_certLevelBadge(ready?'ok':'warning',ready?'stored':'not stored')+'</div>';
   h+='<div class="cert-token-state">'+
     '<div class="cert-kv"><span>Secret</span><strong>'+_esc(ready?'configured':'not stored')+'</strong></div>'+
     '<div class="cert-kv"><span>Provider</span><strong>'+_esc(token.provider||settings.dns_provider||'cloudflare')+'</strong></div>'+
@@ -4624,7 +4625,7 @@ function _certTrustedProxyCard(onboarding){
   h+='<div class="cert-dashboard-head"><h4>App Trust</h4>'+_certLevelBadge(trusted.configured?'ok':'warning',trusted.configured?'trusted proxy':'needs trust')+'</div>';
   h+='<p>Controls which reverse-proxy sources the dashboard trusts for public HTTPS forwarding. This is separate from certificate serving truth.</p>';
   h+='<div class="cert-choice-meta">'+_certMiniPills(cidrs.length?cidrs:['no proxy cidrs'],5)+'</div>';
-  h+='<label class="cert-field"><span>Trusted proxy CIDRs</span><input id="cert-trusted-proxy-cidrs" class="input" type="text" placeholder="10.25.255.38/32" value="'+_esc(cidrs.join(', '))+'"></label>';
+  h+='<label class="cert-field"><span>Trusted proxy CIDRs</span><input id="cert-trusted-proxy-cidrs" class="input" type="text" placeholder="192.168.10.38/32" value="'+_esc(cidrs.join(', '))+'"></label>';
   h+='<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certTrustedProxyPreview">PREVIEW TRUST</button><button class="fleet-btn btn-green" data-action="certTrustedProxyApply">APPLY TRUST</button></div>';
   h+='</div>';
   return h;
@@ -4714,7 +4715,7 @@ function _renderCertSetup(plan,status,onboarding,inventory){
     '<p>'+_esc(_certPath(onboarding,'adopt_existing').intent||'Register and verify SSL that already works without issuing a certificate.')+'</p>'+
     '<div class="cert-form-grid">'+
     _certField('cert-adopt-base-domain','Base domain','example.com',settings.base_domain||detection.base_domain||'')+
-    _certField('cert-adopt-proxy-host','Reverse proxy host','proxy01 or 10.25.x.x',(detection.reverse_proxy_host||''))+
+    _certField('cert-adopt-proxy-host','Reverse proxy host','proxy01 or 192.168.10.x',(detection.reverse_proxy_host||''))+
     _certField('cert-adopt-fullchain','Existing fullchain path','optional host path','')+
     _certField('cert-adopt-key','Existing key path','optional host path','')+
     _certField('cert-adopt-owner','Renewal owner','external','external')+
@@ -5231,7 +5232,7 @@ function runMonitorCheck(){
   _authFetch(API.MONITORS_CHECK).then(function(r){return r.json()}).then(function(d){
     if(!el)return;
     var results=d.results||[];
-    if(!results.length){el.innerHTML='<div class="exec-out">No monitors configured. Add monitors to freq.toml.</div>';return;}
+    if(!results.length){el.innerHTML='<div class="exec-out">No monitors configured yet. Add monitor targets from Settings when monitoring configuration is available.</div>';return;}
     var h='<div style="margin-bottom:8px">'+_statCards([{l:'Total',v:d.count||0},{l:'Healthy',v:d.healthy||0,c:'green'},{l:'Unhealthy',v:d.unhealthy||0,c:d.unhealthy>0?'red':'green'}])+'</div>';
     h+='<table><thead><tr><th>URL</th><th>Status</th><th>Latency</th><th>Code</th></tr></thead><tbody>';
     results.forEach(function(m){
@@ -5708,11 +5709,11 @@ function updateTermTargets(){
   }else if(type==='node'){
     if(_fleetCache.fo&&_fleetCache.fo.pve_nodes){
       sel.innerHTML='<option value="">Select node...</option>';
-      _fleetCache.fo.pve_nodes.forEach(function(n){sel.innerHTML+='<option value="'+_esc(n.ip)+'" data-label="'+_esc(n.name)+'">'+_esc(n.name)+' ('+_esc(n.ip)+')</option>';});
+      _fleetCache.fo.pve_nodes.forEach(function(n){var dn=_displayName(n);sel.innerHTML+='<option value="'+_esc(n.ip)+'" data-label="'+_esc(n.name)+'">'+_esc(dn)+' ('+_esc(_secondaryIdentity(n)||n.ip)+')</option>';});
     }else{
       _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
         sel.innerHTML='<option value="">Select node...</option>';
-        (fo.pve_nodes||[]).forEach(function(n){sel.innerHTML+='<option value="'+_esc(n.ip)+'" data-label="'+_esc(n.name)+'">'+_esc(n.name)+' ('+_esc(n.ip)+')</option>';});
+        (fo.pve_nodes||[]).forEach(function(n){var dn=_displayName(n);sel.innerHTML+='<option value="'+_esc(n.ip)+'" data-label="'+_esc(n.name)+'">'+_esc(dn)+' ('+_esc(_secondaryIdentity(n)||n.ip)+')</option>';});
       });
     }
   }else if(type==='pfsense'||type==='truenas'||type==='idrac'||type==='switch'){
@@ -6295,6 +6296,52 @@ function _getLabLabels(healthHosts){
 function _deviceRowId(value){
   return String(value||'device').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'device';
 }
+function _rawLabel(obj){
+  obj=obj||{};
+  return obj.raw_label||obj.label||obj.name||obj.key||'';
+}
+function _displayName(obj){
+  obj=obj||{};
+  return obj.display_label||obj.display_name||obj.name||obj.label||obj.raw_label||obj.key||'';
+}
+function _secondaryIdentity(obj){
+  obj=obj||{};
+  var raw=_rawLabel(obj);
+  var display=_displayName(obj);
+  var parts=[];
+  if(raw&&raw!==display)parts.push(raw);
+  if(obj.ip)parts.push(obj.ip);
+  return parts.join(' · ');
+}
+function _physicalAdminEntries(admin){
+  var src=(admin&&admin.physical)||{};
+  var out=[];
+  function add(key,p){
+    if(!p)return;
+    p=Object.assign({},p);
+    p.key=p.key||key||p.label||p.raw_label;
+    p.label=p.label||p.raw_label||p.key;
+    p.raw_label=p.raw_label||p.label;
+    p.display_label=p.display_label||p.display_name||p.label;
+    out.push(p);
+  }
+  if(Array.isArray(src))src.forEach(function(p){add(p&&p.key,p);});
+  else Object.keys(src).forEach(function(k){add(k,src[k]);});
+  return out;
+}
+function _deviceIdentityInput(rowId,it,editable){
+  var val=it&&it.display_name?it.display_name:'';
+  var label=_displayName(it);
+  var raw=_rawLabel(it);
+  var secondary=_secondaryIdentity(it);
+  if(!editable){
+    return '<strong>'+_esc(label)+'</strong>'+(secondary?'<div class="text-sub">'+_esc(secondary)+'</div>':'');
+  }
+  return '<div class="device-identity-stack">'+
+    '<input id="dn-'+rowId+'" value="'+_esc(val)+'" class="device-prop-input device-display-input" placeholder="'+_esc(raw||label||'Display name')+'">'+
+    '<div class="text-sub">'+_esc(secondary||raw||'raw inventory identity')+'</div>'+
+  '</div>';
+}
 var DEVICE_ASSIGNMENT_OPTIONS=[
   {value:'prod',label:'PROD'},
   {value:'lab',label:'LAB'},
@@ -6376,13 +6423,14 @@ function _loadLabAssignments(){
     _fleetAdminData=admin;
     var items=[];
     var adminHosts={};
-    (admin.hosts||[]).forEach(function(h){adminHosts[h.label]=h;});
+    (admin.hosts||[]).forEach(function(h){adminHosts[_rawLabel(h)]=h;});
+    var adminPhysical=_physicalAdminEntries(admin);
     /* Add all hosts from health data */
     if(hd&&hd.hosts)hd.hosts.forEach(function(h){
       var ah=adminHosts[h.label]||{};
       var groupsText=String(h.groups||ah.groups||'').toLowerCase();
       var serverCat=groupsText.indexOf('out_of_contract')>=0||groupsText.indexOf('ooc')>=0?'ooc':groupsText.indexOf('lab')>=0?'lab':groupsText.indexOf('template')>=0?'template':'prod';
-      items.push({label:h.label,type:h.type||ah.type||'linux',ip:h.ip||ah.ip||'',groups:ah.groups||h.groups||'',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
+      items.push({label:h.label,raw_label:ah.raw_label||h.label,display_name:ah.display_name||h.display_name||'',display_label:ah.display_label||h.display_label||ah.display_name||h.display_name||h.label,type:h.type||ah.type||'linux',ip:h.ip||ah.ip||'',groups:ah.groups||h.groups||'',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
     });
     /* Add inventory-only/unmanaged hosts that are intentionally absent from health. */
     var healthSet={};items.forEach(function(i){healthSet[i.label]=true;});
@@ -6391,7 +6439,17 @@ function _loadLabAssignments(){
       var ah=adminHosts[label]||{};
       var groupsText=String(ah.groups||'').toLowerCase();
       var serverCat=groupsText.indexOf('out_of_contract')>=0||groupsText.indexOf('ooc')>=0?'ooc':groupsText.indexOf('lab')>=0?'lab':groupsText.indexOf('template')>=0?'template':'prod';
-      items.push({label:label,type:ah.type||'linux',ip:ah.ip||'',groups:ah.groups||'',node:'',status:ah.managed===false?'inventory':'unprobed',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
+      items.push({label:label,raw_label:ah.raw_label||label,display_name:ah.display_name||'',display_label:ah.display_label||ah.display_name||label,type:ah.type||'linux',ip:ah.ip||'',groups:ah.groups||'',node:'',status:ah.managed===false?'inventory':'unprobed',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
+    });
+    /* Add physical/core devices that are not normal SSH hosts. */
+    var itemRawSet={};items.forEach(function(i){itemRawSet[_rawLabel(i)||i.label]=true;});
+    adminPhysical.forEach(function(ph){
+      var raw=_rawLabel(ph)||ph.key;
+      if(itemRawSet[raw])return;
+      var groupsText=String(ph.groups||'').toLowerCase();
+      var serverCat=(ph.scope==='lab'||groupsText.indexOf('lab')>=0)?'lab':groupsText.indexOf('out_of_contract')>=0||groupsText.indexOf('ooc')>=0?'ooc':'prod';
+      items.push({label:ph.label||raw,raw_label:raw,key:ph.key||raw,display_name:ph.display_name||'',display_label:ph.display_label||ph.display_name||ph.label||raw,type:ph.type||'unknown',ip:ph.ip||'',groups:ph.groups||'',detail:ph.detail||'',node:'',status:'inventory',serverCat:serverCat,source:'physical',managed:false,vmid:0,scope:ph.scope||'core'});
+      itemRawSet[raw]=true;
     });
     /* Add VMs not already covered by hosts (VMs without SSH entries) */
     var hostSet={};items.forEach(function(i){hostSet[i.label]=true;});
@@ -6407,28 +6465,33 @@ function _loadLabAssignments(){
       if(aLab&&!bLab)return -1;if(!aLab&&bLab)return 1;
       return a.label<b.label?-1:1;
     });
-    var h='<table class="device-assignment-table"><thead><tr><th>Name</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th><th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th></tr></thead><tbody>';
+    var h='<table class="device-assignment-table"><thead><tr><th>Identity</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th><th>Properties</th><th>Management</th><th>Permissions</th><th>Save</th></tr></thead><tbody>';
     items.forEach(function(it){
       var vmCat=it.source==='pve'?(_deviceCategoryForVmid(it.vmid,admin)||it.vmCategory||''):'';
       var assignment=it.source==='pve'?_deviceAssignmentFromCategory(vmCat,it.serverCat):_deviceAssignment(it.label,it.serverCat);
       var statusColor=it.status==='online'||it.status==='running'?'var(--green)':'var(--text-dim)';
       var rowId=_deviceRowId((it.source==='pve'?'vm-'+it.vmid:it.label));
       var manageable=it.source==='host';
+      var physical=it.source==='physical';
       var permissionHtml=it.source==='pve'?_devicePermissionTags(admin,vmCat):'<span class="tag">'+(it.managed?'managed':'inventory')+'</span>';
-      h+='<tr><td><strong>'+_esc(it.label)+'</strong>'+(it.vmid?'<div class="text-sub">VMID '+_esc(String(it.vmid))+'</div>':'')+'</td>';
+      if(physical)permissionHtml='<span class="tag">'+_esc(String(it.scope||'core').toUpperCase())+'</span>';
+      h+='<tr><td>'+_deviceIdentityInput(rowId,it,manageable||physical)+(it.vmid?'<div class="text-sub">VMID '+_esc(String(it.vmid))+'</div>':'')+'</td>';
       h+='<td class="mono-11">'+_esc((it.type||'unknown').toUpperCase())+'</td>';
       h+='<td class="mono-11">'+_esc(it.ip||it.node||'-')+'</td>';
       h+='<td><span style="color:'+statusColor+'">'+it.status.toUpperCase()+'</span></td>';
       h+='<td>'+_deviceAssignmentSelect(rowId,assignment)+'</td>';
       if(manageable){
-        h+='<td><div class="device-props-grid">'+_deviceTypeSelect(rowId,it.type)+'<input id="hg-'+rowId+'" value="'+_esc(it.groups||'')+'" class="device-prop-input" placeholder="prod,media"></div></td>';
+        h+='<td><div class="device-props-grid">'+_deviceTypeSelect(rowId,it.type)+'<input id="hg-'+rowId+'" value="'+_esc(it.groups||'')+'" class="device-prop-input" placeholder="prod,media"><input id="hd-'+rowId+'" value="'+_esc(it.detail||'')+'" class="device-prop-input" placeholder="role/detail"></div></td>';
         h+='<td><select id="hm-'+rowId+'" class="device-prop-select"><option value="true"'+(it.managed?' selected':'')+'>managed</option><option value="false"'+(!it.managed?' selected':'')+'>inventory-only</option></select></td>';
+      }else if(physical){
+        h+='<td><div class="device-props-grid">'+_deviceTypeSelect(rowId,it.type)+'<input id="hg-'+rowId+'" value="'+_esc(it.groups||'')+'" class="device-prop-input" placeholder="prod,network"><input id="hd-'+rowId+'" value="'+_esc(it.detail||'')+'" class="device-prop-input" placeholder="role/detail"></div></td>';
+        h+='<td><span class="text-sub">physical inventory</span></td>';
       }else{
         h+='<td><span class="text-sub">PVE inventory</span></td>';
         h+='<td><span class="text-sub">PVE only</span></td>';
       }
       h+='<td><div class="device-permission-tags">'+permissionHtml+'</div></td>';
-      h+='<td><button class="fleet-btn pill-ok-sm" data-action="saveDeviceAssignmentRow" data-source="'+_esc(it.source)+'" data-label="'+_esc(it.label)+'" data-vmid="'+_esc(String(it.vmid||''))+'" data-row="'+_esc(rowId)+'">SAVE</button></td>';
+      h+='<td><button class="fleet-btn pill-ok-sm" data-action="saveDeviceAssignmentRow" data-source="'+_esc(it.source)+'" data-label="'+_esc(it.label)+'" data-device="'+_esc(it.key||_rawLabel(it)||it.label)+'" data-vmid="'+_esc(String(it.vmid||''))+'" data-row="'+_esc(rowId)+'">SAVE</button></td>';
       h+='</tr>';
     });
     h+='</tbody></table>';
@@ -6544,6 +6607,7 @@ function saveDeviceAssignmentRow(btn){
   var rowId=btn.dataset.row||'';
   var source=btn.dataset.source||'';
   var label=btn.dataset.label||'';
+  var device=btn.dataset.device||label;
   var vmid=parseInt(btn.dataset.vmid||'0',10);
   var assignmentEl=document.getElementById('da-'+rowId);
   var assignment=assignmentEl?assignmentEl.value:'prod';
@@ -6553,10 +6617,33 @@ function saveDeviceAssignmentRow(btn){
   }
   var typeEl=document.getElementById('ht-'+rowId);
   var groupEl=document.getElementById('hg-'+rowId);
+  var detailEl=document.getElementById('hd-'+rowId);
+  var displayEl=document.getElementById('dn-'+rowId);
   var managedEl=document.getElementById('hm-'+rowId);
   if(!typeEl||!groupEl){toast('Row controls unavailable','error');return;}
   groupEl.value=_deviceGroupsForAssignment(groupEl.value,assignment);
+  if(source==='physical'){
+    var scope=assignment==='lab'?'lab':'core';
+    var purl=API.ADMIN_BOUNDARIES_UPDATE+
+      '?action=update_physical_identity&device='+encodeURIComponent(device)+
+      '&display_name='+encodeURIComponent(displayEl?displayEl.value.trim():'')+
+      '&type='+encodeURIComponent(typeEl.value)+
+      '&detail='+encodeURIComponent(detailEl?detailEl.value.trim():'')+
+      '&groups='+encodeURIComponent(groupEl.value)+
+      '&scope='+encodeURIComponent(scope);
+    _authFetch(purl,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+      if(d.error){toast('Error: '+d.error,'error');return;}
+      _labAssignments[label]=assignment;
+      localStorage.setItem('freq_lab_assign',JSON.stringify(_labAssignments));
+      toast((displayEl&&displayEl.value.trim()?displayEl.value.trim():label)+' identity updated','success');
+      loadFleetAdmin();
+      _loadLabAssignments();
+      refreshCurrentView();
+    }).catch(function(e){toast('Failed: '+e,'error');});
+    return;
+  }
   var url='/api/admin/hosts/update?label='+encodeURIComponent(label)+'&type='+encodeURIComponent(typeEl.value)+'&groups='+encodeURIComponent(groupEl.value);
+  if(displayEl)url+='&display_name='+encodeURIComponent(displayEl.value.trim());
   if(managedEl)url+='&managed='+encodeURIComponent(managedEl.value);
   _authFetch(url,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
@@ -6686,36 +6773,30 @@ function refreshWatchdogHeader(){
     }
     /* Not installed — optional add-on, render plainly */
     if(res.status===501||d.watchdog_installed===false){
-      el.innerHTML=wdHtml('text-dim','Watchdog: not installed (optional add-on)','wd: off');
+      el.innerHTML=wdHtml('text-dim','Watchdog: not installed','wd: off');
       return;
     }
     /* Installed but daemon unreachable (503) */
     if(res.status===503||d.watchdog_down){
-      el.innerHTML=wdHtml('yellow','Watchdog: daemon not reachable','wd: down');
+      el.innerHTML=wdHtml('red','Watchdog: error','wd: error');
       return;
     }
     /* Error from daemon itself */
     if(d.error){
-      el.innerHTML=wdHtml('yellow','Watchdog: '+_esc(String(d.error)).substring(0,60),'wd: warn');
+      el.innerHTML=wdHtml('red','Watchdog: error','wd: error');
       return;
     }
     /* Working — show local audit evidence */
-    var hosts=d.hosts||0;var errors=d.errors||0;var age=d.age_seconds?Math.round(d.age_seconds):null;
+    var errors=d.errors||0;var age=d.age_seconds?Math.round(d.age_seconds):null;
     var wdStatus=String(d.status||'unknown');
     var pending=d.pending_count||0;
-    var clr=(errors>0||pending>0||wdStatus==='pending'||wdStatus==='degraded')?'yellow':hosts>0?'green':'text-dim';
-    var parts=[];
-    parts.push(wdStatus);
-    parts.push(hosts+' hosts observed');
-    if(errors>0)parts.push(errors+' errors');
-    if(pending>0)parts.push(pending+' pending');
-    if(age!==null)parts.push(age+'s ago');
-    var compact='wd: '+wdStatus;
-    if(hosts>0)compact+=' · '+hosts;
-    if(errors>0)compact+=' · '+errors+'e';
-    if(age!==null)compact+=' · '+age+'s';
-    el.innerHTML=wdHtml(clr,'Watchdog: '+parts.join(' · '),compact);
-  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span class="watchdog-label" style="color:var(--text-dim)"><span class="watchdog-full">Watchdog: status unavailable</span><span class="watchdog-compact">wd: ?</span></span>';});
+    var unhealthy=(errors>0||pending>0||wdStatus==='pending'||wdStatus==='degraded'||(wdStatus!=='healthy'&&wdStatus!=='ok'));
+    var full=unhealthy?'Watchdog: error':'Watchdog: healthy';
+    if(age!==null)full+=' \u00b7 '+age+'s ago';
+    var compact=unhealthy?'wd: error':'wd: healthy';
+    if(age!==null)compact+=' \u00b7 '+age+'s';
+    el.innerHTML=wdHtml(unhealthy?'red':'green',full,compact);
+  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span class="watchdog-label" style="color:var(--red)"><span class="watchdog-full">Watchdog: error</span><span class="watchdog-compact">wd: error</span></span>';});
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -6767,16 +6848,18 @@ function _infraRoleCard(ph,healthMap){
   var live=healthMap[ph.label];
   var up=ph.reachable||false;if(live&&_healthIsLive(live))up=true;
   var safeId=ph.label.replace(/[^a-zA-Z0-9]/g,'-');
-  var c='<div class="infra-role-card" data-action="openInfraDevice" data-label="'+_esc(ph.label)+'" data-infra-type="'+_esc(ph.type)+'" data-ip="'+_esc(ph.ip||'')+'" style="cursor:pointer">';
+  var display=_displayName(ph);
+  var secondary=_secondaryIdentity(ph);
+  var c='<div class="infra-role-card" data-action="openInfraDevice" data-label="'+_esc(ph.label)+'" data-raw-label="'+_esc(ph.raw_label||ph.label)+'" data-display-name="'+_esc(ph.display_name||'')+'" data-display-label="'+_esc(display)+'" data-infra-type="'+_esc(ph.type)+'" data-ip="'+_esc(ph.ip||'')+'" style="cursor:pointer">';
   /* Role label row */
   c+='<div class="role-label" style="color:'+roleInfo.color+'"><span class="role-icon">'+roleInfo.icon+'</span>'+roleInfo.role+'</div>';
   /* Device name + status */
   c+='<div class="flex-between">';
-  c+='<h3 class="device-name">'+ph.label+'</h3>';
+  c+='<h3 class="device-name">'+_esc(display)+'</h3>';
   c+='<span id="infra-status-'+safeId+'" style="font-size:11px;font-weight:600;display:flex;align-items:center"><span class="status-dot '+(up?'up':'down')+'"></span>'+(up?'REACHABLE':'UNREACHABLE')+'</span>';
   c+='</div>';
   /* Vendor/model subtitle */
-  c+='<div class="device-sub">'+ph.detail+' \u00b7 '+ph.ip+'</div>';
+  c+='<div class="device-sub">'+_esc(ph.detail||'')+(secondary?' \u00b7 '+_esc(secondary):'')+'</div>';
   /* Live role-specific metrics — placeholder, filled by /api/infra/quick */
   c+='<div class="role-metrics" id="infra-metrics-'+safeId+'">';
   if(up){
@@ -7026,25 +7109,23 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
     var loadVal=parseFloat(h.load)||0;var cores=parseInt(h.cores)||1;
     var loadPct=cores>0?Math.round(loadVal/cores*100):0;
-    var c='<div class="host-card cursor-ptr" data-host-id="'+h.label.toLowerCase()+'" onclick="openHost(\''+h.label+'\')" >';
-    c+='<div class="host-head"><h3 style="color:'+cl+'">'+h.label+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>\u00b7</span><span>'+(h.type||'Linux').toUpperCase()+'</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div>';
-    c+='<div class="divider-light">';
+    var roleKind=(String(h.label||'').toLowerCase()==='freq-test')?'lab-vm':'linux';
+    var c=_labRoleCardStart(h.label,roleKind==='lab-vm'?'LAB VM':(h.type||'LINUX').toUpperCase(),h.ip,(up?'ONLINE':'OFFLINE'),up?'c-green':'c-red',roleKind,cl,h.label);
     if(up){
       var _isStorage=h.type==='truenas';
       if(!_resourceMetricsSupported(h)){
-        c+=_managementMetricRows(h);
+        c+=_labMetric('MANAGEMENT',h.ip||'reachable')+_labMetric('ROLE',(h.type||'linux').toUpperCase());
       } else {
-        c+=_mrow('CPU',cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%',loadPct,'var(--purple-light)');
-        if(_isStorage){c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM (ARC)</span><span class="metric-val">'+_ramGB(ramUsed)+' / '+_ramGB(ramTotal)+'</span></div><div class="pbar"><div class="pbar-fill" style="width:'+ramPct+'%;background:var(--blue)"></div></div></div>';}
-        else{c+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');}
-        c+=_mrow('DISK',(h.disk||'?'),diskPct,'var(--green)');
-        c+='<div class="metric-row" id="ntp-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val c-dim-fs11" >...</span></div></div>';
-        c+='<div class="metric-row" id="upd-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val c-dim-fs11" >...</span></div></div>';
+        c+=_labMetric('CPU',cores+(cores>1?' cores':' core')+' \u00b7 '+loadPct+'%');
+        c+=_labMetric(_isStorage?'RAM (ARC)':'RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal));
+        c+=_labMetric('DISK',(h.disk||'?'));
+        c+=_labMetric('STATUS','ONLINE');
       }
     } else {
-      c+='<p style="color:var(--text-dim);font-size:12px;padding:8px 0">Host unreachable</p>';
+      c+=_labMetric('STATUS','UNREACHABLE')+_labMetric('IP',h.ip||'-');
     }
-    c+='</div></div>';
+    c+=_labActions('host',h.label);
+    c+='</div>';
     if(isLab)labCards+=c;
   });
   /* Also show lab-tagged or lab-category VMs from PVE that aren't in hosts.toml */
@@ -7054,27 +7135,74 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     if(!labLabels[v.label]&&v.category!=='lab')return;
     var isRunning=v.status==='running';
     var cl=_hostColor(v.label,'vm',v.node);
-    var c='<div class="host-card" data-host-id="'+v.label.toLowerCase()+'">';
-    c+='<div class="host-head"><h3 style="color:'+cl+'">'+v.label+'</h3><div class="host-meta"><span>VM '+v.vmid+'</span><span>\u00b7</span><span>'+(v.node||'?')+'</span><span>\u00b7</span>'+(isRunning?'<span class="c-green">RUNNING</span>':'<span class="c-dim">STOPPED</span>')+'</div></div>';
-    c+='<div class="divider-light"><p style="color:var(--text-dim);font-size:12px;padding:8px 0">'+(isRunning?v.cores+' cores \u00b7 '+v.ram:'No SSH entry \u00b7 PVE data only')+'</p></div></div>';
+    if(String(v.label||'').toLowerCase()==='pfsense-lab'){
+      var fw=_labRoleCardStart(v.label,'FIREWALL','VM '+v.vmid+' \u00b7 '+(v.node||'?'),(isRunning?'RUNNING':'STOPPED'),isRunning?'c-green':'c-dim','firewall',cl,v.label);
+      fw+=_labMetric('VMID',v.vmid||'-');
+      fw+=_labMetric('NODE',v.node||'-');
+      fw+=_labMetric('CPU',v.cores?String(v.cores)+' cores':'-');
+      fw+=_labMetric('RAM',v.ram||'-');
+      fw+=_labActions('pfsense',v.label);
+      fw+='</div>';
+      labCards+=fw;
+      return;
+    }
+    var kind=String(v.label||'').toLowerCase().indexOf('lab-pve')===0?'lab-pve':'lab-vm';
+    var c=_labRoleCardStart(v.label,kind==='lab-pve'?'LAB PVE NODE':'LAB VM','VM '+v.vmid+' \u00b7 '+(v.node||'?'),(isRunning?'RUNNING':'STOPPED'),isRunning?'c-green':'c-dim',kind,cl,v.label);
+    c+=_labMetric('VMID',v.vmid||'-');
+    c+=_labMetric('NODE',v.node||'-');
+    c+=_labMetric('CPU',v.cores?String(v.cores)+' cores':'-');
+    c+=_labMetric('RAM',v.ram||'-');
+    c+=_labActions('vm',v.label,v.vmid);
+    c+='</div>';
     labCards+=c;
   });
   return labCards;
 }
+function _labMetric(label,value){
+  return '<div class="lab-metric"><span>'+_esc(label)+'</span><strong>'+_esc(value==null?'-':String(value))+'</strong></div>';
+}
+function _labRoleCardStart(label,kind,meta,status,statusClass,roleClass,color,targetLabel){
+  var safeId=_esc(String(label||'').toLowerCase());
+  var cls=roleClass==='firewall'?'lab-card-firewall':roleClass==='nas'?'lab-card-nas':roleClass==='lab-pve'?'lab-card-pve':'lab-card-vm';
+  var h='<div class="host-card lab-role-card '+cls+' cursor-ptr" data-host-id="'+safeId+'" data-action="openHost" data-label="'+_esc(targetLabel||label||'')+'">';
+  h+='<div class="lab-role-top"><div><h3 class="lab-title" style="color:'+color+'">'+_esc(label)+'</h3><div class="lab-meta">'+_esc(meta||'')+' \u00b7 <span class="'+statusClass+'">'+_esc(status||'UNKNOWN')+'</span></div></div><span class="lab-kind">'+_esc(kind)+'</span></div>';
+  h+='<div class="lab-metrics">';
+  return h;
+}
+function _labActions(type,label,vmid){
+  var h='</div><div class="lab-actions">';
+  if(type==='pfsense'){
+    ['status','interfaces','rules','nat','gateways','states'].forEach(function(a){
+      h+='<button class="fleet-btn" data-action="infraRead" data-infra-type="pfsense" data-arg="'+a+'" data-target="'+_esc(label)+'">'+a.toUpperCase()+'</button>';
+    });
+  }else if(type==='truenas'){
+    ['status','pools','datasets','shares'].forEach(function(a){
+      h+='<button class="fleet-btn" data-action="infraRead" data-infra-type="truenas" data-arg="'+a+'" data-target="'+_esc(label)+'">'+a.toUpperCase()+'</button>';
+    });
+  }else if(type==='vm'&&vmid){
+    h+='<button class="fleet-btn" data-action="openVmInfo" data-vmid="'+_esc(vmid)+'" data-label="'+_esc(label)+'">OPEN VM</button>';
+  }else{
+    h+='<button class="fleet-btn" data-action="openHost" data-label="'+_esc(label)+'">OPEN HOST</button>';
+  }
+  return h+'</div>';
+}
 function _plainLabDeviceCard(dev){
   dev=dev||{};
   var label=dev.label||dev.name||'device';
+  var display=_displayName(dev);
+  var secondary=_secondaryIdentity(dev);
   var type=dev.type||'device';
   var cl=_hostColor(label,type);
   var up=String(dev.status||'').toLowerCase()==='online'||String(dev.status||'').toLowerCase()==='running';
-  var c='<div class="host-card cursor-ptr" data-host-id="'+_esc(label.toLowerCase())+'" onclick="openHost(\''+_esc(label)+'\')" >';
-  c+='<div class="host-head"><h3 style="color:'+cl+'">'+_esc(label)+'</h3><div class="host-meta">';
-  if(dev.ip)c+='<span>'+_esc(dev.ip)+'</span><span>\u00b7</span>';
-  c+='<span>'+_esc(String(type).toUpperCase())+'</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div>';
-  c+='<div class="divider-light">';
-  c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">ASSIGNMENT</span><span class="metric-val fs-11">LAB</span></div></div>';
-  if(dev.detail)c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">DETAIL</span><span class="metric-val fs-11">'+_esc(dev.detail)+'</span></div></div>';
-  c+='</div></div>';
+  var role=type==='pfsense'?'firewall':type==='truenas'?'nas':'lab-vm';
+  var kind=type==='pfsense'?'FIREWALL':type==='truenas'?'NAS':'LAB DEVICE';
+  var c=_labRoleCardStart(display,kind,secondary||dev.ip||'LAB',up?'ONLINE':'OFFLINE',up?'c-green':'c-red',role,cl,label);
+  c+=_labMetric('ASSIGNMENT','LAB');
+  c+=_labMetric('TYPE',String(type).toUpperCase());
+  if(dev.ip)c+=_labMetric('IP',dev.ip);
+  if(dev.detail)c+=_labMetric('DETAIL',dev.detail);
+  c+=_labActions(type==='pfsense'?'pfsense':type==='truenas'?'truenas':'host',label);
+  c+='</div>';
   return c;
 }
 function _isLabPhysical(ph){
@@ -7083,12 +7211,17 @@ function _isLabPhysical(ph){
 }
 function _normalizeFleetPhysical(fo){
   if(!fo)return;
-  var all=_arr(fo.all_physical);
-  if(!all.length){
-    all=_arr(fo.physical).concat(_arr(fo.lab_physical));
+  function physList(v){
+    if(Array.isArray(v))return v;
+    if(v&&typeof v==='object')return Object.keys(v).map(function(k){var p=Object.assign({},v[k]||{});p.key=p.key||k;p.label=p.label||p.raw_label||k;p.raw_label=p.raw_label||p.label;return p;});
+    return [];
   }
-  fo.core_physical=fo.core_physical||all.filter(function(p){return !_isLabPhysical(p);});
-  fo.lab_physical=fo.lab_physical||all.filter(function(p){return _isLabPhysical(p);});
+  var all=physList(fo.all_physical);
+  if(!all.length){
+    all=physList(fo.physical).concat(physList(fo.lab_physical));
+  }
+  fo.core_physical=physList(fo.core_physical);if(!fo.core_physical.length)fo.core_physical=all.filter(function(p){return !_isLabPhysical(p);});
+  fo.lab_physical=physList(fo.lab_physical);if(!fo.lab_physical.length)fo.lab_physical=all.filter(function(p){return _isLabPhysical(p);});
   fo.all_physical=all.length?all:fo.core_physical.concat(fo.lab_physical);
   fo.physical=fo.core_physical;
 }
@@ -7098,6 +7231,8 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
   healthMap=healthMap||{};vmsByNode=vmsByNode||{};ctsByNode=ctsByNode||{};ctrByVmid=ctrByVmid||{};labLabels=labLabels||{};
   pveNodes.forEach(function(pn){
     var nodeName=pn.name;
+    var nodeDisplay=_displayName(pn);
+    var nodeSecondary=_secondaryIdentity(pn);
     var cl=_hostColor(nodeName,'pve');
     var live=healthMap[nodeName];
     var up=(live&&_healthIsLive(live))||pn.online===true;
@@ -7122,7 +7257,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
     var detailRam=(pn.detail||'').match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':(pn.ram_gb?pn.ram_gb+'GB':'?');
     var nodeCard='<div class="host-card pve-node-card" data-host-id="'+nodeName.toLowerCase()+'" data-action="openVmInfo" data-label="'+nodeName+'" data-vmid="0">';
     nodeCard+='<div class="pve-node-main">';
-    nodeCard+='<div class="pve-node-id"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div><div class="pve-node-detail">'+_esc(pn.detail||'')+'</div></div>';
+    nodeCard+='<div class="pve-node-id"><h3 style="color:'+cl+'">'+_esc(nodeDisplay)+'</h3><div class="host-meta">'+(nodeSecondary?'<span>'+_esc(nodeSecondary)+'</span><span>\u00b7</span>':'')+'<span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div><div class="pve-node-detail">'+_esc(pn.detail||'')+'</div></div>';
     nodeCard+='<div class="pve-node-summary">';
     if(up){
       if(!live)live={cores:'0',load:'0',disk:'0%',ram:'0/0MB'};
@@ -7337,6 +7472,9 @@ function _renderFleetData(fo,hd,md,ctd){
       var live=healthMap[ph.label]||{};
       labCards+=_plainLabDeviceCard({
         label:ph.label,
+        raw_label:ph.raw_label||ph.label,
+        display_name:ph.display_name||'',
+        display_label:ph.display_label||ph.display_name||ph.label,
         ip:ph.ip,
         type:ph.type||'device',
         status:(live&&_healthIsLive(live))?'online':'offline',
@@ -7540,7 +7678,7 @@ function _toolExec(content){
   _authFetch(API.STATUS).then(function(r){return r.json()}).then(function(d){
     _execHosts=[{value:'all',label:'ALL HOSTS',detail:'Run on every host'}];
     d.hosts.forEach(function(h){_execHosts.push({value:h.label,label:h.label.toUpperCase(),detail:h.ip+' · '+(h.type||'linux').toUpperCase()+(h.status==='up'?' · ONLINE':' · OFFLINE')});});
-    PROD_HOSTS.forEach(function(h){_execHosts.push({value:h.label,label:h.label.toUpperCase(),detail:h.ip+' · '+h.role});});
+    PROD_HOSTS.forEach(function(h){_execHosts.push({value:h.label,label:_displayName(h).toUpperCase(),detail:(_secondaryIdentity(h)||h.ip)+' · '+h.role});});
     PROD_VMS.forEach(function(v){_execHosts.push({value:v.label,label:v.label.toUpperCase(),detail:v.ip+' · VM '+v.vmid+' · '+v.node});});
     window._execHostsList=_execHosts;
     renderExecDropdown(_execHosts);
@@ -7863,7 +8001,7 @@ function _vmCreateNicHtml(row,data){
     '<div class="vmt-nic-grid">'+
       '<div><label class="label-sub">NETWORK</label><select id="'+_vmCreateRowId(row,'vlan')+'" class="input-primary">'+_vmCreateSelectOptions(vlans,function(n){return _vmCreateVlanValue(n);},function(n){return (n.name||('VLAN '+_vmCreateVlanValue(n)))+(n.subnet?' / '+n.subnet:'');},vlan)+'</select></div>'+
       '<div><label class="label-sub">IP MODE</label><select id="'+_vmCreateRowId(row,'ip-mode')+'" class="input-primary"><option value="auto"'+(ipMode==='auto'?' selected':'')+'>Auto static IP</option><option value="dhcp"'+(ipMode==='dhcp'?' selected':'')+'>DHCP</option><option value="manual"'+(ipMode==='manual'?' selected':'')+'>Manual static IP</option></select></div>'+
-      '<div id="'+_vmCreateRowId(row,'ip-wrap')+'"><label class="label-sub">STATIC IP</label><input id="'+_vmCreateRowId(row,'ip')+'" class="input-primary" placeholder="10.25.25.x" value="'+_esc((data&&data.ip)||'')+'"></div>'+
+      '<div id="'+_vmCreateRowId(row,'ip-wrap')+'"><label class="label-sub">STATIC IP</label><input id="'+_vmCreateRowId(row,'ip')+'" class="input-primary" placeholder="192.168.20.x" value="'+_esc((data&&data.ip)||'')+'"></div>'+
       '<div><label class="label-sub">BRIDGE</label><input id="'+_vmCreateRowId(row,'bridge')+'" class="input-primary" value="'+_esc(bridge)+'"></div>'+
     '</div>'+
     '<div id="'+_vmCreateRowId(row,'truth')+'" class="host-meta vmt-nic-truth"></div>'+
@@ -7958,6 +8096,8 @@ function _vmCreateRenderLoaded(opts){
   var memory=opts.memory||{};
   var disk=opts.disk||{};
   var policy=opts.network_policy||{};
+  var networkSetupRequired=!!(policy.network_setup_required||opts.network_setup_required);
+  var networkSetupHint=policy.network_setup_hint||opts.network_setup_hint||'Configure VM Network Profiles before creating static-IP VMs.';
   var selectedNode=_pendingVmCreateNode||_vmCreateNodeValue(nodes[0])||'';
   var defaultTemplate=templates[0]||{};
   var defaultCpu=cpu.default||'x86-64-v2-AES';
@@ -7973,7 +8113,8 @@ function _vmCreateRenderLoaded(opts){
       '<div><label class="label-sub">STORAGE</label><select id="vmt-c-storage" class="input-primary">'+_vmCreateStorageOptions(selectedNode,'')+'</select></div>'+
     '</div>'+
     '<section class="vmt-create-section">'+
-      '<div class="vmt-create-section-head"><div><strong>NETWORK INTERFACES</strong><span>Gateway and free-IP policy are resolved by the backend.</span></div><button class="fleet-btn btn-cyan" data-action="vmtAddNic">ADD NIC</button></div>'+
+      '<div class="vmt-create-section-head"><div><strong>NETWORK INTERFACES</strong><span>Gateway and free-IP policy come from configured VM Network Profiles.</span></div><button class="fleet-btn btn-cyan" data-action="vmtAddNic">ADD NIC</button></div>'+
+      (networkSetupRequired?'<div class="vmt-network-warning">'+_esc(networkSetupHint)+' Open Settings to define network profiles and gateway rules for this site.</div>':'')+
       '<div id="vmt-c-nics" class="vmt-nic-list"></div>'+
       '<div class="host-meta vmt-policy">'+
         '<span>SCHEMA '+_esc(opts.schema_version||'1')+'</span><span>/</span>'+
@@ -9755,18 +9896,24 @@ function _renderIdracOutput(d,action){
   });
   return html||'<div class="c-yellow">No BMC targets returned for '+_esc(action)+'</div>';
 }
-function pfAction(action){
+function pfAction(action,target){
   var o=_infraOut('pf-out');if(!o)return;
-  o.innerHTML='<span class="c-dim">Querying pfSense ('+action+')...</span>';
-  _authFetch(API.INFRA_PFSENSE+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  var suffix=target?' on '+target:'';
+  o.innerHTML='<span class="c-dim">Querying pfSense ('+action+')'+suffix+'...</span>';
+  var url=API.INFRA_PFSENSE+'?action='+encodeURIComponent(action);
+  if(target)url+='&target='+encodeURIComponent(target);
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_renderPfOutput(d);}
     else{o.innerHTML='<div class="c-red">Cannot reach pfSense at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
-function tnAction(action){
+function tnAction(action,target){
   var o=_infraOut('tn-out');if(!o)return;
-  o.innerHTML='<span class="c-dim">Querying TrueNAS ('+action+')...</span>';
-  _authFetch(API.INFRA_TRUENAS+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  var suffix=target?' on '+target:'';
+  o.innerHTML='<span class="c-dim">Querying TrueNAS ('+action+')'+suffix+'...</span>';
+  var url=API.INFRA_TRUENAS+'?action='+encodeURIComponent(action);
+  if(target)url+='&target='+encodeURIComponent(target);
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.unsupported){o.innerHTML=_infraRenderTextDevice('TrueNAS',d.action||action,d.output||d.error||'Action unavailable');}
     else if(d.api_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'API key unavailable');}
     else if(d.reachable&&d.ssh_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'SSH metrics unavailable');}
@@ -9784,10 +9931,13 @@ function idracAction(action,target){
     o.innerHTML=_renderIdracOutput(d,action);
   }).catch(function(e){o.innerHTML='<p class="c-red">Error: '+e+'</p>';});
 }
-function swAction(action){
+function swAction(action,target){
   var o=_infraOut('sw-out');if(!o)return;
-  o.innerHTML='<span class="c-dim">Querying switch ('+action+')...</span>';
-  _authFetch(API.SWITCH+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  var suffix=target?' on '+target:'';
+  o.innerHTML='<span class="c-dim">Querying switch ('+action+')'+suffix+'...</span>';
+  var url=API.SWITCH+'?action='+encodeURIComponent(action);
+  if(target)url+='&target='+encodeURIComponent(target);
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.reachable)o.innerHTML=_renderSwitchOutput(d);
     else o.innerHTML='<div class="c-red">Cannot reach switch at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';
   });
@@ -9947,7 +10097,7 @@ function pfWriteDhcp(){
   _writeForm([
     {id:'action',label:'Action',type:'select',options:['add','delete','list']},
     {id:'mac',label:'MAC Address',placeholder:'AA:BB:CC:DD:EE:FF'},
-    {id:'ip',label:'IP Address',placeholder:'10.25.10.50'},
+    {id:'ip',label:'IP Address',placeholder:'192.168.10.50'},
     {id:'hostname',label:'Hostname',placeholder:'my-device'},
     {id:'description',label:'Description (optional)',placeholder:'Lab server'}
   ],'SUBMIT',function(v){
@@ -9967,8 +10117,8 @@ function pfWriteRule(){
     {id:'direction',label:'Direction',type:'select',options:['in','out']},
     {id:'interface',label:'Interface',placeholder:'lan'},
     {id:'proto',label:'Protocol',type:'select',options:['any','tcp','udp','icmp']},
-    {id:'src',label:'Source',placeholder:'any or 10.25.10.0/24'},
-    {id:'dst',label:'Destination',placeholder:'any or 10.25.20.0/24'},
+    {id:'src',label:'Source',placeholder:'any or 192.168.10.0/24'},
+    {id:'dst',label:'Destination',placeholder:'any or 192.168.20.0/24'},
     {id:'dst_port',label:'Dest Port (tcp/udp only)',placeholder:'443'},
     {id:'description',label:'Description',placeholder:'Allow HTTPS from lab'}
   ],'ADD RULE',function(v){
@@ -9981,7 +10131,7 @@ function pfWriteNat(){
     {id:'interface',label:'Interface',placeholder:'wan'},
     {id:'proto',label:'Protocol',type:'select',options:['tcp','udp','tcp/udp']},
     {id:'src_port',label:'External Port',placeholder:'8080'},
-    {id:'dst_ip',label:'Internal IP',placeholder:'10.25.10.50'},
+    {id:'dst_ip',label:'Internal IP',placeholder:'192.168.10.50'},
     {id:'dst_port',label:'Internal Port',placeholder:'80'},
     {id:'description',label:'Description',placeholder:'Web server forward'}
   ],'ADD NAT RULE',function(v){
@@ -9995,7 +10145,7 @@ function pfWriteWgPeer(){
     {id:'action',label:'Action',type:'select',options:['list','add','remove']},
     {id:'interface',label:'WG Interface',placeholder:'wg0'},
     {id:'public_key',label:'Public Key',placeholder:'Base64 public key'},
-    {id:'allowed_ips',label:'Allowed IPs',placeholder:'10.25.100.5/32'},
+    {id:'allowed_ips',label:'Allowed IPs',placeholder:'192.168.100.5/32'},
     {id:'endpoint',label:'Endpoint (optional)',placeholder:'1.2.3.4:51820'}
   ],'SUBMIT',function(v){
     if(v.action==='list'){
@@ -10140,7 +10290,7 @@ function opnWriteWg(){
   _writeForm([
     {id:'name',label:'Peer Name',placeholder:'my-laptop'},
     {id:'pubkey',label:'Public Key',placeholder:'base64 key'},
-    {id:'tunneladdress',label:'Tunnel Address',placeholder:'10.25.100.5/32'}
+    {id:'tunneladdress',label:'Tunnel Address',placeholder:'192.168.100.5/32'}
   ],'ADD WIREGUARD PEER',function(v){
     if(!v.pubkey||!v.tunneladdress){toast('Public key and tunnel address required','error');return;}
     _writePost(API.OPN_WG_ADD,{name:v.name,pubkey:v.pubkey,tunneladdress:v.tunneladdress},'Add WireGuard peer');
@@ -10556,7 +10706,7 @@ function loadNotify(){
       html+='<tr><td>'+p.name+'</td><td>'+(ok?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr>';
     });
     html+='</table>';
-    html+='<p class="text-dim mt-sm" style="font-size:11px">Configure in freq.toml under [notifications]</p>';
+    html+='<p class="text-dim mt-sm" style="font-size:11px">Configure notification channels from Settings when available.</p>';
     document.getElementById('notify-status').innerHTML=html;
   });
 }
@@ -10922,7 +11072,7 @@ function openCard(type,config){
   ov.classList.add('open');
   ov.scrollTop=0;
   document.body.style.overflow='hidden';
-  document.getElementById('hd-title').textContent=(config.label||'').toUpperCase();
+  document.getElementById('hd-title').textContent=(_displayName(config)||config.label||'').toUpperCase();
   document.getElementById('hd-subtitle').textContent='Loading...';
   document.getElementById('hd-loading').style.display='block';
   document.getElementById('hd-content').style.display='none';
@@ -12056,7 +12206,7 @@ function loadTopology(){
 function _loadTopoPositions(){try{return JSON.parse(localStorage.getItem(_userKey('topo_positions'))||'{}');}catch(e){return {};}}
 function _saveTopoPositions(positions){localStorage.setItem(_userKey('topo_positions'),JSON.stringify(positions));}
 function resetTopoLayout(){localStorage.removeItem(_userKey('topo_positions'));loadTopology();}
-var _topoResizeTimer;window.addEventListener('resize',function(){clearTimeout(_topoResizeTimer);_topoResizeTimer=setTimeout(function(){if(_currentView==='network')loadTopology();},250);});
+var _topoResizeTimer;window.addEventListener('resize',function(){clearTimeout(_topoResizeTimer);_topoResizeTimer=setTimeout(function(){if(_currentView==='network'||_currentView==='fleet')loadTopology();},250);});
 
 function _renderTopology(svg,nodes,links){
   var W=Math.round(svg.getBoundingClientRect().width)||svg.clientWidth||900;
@@ -12109,24 +12259,25 @@ function _renderTopology(svg,nodes,links){
   });
 
   /* Layout constants */
-  var padX=Math.max(44,Math.min(72,Math.round(W*0.055))),padY=50;
-  var switchY=55;    /* switch hub — top center */
-  var coreY=150;     /* other core infra — below switch */
-  var tierY2=260;    /* PVE nodes */
-  var tierY3=395;    /* VMs start */
-  var vmSpacingY=68;
+  var padX=Math.max(50,Math.min(90,Math.round(W*0.06))),padY=58;
+  var switchY=175;   /* switch hub — centered in core infrastructure band */
+  var coreY=175;     /* other core infra — around switch */
+  var tierY2=415;    /* hypervisors */
+  var tierY3=610;    /* virtual machines */
+  var vmSpacingY=72;
 
   /* Position Tier 1 — switch as elevated hub, others radiate below */
   var switchNode=tier1.find(function(n){return n.type==='switch';});
   if(switchNode){
     switchNode.x=W/2;switchNode.y=switchY;
     var others=tier1.filter(function(n){return n!==switchNode;});
-    var coreSpread=Math.min(W-2*padX,others.length*180);
-    var coreStart=W/2-coreSpread/2;
-    var coreStep=others.length>1?coreSpread/(others.length-1):0;
+    var radiusX=Math.max(170,Math.min(440,W*0.27));
+    var radiusY=92;
     others.forEach(function(n,i){
-      n.x=others.length===1?W/2:coreStart+i*coreStep;
-      n.y=coreY;
+      var t=others.length===1?.5:(i/(others.length-1));
+      var angle=(-150+(t*300))*Math.PI/180;
+      n.x=_clamp(W/2+Math.cos(angle)*radiusX,padX,W-padX);
+      n.y=coreY+Math.sin(angle)*radiusY;
     });
   } else {
     var t1spacing=tier1.length>1?(W-2*padX)/(tier1.length-1):0;
@@ -12181,8 +12332,8 @@ function _renderTopology(svg,nodes,links){
   /* Dynamic height */
   var maxY=0;
   allNodes.forEach(function(n){if(n.y>maxY)maxY=n.y;});
-  var H=Math.max(maxY+padY+40, tierY3+maxVmRows*vmSpacingY+padY);
-  if(H<500)H=500;
+  var H=Math.max(maxY+padY+80, tierY3+maxVmRows*vmSpacingY+padY);
+  if(H<760)H=760;
   svg.setAttribute('viewBox','0 0 '+W+' '+H);
   svg.setAttribute('height',H);
 
@@ -12590,7 +12741,7 @@ function loadGitops(){
   st.innerHTML='<div class="skeleton"></div>';
   _authFetch('/api/gitops/status').then(function(r){return r.json()}).then(function(d){
     if(!d.enabled){
-      st.innerHTML='<div class="c-dim-fs12">GitOps not configured. Add <code>[gitops]</code> section with <code>repo_url</code> to freq.toml.</div>';
+      st.innerHTML='<div class="c-dim-fs12">GitOps is not configured yet. Add a repository URL from Settings when config sync is available.</div>';
       if(acts)acts.classList.add('d-none');
       /* Previously this left the COMMIT HISTORY section header with an
        * empty body — visible dead space on every cold load of the

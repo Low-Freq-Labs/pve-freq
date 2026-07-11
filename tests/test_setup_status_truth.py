@@ -204,6 +204,17 @@ class TestWebInitRuntimeHandoff(unittest.TestCase):
         self.assertIn("freq-serve.service", helper)
         self.assertIn("kill -TERM", helper)
 
+    def test_web_init_does_not_start_managed_service_before_handoff(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
+            src = f.read()
+        block = src.split("# \u2500\u2500 9k: Dashboard Service", 1)[1].split("# \u2500\u2500 9k.1: Watchdog Service", 1)[0]
+        self.assertIn('os.environ.get("FREQ_WEB_INIT") == "1"', block)
+        self.assertIn("handoff will start", block)
+        self.assertLess(
+            block.index('os.environ.get("FREQ_WEB_INIT") == "1"'),
+            block.index('["systemctl", "start", "freq-serve"]'),
+        )
+
 
 class TestFleetNicProbeContract(unittest.TestCase):
     """Fleet NIC inventory should not timeout on slow per-VM qm config loops."""

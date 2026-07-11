@@ -65,6 +65,7 @@ def _mock_cfg(tmpdir):
         data_dir=os.path.join(tmpdir, "data"),
         conf_dir=os.path.join(tmpdir, "conf"),
         key_dir=os.path.join(tmpdir, "keys"),
+        vault_dir=os.path.join(tmpdir, "data", "vault"),
         vault_file=os.path.join(tmpdir, "conf", "vault.json"),
         install_dir="/opt/freq",
         ssh_key_path=os.path.join(tmpdir, "keys", "freq_id_ed25519"),
@@ -452,6 +453,91 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
             self.assertTrue(data["resumed"])
             mock_session.assert_called_once_with(h, "admin", "admin")
 
+    def test_create_admin_repairs_passwordless_partial_setup_window(self):
+        """Partial setup with users.conf but no password hash must be repairable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = _mock_cfg(tmpdir)
+            os.makedirs(cfg.conf_dir, exist_ok=True)
+            existing_users = [{"username": "admin", "role": "admin", "groups": ""}]
+            body = '{"username":"admin","password":"validpass123"}'
+            h = self._setup_handler(body)
+
+            with patch("freq.modules.serve.load_config", return_value=cfg), \
+                 patch("freq.modules.serve._is_first_run", return_value=False), \
+                 patch("freq.modules.serve._load_users", return_value=existing_users), \
+                 patch("freq.modules.serve.vault_get", return_value=""), \
+                 patch("freq.modules.serve._setup_store_admin_password", return_value="") as mock_store, \
+                 patch("freq.modules.serve._setup_session_payload", return_value={
+                     "ok": True,
+                     "user": "admin",
+                     "role": "admin",
+                     "session_started": True,
+                     "csrf_token": "csrf",
+                     "auth_mode": "cookie",
+                     "resumed": True,
+                     "repaired": True,
+                 }):
+                h._serve_setup_create_admin()
+
+            self.assertEqual(h._status, 200)
+            data = _get_json(h)
+            self.assertTrue(data["repaired"])
+            mock_store.assert_called_once_with(cfg, "admin", "validpass123")
+
+    def test_create_admin_can_replace_passwordless_partial_admin_row(self):
+        """Retry with corrected username can recover a passwordless partial row."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = _mock_cfg(tmpdir)
+            os.makedirs(cfg.conf_dir, exist_ok=True)
+            existing_users = [{"username": "oldadmin", "role": "admin", "groups": ""}]
+            body = '{"username":"newadmin","password":"validpass123"}'
+            h = self._setup_handler(body)
+
+            with patch("freq.modules.serve.load_config", return_value=cfg), \
+                 patch("freq.modules.serve._is_first_run", return_value=False), \
+                 patch("freq.modules.serve._load_users", return_value=existing_users), \
+                 patch("freq.modules.serve.vault_get", return_value=""), \
+                 patch("freq.modules.serve._setup_store_admin_password", return_value="") as mock_store, \
+                 patch("freq.modules.serve._save_users_error", return_value="") as mock_save, \
+                 patch("freq.modules.serve._setup_session_payload", return_value={
+                     "ok": True,
+                     "user": "newadmin",
+                     "role": "admin",
+                     "session_started": True,
+                     "csrf_token": "csrf",
+                     "auth_mode": "cookie",
+                     "resumed": True,
+                     "repaired": True,
+                     "replaced_passwordless_user": True,
+                 }):
+                h._serve_setup_create_admin()
+
+            self.assertEqual(h._status, 200)
+            data = _get_json(h)
+            self.assertTrue(data["replaced_passwordless_user"])
+            mock_store.assert_called_once_with(cfg, "newadmin", "validpass123")
+            mock_save.assert_called_once_with(
+                cfg, [{"username": "newadmin", "role": "admin", "groups": ""}]
+            )
+
+    def test_create_admin_does_not_write_user_when_password_store_fails(self):
+        """create-admin must not leave a passwordless admin row on vault failure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = _mock_cfg(tmpdir)
+            body = '{"username":"newadmin","password":"validpass123"}'
+            h = self._setup_handler(body)
+
+            with patch("freq.modules.serve.load_config", return_value=cfg), \
+                 patch("freq.modules.serve._is_first_run", return_value=True), \
+                 patch("freq.modules.serve._load_users", return_value=[]), \
+                 patch("freq.modules.serve._setup_store_admin_password", return_value="Permission denied: vault"):
+                h._serve_setup_create_admin()
+
+            self.assertEqual(h._status, 500)
+            data = _get_json(h)
+            self.assertIn("Failed to store password", data["error"])
+            self.assertFalse(os.path.exists(os.path.join(cfg.conf_dir, "users.conf")))
+
     def test_save_failure_returns_filesystem_reason(self):
         """create-admin must not collapse filesystem failures to a vague 500."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -462,6 +548,7 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
             with patch("freq.modules.serve.load_config", return_value=cfg), \
                  patch("freq.modules.serve._is_first_run", return_value=True), \
                  patch("freq.modules.serve._load_users", return_value=[]), \
+                 patch("freq.modules.serve._setup_store_admin_password", return_value=""), \
                  patch("freq.modules.serve._save_users_error", return_value="Permission denied: users.conf"):
                 h._serve_setup_create_admin()
 

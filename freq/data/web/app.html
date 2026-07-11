@@ -84,10 +84,10 @@
      reads the same state without it, faster. -->
 <div id="home-empty">
   <div style="font-size:13px;color:var(--text);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">no widgets configured</div>
-  <div style="font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:14px">LAYOUT picks individual widgets from fleet / docker / security / system. QUICK START loads the default set.</div>
+  <div style="font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:14px">Start with the default dashboard set or choose the fleet, docker, security, and system widgets that matter for this install.</div>
   <button class="fleet-btn c-purple-active" data-action="openLayoutConfig" >&#9776; CONFIGURE DASHBOARD</button>
 </div>
-<!-- Version is already rendered in the top header (nav-ver: V1.0.0 · DC01),
+<!-- Version and environment are already rendered in the top header,
      so the old home-only footer was redundant chrome on every cold load.
      Kept the element id so any code still setting its textContent stays
      harmless, but it no longer draws a border row on the empty home. -->
@@ -95,10 +95,6 @@
 </div><!-- close home-view -->
 <!-- FLEET VIEW (hidden by default) -->
 <div id="fleet-view" class="d-none">
-<div class="sub-tabs" id="subtabs-fleet">
-  <button class="sub-tab active-sub" data-view="fleet">Infra</button>
-  <button class="sub-tab" data-view="network">Network</button>
-</div>
 <!-- Fleet Stats group -->
 <div class="section layout-section" id="fleet-sec-stats">
   <div class="section-header"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
@@ -170,7 +166,50 @@
 <div class="section collapsed layout-section" id="fleet-lab-section">
   <div class="section-header"><h3>Lab Equipment</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div id="fleet-lab-cards" class="cards grid-auto-240" ></div>
+    <div id="fleet-lab-cards" class="lab-card-grid"></div>
+  </div>
+</div>
+<div class="section layout-section" id="fleet-sec-network-topology">
+  <div class="section-header"><h3>Network Topology</h3><div class="flex-1"></div><button class="fleet-btn mr-4" data-action="resetTopoLayout">RESET LAYOUT</button><button class="fleet-btn" data-action="loadTopology">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="topo-legend" class="topo-legend">
+      <span style="color:var(--purple-light)">&#9632;</span> PVE Node
+      <span class="text-green">&#9632;</span> VM (running)
+      <span class="text-dim">&#9632;</span> VM (stopped)
+      <span class="c-red">&#9632;</span> Unreachable
+      <span style="color:var(--blue)">&#9632;</span> Device
+    </div>
+    <svg id="topo-svg" width="100%" height="700"></svg>
+    <div id="topo-info" class="helptext-mt8"></div>
+  </div>
+</div>
+<div class="section layout-section" id="fleet-sec-network-monitoring">
+  <div class="section-header"><h3>Network Monitoring</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadNetworkPage">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="fleet-network-grid">
+      <div class="fleet-network-panel">
+        <div class="fleet-network-panel-head">
+          <h4>Switch Fleet</h4>
+          <div class="stats compact-stats fleet-network-stats" id="net-switch-stats"></div>
+        </div>
+        <div class="responsive-table-wrap"><table><thead><tr><th>Switch</th><th>Model</th><th>Firmware</th><th>Ports</th><th>Uptime</th><th>Status</th></tr></thead><tbody id="net-switch-tbl"></tbody></table></div>
+      </div>
+      <div class="fleet-network-panel">
+        <div class="fleet-network-panel-head"><h4>Poll Data / Interfaces</h4></div>
+        <div class="flex-wrap-8-mb12">
+          <button class="fleet-btn" data-action="loadNetmonData">POLL DATA</button>
+          <button class="fleet-btn" data-action="loadNetmonInterfaces">INTERFACES</button>
+        </div>
+        <div class="exec-out mt-8" id="netmon-out">Click to load network monitoring data.</div>
+      </div>
+    </div>
+    <div class="fleet-network-panel mt-12" id="snmp-setup-section">
+      <div class="fleet-network-panel-head">
+        <h4>SNMP Setup</h4>
+        <div class="stats compact-stats fleet-network-stats" id="snmp-setup-stats"></div>
+      </div>
+      <div id="snmp-setup-main"><div class="skeleton h-60"></div></div>
+    </div>
   </div>
 </div>
 </div><!-- close fleet-view -->
@@ -380,8 +419,9 @@
 <!-- VAULT VIEW -->
 <div id="vault-view" class="d-none">
 <div class="section layout-section vault-shell" id="vault-main">
-  <div class="section-header"><h3>Vault</h3><div class="stats compact-stats" id="vault-stats"></div><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Vault</h3><span class="chev">▾</span></div>
   <div class="section-body">
+    <div class="stats compact-stats vault-stat-strip" id="vault-stats"></div>
     <div class="vault-toolbar">
       <div class="vault-scope-tabs">
         <button class="fleet-btn vault-filter active-view" data-action="vaultFilter" data-arg="all">ALL</button>
@@ -777,7 +817,7 @@
         <h4 class="helptext-mb8">REGISTER NEW SITE</h4>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="fed-name" placeholder="Site name" class="freq-input flex-min-100">
-          <input id="fed-url" placeholder="https://freq.dc02:8888" class="freq-input">
+          <input id="fed-url" placeholder="https://freq.example.com:8888" class="freq-input">
           <input id="fed-secret" placeholder="Shared secret (optional)" type="password" class="freq-input flex-min-100">
           <button class="fleet-btn" data-action="fedRegister">REGISTER</button>
         </div>
@@ -788,7 +828,7 @@
   <div class="section">
     <div class="section-header"><h3>Device Assignment</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div class="helptext-mb12">Classify hosts and existing VMs as PROD, LAB, TEMP, or OOC. Managed devices are probed and can affect health; inventory-only devices stay visible without alerts or doctor degradation.</div>
+      <div class="helptext-mb12">Name and classify hosts, physical devices, and existing VMs as PROD, LAB, TEMP, or OOC. Friendly names drive cards and dropdowns; raw labels stay visible as secondary identity. Unmanaged inventory-only devices stay visible without alerts or doctor degradation.</div>
       <div id="lab-assign-list"><div class="skeleton"></div></div>
       <div id="device-admin-mount" class="device-admin-mount"></div>
     </div>
@@ -837,51 +877,6 @@
      NETWORK VIEW — Switch management, SNMP, topology intelligence
      ============================================================ -->
 <div id="network-view" class="d-none">
-<div class="sub-tabs" id="subtabs-network">
-  <button class="sub-tab" data-view="fleet">Infra</button>
-  <button class="sub-tab active-sub" data-view="network">Network</button>
-</div>
-<div class="section">
-  <div class="section-header"><h3>Network Topology</h3><div class="flex-1"></div><button class="fleet-btn mr-4" data-action="resetTopoLayout">RESET LAYOUT</button><button class="fleet-btn" data-action="loadTopology">REFRESH</button><span class="chev">&#9662;</span></div>
-  <div class="section-body">
-    <div id="topo-legend" class="helptext-sm-mb8">
-      <span style="color:var(--purple-light)">&#9632;</span> PVE Node &nbsp;
-      <span class="text-green">&#9632;</span> VM (running) &nbsp;
-      <span class="text-dim">&#9632;</span> VM (stopped) &nbsp;
-      <span class="c-red">&#9632;</span> Unreachable &nbsp;
-      <span style="color:var(--blue)">&#9632;</span> Device
-    </div>
-    <svg id="topo-svg" width="calc(100% + 32px)" height="700"></svg>
-    <div id="topo-info" class="helptext-mt8"></div>
-  </div>
-</div>
-<div class="section">
-  <div class="section-header"><h3>Switch Fleet</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadNetworkPage">REFRESH</button><span class="chev">&#9662;</span></div>
-  <div class="section-body">
-    <div class="stats" id="net-switch-stats"></div>
-    <table><thead><tr><th>Switch</th><th>Model</th><th>Firmware</th><th>Ports</th><th>Uptime</th><th>Status</th></tr></thead><tbody id="net-switch-tbl"></tbody></table>
-  </div>
-</div>
-<div class="section">
-  <div class="section-header"><h3>Port Profiles</h3><span class="chev">&#9662;</span></div>
-  <div class="section-body"><div id="net-profiles"></div></div>
-</div>
-<div class="section">
-  <div class="section-header"><h3>Switch Detail</h3><span class="chev">&#9662;</span></div>
-  <div class="section-body">
-    <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn c-purple-active" data-action="loadSwitchData" data-arg="show">OVERVIEW</button>
-      <button class="fleet-btn" data-action="loadSwitchData" data-arg="facts">FACTS</button>
-      <button class="fleet-btn" data-action="loadSwitchData" data-arg="interfaces">INTERFACES</button>
-      <button class="fleet-btn" data-action="loadSwitchData" data-arg="vlans">VLANS</button>
-      <button class="fleet-btn" data-action="loadSwitchData" data-arg="mac">MAC TABLE</button>
-      <button class="fleet-btn" data-action="loadSwitchData" data-arg="arp">ARP TABLE</button>
-      <button class="fleet-btn" data-action="loadSwitchData" data-arg="neighbors">NEIGHBORS</button>
-      <button class="fleet-btn" data-action="loadSwitchData" data-arg="environment">ENVIRONMENT</button>
-    </div>
-    <div class="exec-out" id="switch-detail-out">Select a data view to query the switch.</div>
-  </div>
-</div>
 <div class="section">
   <div class="section-header"><h3>Config Backups</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -1438,7 +1433,7 @@
     <div class="crd" style="margin-bottom:24px;border-left:3px solid var(--purple)">
       <h3 class="fs-16">About PVE FREQ</h3>
       <p class="mt-8">FREQ is a zero-dependency Proxmox fleet management tool. Pure Python stdlib. One binary. Every command you need to manage VMs, containers, networking, storage, and monitoring across your entire cluster.</p>
-      <p class="mt-8">Built from scratch — 16,000+ lines of bash rewritten into clean Python. SSH to 6 platform types. Knowledge base. Risk analysis. Auto-audit pipeline. Practical infrastructure control for the DC01 fleet.</p>
+      <p class="mt-8">Built from scratch — 16,000+ lines of bash rewritten into clean Python. SSH to 6 platform types. Knowledge base. Risk analysis. Auto-audit pipeline. Practical infrastructure control for your fleet.</p>
       <p class="section-label-pl-mt12"><em>"freq did not come to play."</em></p>
     </div>
     <h3 style="color:var(--purple-light);font-size:14px;margin-bottom:16px">Capabilities</h3>

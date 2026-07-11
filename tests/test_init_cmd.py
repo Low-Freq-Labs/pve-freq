@@ -32,6 +32,52 @@ from freq.modules.init_cmd import (
 from freq.core.config import FreqConfig, _resolve_paths
 
 
+class TestInitPhaseVerifyTruthContract(unittest.TestCase):
+    """Init verification must not green-light hosts doctor will degrade."""
+
+    def _phase_verify_src(self):
+        repo_root = Path(__file__).parent.parent
+        with open(repo_root / "freq/modules/init_cmd.py") as f:
+            src = f.read()
+        return src.split("def _phase_verify", 1)[1].split("\n    # \u2500\u2500 Enhanced checks", 1)[0]
+
+    def test_phase_verify_uses_managed_probe_scope(self):
+        with open(Path(__file__).parent.parent / "freq/modules/init_cmd.py") as f:
+            src = f.read()
+        self.assertIn("from freq.core.host_scope import managed_probe_hosts", src)
+        block = self._phase_verify_src()
+        self.assertIn("managed_probe_hosts(cfg)", block)
+
+    def test_phase_verify_does_not_skip_managed_hosts_not_deployed_this_run(self):
+        block = self._phase_verify_src()
+        self.assertNotIn("not deployed this run", block)
+        self.assertIn("managed host verification failed", block)
+        self.assertIn("managed host not verified", block)
+
+
+class TestInitFixTruthContract(unittest.TestCase):
+    """init --fix must repair VM SSH drift through product-owned fallbacks."""
+
+    def _init_fix_src(self):
+        repo_root = Path(__file__).parent.parent
+        with open(repo_root / "freq/modules/init_cmd.py") as f:
+            src = f.read()
+        return src.split("def _init_fix", 1)[1].split("\n\n# \u2550", 1)[0]
+
+    def test_init_fix_has_guest_agent_fallback_for_linux_vms(self):
+        block = self._init_fix_src()
+        self.assertIn("_populate_fix_vmid_node_map(cfg, ctx)", block)
+        self.assertIn("_deploy_via_guest_agent", block)
+        self.assertIn("bootstrap repair failed", block)
+
+    def test_scan_fleet_carries_vmid_for_fix(self):
+        repo_root = Path(__file__).parent.parent
+        with open(repo_root / "freq/modules/init_cmd.py") as f:
+            src = f.read()
+        scan = src.split("def _scan_fleet", 1)[1].split("\ndef _init_check", 1)[0]
+        self.assertIn('"vmid": int(getattr(h, "vmid", 0) or 0)', scan)
+
+
 # ═══════════════════════════════════════════════════════════════════
 # _run_with_input() tests
 # ═══════════════════════════════════════════════════════════════════
@@ -196,6 +242,35 @@ class TestInitResetLocalState(unittest.TestCase):
             for path in watchdog_files:
                 self.assertFalse(os.path.exists(path), f"watchdog state survived reset: {path}")
 
+    def test_reset_stops_watchdog_before_removing_state(self):
+        from freq.modules import init_cmd
+
+        with patch("freq.modules.init_cmd._run", return_value=(1, "", "")) as mock_run:
+            with patch("freq.modules.init_cmd.INIT_GENERATED_TOKEN_FILES", ()):
+                with patch("freq.modules.init_cmd.INIT_GENERATED_WATCHDOG_FILES", ()):
+                    init_cmd._reset_local_init_state(self.cfg)
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        self.assertIn(["systemctl", "disable", "--now", "freq-watchdog.service"], commands)
+        self.assertIn(["pkill", "-f", "python3 -m freq watchdog run"], commands)
+
+    def test_reset_removes_generated_watchdog_user(self):
+        from freq.modules import init_cmd
+
+        def fake_run(cmd, **_kwargs):
+            if cmd[:2] == ["id", "freq-watch"]:
+                return 0, "", ""
+            return 0, "", ""
+
+        with patch("freq.modules.init_cmd._run", side_effect=fake_run) as mock_run:
+            with patch("freq.modules.init_cmd.INIT_GENERATED_TOKEN_FILES", ()):
+                with patch("freq.modules.init_cmd.INIT_GENERATED_WATCHDOG_FILES", ()):
+                    init_cmd._reset_local_init_state(self.cfg)
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        self.assertIn(["pkill", "-u", "freq-watch"], commands)
+        self.assertIn(["userdel", "-r", "freq-watch"], commands)
+
     def test_reset_removes_generated_runtime_ssh_state(self):
         fake_home = os.path.join(self.tmp, "home", "freq")
         ssh_dir = os.path.join(fake_home, ".ssh")
@@ -329,6 +404,30 @@ class TestPureNothingInitContract(unittest.TestCase):
         self.assertIn("_chown(_credential_owner(svc_name), pass_path)", block)
         self.assertIn("os.chmod(creds_path, 0o640)", block)
         self.assertIn("_chown(_credential_owner(svc_name), creds_path)", block)
+
+    def test_web_init_runtime_owner_prefers_managed_service_user(self):
+        src = self._src()
+        helper = src.split("def _post_init_runtime_owner", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('"freq-serve.service"', helper)
+        self.assertIn('"-p", "User"', helper)
+        self.assertIn("return service_user", helper)
+        self.assertIn("if _is_container_runtime():", helper)
+
+    def test_init_heals_stale_known_hosts_during_trust_establishment(self):
+        src = self._src()
+        self.assertIn("def _run_ssh_with_stale_hostkey_retry", src)
+        self.assertIn('"ssh-keygen", "-R"', src)
+        self.assertIn("remote host identification has changed", src)
+        self.assertIn("_run_ssh_with_stale_hostkey_retry(ssh_cmd, VERIFY_TIMEOUT", src)
+        self.assertIn("_run_ssh_with_stale_hostkey_retry(\n                    ssh_cmd + [\"echo ok\"]", src)
+
+    def test_runtime_ownership_failure_is_fatal_for_init(self):
+        src = self._src()
+        headless = src.split("def _init_headless", 1)[1].split("\ndef _headless_local_account", 1)[0]
+        self.assertIn("if not _ensure_post_init_runtime_state_ownership", headless)
+        self.assertIn("Post-init runtime ownership could not be applied", headless)
+        self.assertIn("return 1", headless)
+        self.assertGreaterEqual(src.count("if not _ensure_post_init_runtime_state_ownership"), 2)
 
     def test_init_fix_reuses_existing_service_account_password(self):
         src = self._src()
@@ -1151,8 +1250,18 @@ class TestHeadlessFleetDeployTruth(unittest.TestCase):
         mock_run.assert_not_called()
         mock_dispatch.assert_not_called()
         self.assertEqual(ctx.get("fleet_deploy_failures"), 1)
+        self.assertEqual(ctx.get("fleet_deploy_failed_ips"), {"10.25.10.201"})
         fail_messages = " ".join(str(c.args[0]) for c in mock_fmt.step_fail.call_args_list)
         self.assertIn("TrueNAS 'truenas-lab' has API credentials only", fail_messages)
+
+    def test_phase12_reconciles_transient_deploy_failure_by_host_verification(self):
+        """Final verification, not stale Phase 8 count, decides init success."""
+        src = Path("freq/modules/init_cmd.py").read_text()
+        self.assertIn("deploy_failed_verified_ips", src)
+        self.assertIn("fleet_deploy_recovered_failed_ips", src)
+        self.assertIn("0 unresolved failed hosts", src)
+        self.assertIn("if h.ip in deploy_failed_ips:", src)
+        self.assertIn("deploy_failed_ips - deploy_failed_verified_ips", src)
 
     @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
     @patch("freq.modules.init_cmd._run")

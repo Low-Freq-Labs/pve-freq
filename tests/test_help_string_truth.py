@@ -111,11 +111,9 @@ class TestHelpStringExamplesValid(unittest.TestCase):
         cli_path = os.path.join(REPO_ROOT, "freq", "cli.py")
         with open(cli_path) as f:
             content = f.read()
-        # The 10.0.0.50 IP is in the monitor example. While it's RFC 1918,
-        # using 198.51.100.x (RFC 5737) would be clearer as a documentation IP.
-        # For now, just verify the example exists and has a port.
-        self.assertIn("healthz", content,
-                       "Monitor example must reference /healthz endpoint")
+        # The removed monitor example used a real-looking RFC 1918 address.
+        # Keep that stale example from returning to the CLI help surface.
+        self.assertNotIn("10.0.0.50", content)
 
 
 if __name__ == "__main__":

@@ -113,6 +113,7 @@ class Host:
     changes: list = field(default_factory=list)
     error: str = ""
     duration: float = 0.0
+    display_name: str = ""
 
     @property
     def category(self):
@@ -260,6 +261,7 @@ class PhysicalDevice:
     hostname: str = ""
     service_tag: str = ""
     identity_source: str = ""
+    display_name: str = ""
 
 
 @dataclass

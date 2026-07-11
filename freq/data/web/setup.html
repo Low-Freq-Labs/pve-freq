@@ -149,10 +149,10 @@
       </div>
       <div class="field-row">
         <label>Core devices
-          <input id="core-devices" name="core_devices" type="text" placeholder="pfsense:10.25.255.1, truenas:10.25.255.10">
+          <input id="core-devices" name="core_devices" type="text" placeholder="firewall:192.168.10.1, storage:192.168.10.10">
         </label>
         <label>Lab devices
-          <input id="lab-devices" name="lab_devices" type="text" placeholder="switch-lab:10.25.60.2">
+          <input id="lab-devices" name="lab_devices" type="text" placeholder="switch-lab:192.168.60.2">
         </label>
       </div>
       <label>Optional hosts import
@@ -180,7 +180,7 @@
           <input id="pdm-pass" name="pdm_pass" type="password">
         </label>
         <label>Remote name
-          <input id="pdm-remote" name="pdm_remote" type="text" placeholder="dc01">
+          <input id="pdm-remote" name="pdm_remote" type="text" placeholder="site01">
         </label>
       </div>
     </section>
@@ -199,7 +199,7 @@
       <div class="ssl-fields" data-ssl-fields="adopt-existing">
         <div class="field-row">
           <label>Base domain
-            <input id="ssl-adopt-domain" name="ssl_adopt_domain" type="text" placeholder="dc01.example.com">
+            <input id="ssl-adopt-domain" name="ssl_adopt_domain" type="text" placeholder="site01.example.com">
           </label>
           <label>Cert source
             <select id="ssl-adopt-source" name="ssl_adopt_source">
@@ -212,27 +212,49 @@
           </label>
         </div>
         <div class="field-row">
+          <label>Dashboard upstream host
+            <input id="ssl-dashboard-origin-host" name="ssl_dashboard_origin_host" type="text" placeholder="10.25.255.50">
+          </label>
+          <label>Dashboard upstream port
+            <input id="ssl-dashboard-origin-port" name="ssl_dashboard_origin_port" type="number" min="1" max="65535" placeholder="8888">
+          </label>
+          <label>Upstream protocol
+            <select id="ssl-upstream-scheme" name="ssl_upstream_scheme">
+              <option value="http">HTTP upstream</option>
+              <option value="https">HTTPS upstream</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Upstream TLS verification
+            <select id="ssl-upstream-tls-verify" name="ssl_upstream_tls_verify">
+              <option value="true">Verify upstream cert</option>
+              <option value="false">Skip upstream cert verification</option>
+            </select>
+          </label>
           <label>Fullchain path
             <input id="ssl-fullchain-path" name="ssl_fullchain_path" type="text" placeholder="/etc/ssl/example/fullchain.pem">
           </label>
           <label>Key path
             <input id="ssl-key-path" name="ssl_key_path" type="text" placeholder="/etc/ssl/example/privkey.pem">
           </label>
+        </div>
+        <div class="field-row">
           <label>Target hostnames
-            <input id="ssl-targets" name="ssl_targets" type="text" placeholder="pve01.dc01.example.com, freq.dc01.example.com">
+            <input id="ssl-targets" name="ssl_targets" type="text" placeholder="pve01.site01.example.com, freq.site01.example.com">
           </label>
         </div>
       </div>
       <div class="ssl-fields" data-ssl-fields="bootstrap-new">
         <div class="field-row">
           <label>Base domain
-            <input id="ssl-bootstrap-domain" name="ssl_bootstrap_domain" type="text" placeholder="dc01.example.com">
+            <input id="ssl-bootstrap-domain" name="ssl_bootstrap_domain" type="text" placeholder="site01.example.com">
           </label>
           <label>Cloudflare token path
             <input id="cloudflare-token-path" name="cloudflare_token_path" type="text" placeholder="/etc/freq/credentials/cloudflare_dns_token">
           </label>
           <label>Target hostnames
-            <input id="ssl-bootstrap-targets" name="ssl_bootstrap_targets" type="text" placeholder="pve01.dc01.example.com, freq.dc01.example.com">
+            <input id="ssl-bootstrap-targets" name="ssl_bootstrap_targets" type="text" placeholder="pve01.site01.example.com, freq.site01.example.com">
           </label>
         </div>
       </div>

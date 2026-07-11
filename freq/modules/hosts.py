@@ -22,6 +22,7 @@ Design decisions:
 
 import json
 import os
+import re
 import shutil
 
 from freq.core import fmt
@@ -35,6 +36,100 @@ from freq.core import validate
 
 HOSTS_PVE_TIMEOUT = 15
 HOSTS_AGENT_TIMEOUT = 10
+
+
+def _ip_sort_key(ip: str):
+    try:
+        return tuple(int(part) for part in str(ip or "").split("."))
+    except ValueError:
+        return (999, 999, 999, 999)
+
+
+def _toml_inline_string(value: str) -> str:
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _generic_physical_label(label: str, dtype: str) -> bool:
+    label = str(label or "").strip().lower()
+    dtype = str(dtype or "").strip().lower()
+    if not label:
+        return True
+    if label == dtype:
+        return True
+    if re.match(r"^(bmc|idrac|ilo|ipmi)[-_]?\d+$", label):
+        return True
+    if re.match(r"^\d+\.\d+\.\d+\.\d+$", label):
+        return True
+    return False
+
+
+def _bmc_display_prefix(dtype: str) -> str:
+    dtype = str(dtype or "").strip().lower()
+    if dtype == "idrac":
+        return "iDRAC"
+    if dtype == "ilo":
+        return "iLO"
+    if dtype == "ipmi":
+        return "IPMI"
+    return "BMC"
+
+
+def _node_display_name(name: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(name or "").strip()).strip("-_.")
+    return cleaned.upper()
+
+
+def _physical_display_name_for(dev: dict, all_physical: dict, all_pve: dict, cfg=None) -> str:
+    """Derive an operator-facing display name for generic physical labels.
+
+    Raw labels such as bmc-11 remain stable internal selectors, but they should
+    not be the primary title on a dashboard card.
+    """
+    if not isinstance(dev, dict):
+        return ""
+    existing = str(dev.get("display_name") or dev.get("name") or "").strip()
+    if existing:
+        return existing
+    dtype = str(dev.get("type") or "unknown").strip().lower()
+    label = str(dev.get("label") or "").strip()
+    if not _generic_physical_label(label, dtype):
+        return ""
+
+    if dtype in {"idrac", "bmc", "ilo", "ipmi"}:
+        prefix = _bmc_display_prefix(dtype)
+        bmc_items = [
+            (key, item)
+            for key, item in (all_physical or {}).items()
+            if isinstance(item, dict)
+            and str(item.get("type") or "").strip().lower() in {"idrac", "bmc", "ilo", "ipmi"}
+            and str(item.get("scope") or "core").strip().lower() != "lab"
+        ]
+        bmc_items.sort(key=lambda kv: (_ip_sort_key(kv[1].get("ip", "")), str(kv[0])))
+
+        node_items = []
+        for key, item in (all_pve or {}).items():
+            if isinstance(item, dict):
+                node_items.append((str(key), item.get("ip", "")))
+        if not node_items and cfg is not None:
+            names = list(getattr(cfg, "pve_node_names", []) or [])
+            ips = list(getattr(cfg, "pve_nodes", []) or [])
+            for idx, ip in enumerate(ips):
+                node_items.append((names[idx] if idx < len(names) and names[idx] else f"pve{idx + 1:02d}", ip))
+        node_items.sort(key=lambda item: (_ip_sort_key(item[1]), item[0]))
+
+        dev_ip = str(dev.get("ip") or "")
+        dev_key = next((key for key, item in bmc_items if item is dev or str(item.get("ip") or "") == dev_ip), "")
+        dev_idx = next((idx for idx, (key, item) in enumerate(bmc_items) if key == dev_key), -1)
+        if 0 <= dev_idx < len(node_items):
+            return f"{prefix}-{_node_display_name(node_items[dev_idx][0])}"
+
+        hostname = str(dev.get("hostname") or dev.get("service_tag") or "").strip()
+        if hostname:
+            return f"{prefix}-{_node_display_name(hostname)}"
+        if dev_ip:
+            return f"{prefix}-{dev_ip.rsplit('.', 1)[-1]}"
+
+    return ""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -887,9 +982,11 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
                     tier = dev.get("tier", "probe")
                     groups = dev.get("groups", "")
                     scope = dev.get("scope", "lab" if "lab" in f"{key} {label} {groups}".lower() else "core")
+                    display_name = _physical_display_name_for(dev, merged_physical, merged_pve, cfg)
+                    display_part = f', display_name = "{_toml_inline_string(display_name)}"' if display_name else ""
                     f.write(
                         f'{key} = {{ ip = "{ip}", label = "{label}", type = "{dtype}", '
-                        f'tier = "{tier}", detail = "{detail}", groups = "{groups}", scope = "{scope}" }}\n'
+                        f'tier = "{tier}", detail = "{detail}", groups = "{groups}", scope = "{scope}"{display_part} }}\n'
                     )
 
         if merged_pve:

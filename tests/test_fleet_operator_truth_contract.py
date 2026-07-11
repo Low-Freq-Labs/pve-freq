@@ -422,7 +422,10 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
         self.assertIn('data-action="openInfraDevice"', src)
         self.assertIn("data-infra-type", src)
-        self.assertIn("openCard('infra',{label:da.dataset.label,infraType:da.dataset.infraType,ip:da.dataset.ip})", src)
+        self.assertIn(
+            "openCard('infra',{label:da.dataset.label,display_name:da.dataset.displayName||'',display_label:da.dataset.displayLabel||'',raw_label:da.dataset.rawLabel||da.dataset.label,infraType:da.dataset.infraType,ip:da.dataset.ip})",
+            src,
+        )
         self.assertIn("if(!ph&&config.ip)ph={label:label,type:infraType,ip:config.ip", src)
 
     def test_infra_quick_reconciles_reachability_with_fleet_overview(self):

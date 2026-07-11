@@ -277,7 +277,7 @@ def _register_utilities(sub):
     p.add_argument("--pve-node-names", help="PVE node names (comma or space-separated, same order as --pve-nodes)")
     p.add_argument("--gateway", help="Network gateway IP for VM networking")
     p.add_argument("--nameserver", help="DNS nameserver IP (default: 1.1.1.1)")
-    p.add_argument("--cluster-name", help="Cluster name (e.g. dc01, homelab)")
+    p.add_argument("--cluster-name", help="Cluster name (e.g. site01, homelab)")
     p.add_argument("--ssh-mode", choices=["sudo", "root"], help="SSH mode: sudo (recommended) or root")
     p.add_argument("--hosts-file", help="Path to hosts file to import fleet hosts from")
     p.add_argument("--device-credentials", help="TOML file with per-device-type auth")
@@ -1735,7 +1735,7 @@ def _register_cert(sub):
     p.set_defaults(func=_cmd_cert_plan)
 
     p = cert_sub.add_parser("bootstrap", help="Configure cert lifecycle from a Cloudflare token file")
-    p.add_argument("--base-domain", required=True, help="Base domain for fleet certificates, e.g. dc01.example.com")
+    p.add_argument("--base-domain", required=True, help="Base domain for fleet certificates, e.g. infra.example.com")
     p.add_argument("--cloudflare-token-file", required=True, help="Path to Cloudflare API token file")
     p.add_argument("--token-dest", help="Managed destination path for the Cloudflare token")
     p.add_argument("--replace", action="store_true", help="Replace existing certificate config tables")
@@ -3893,12 +3893,9 @@ def _cmd_monitor(cfg: FreqConfig, pack, args) -> int:
     fmt.header("HTTP Endpoint Checks")
     fmt.blank()
     if not cfg.monitors:
-        fmt.info("No [[monitor]] entries in freq.toml")
+        fmt.info("No HTTP monitors configured")
         fmt.blank()
-        fmt.line(f"  {fmt.C.DIM}Add to freq.toml:{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}[[monitor]]{fmt.C.RESET}")
-        fmt.line(f'  {fmt.C.DIM}name = "Dashboard"{fmt.C.RESET}')
-        fmt.line(f'  {fmt.C.DIM}url = "http://10.0.0.50:8888/healthz"{fmt.C.RESET}')
+        fmt.line(f"  {fmt.C.DIM}Add monitors from the web Settings area once the dashboard is running.{fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
         return 0

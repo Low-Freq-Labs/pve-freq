@@ -109,7 +109,7 @@ agent_port = 9990
 #      freq cert plan
 #      freq cert dns-sync --dry-run
 #      freq --yes cert dns-sync
-#      freq --yes cert issue
+#      freq --yes cert issue --deploy
 #      freq cert deploy --dry-run
 #      freq --yes cert deploy
 #      freq cert verify
@@ -121,9 +121,11 @@ agent_port = 9990
 # base_domain = "home.example.com"
 # wildcard = true
 # issuer = "acme.sh"
-# acme_home = "~/.acme.sh"
+# acme_home = "/opt/pve-freq/data/acme"
 # acme_auto_install = true
 # acme_keylength = "ec-256"
+# cert_fullchain_path = "/opt/pve-freq/data/certs/managed/home.example.com/fullchain.cer"
+# cert_key_path = "/opt/pve-freq/data/certs/managed/home.example.com/home.example.com.key"
 # dns_provider = "cloudflare"
 # dns_token_path = "/etc/freq/credentials/cloudflare_dns_token"
 # cloudflare_zone_id = "zone-id"

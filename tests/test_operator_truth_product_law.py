@@ -47,6 +47,7 @@ These are translation rules into code:
 
 import os
 import re
+from types import SimpleNamespace
 import unittest
 
 
@@ -362,6 +363,55 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
         self.assertIn('no IP assigned', chunk)
         self.assertNotIn('=== INTERFACES WITH IPs ===', chunk)
         self.assertNotIn('=== ALL INTERFACES ===', chunk)
+
+    def test_pfsense_backend_is_target_aware_for_lab_firewalls(self):
+        src = _serve_py()
+        self.assertIn("def _resolve_pfsense_target", src)
+        self.assertIn("target_name = params.get(\"target\", [\"\"])[0]", src)
+        self.assertIn("target = _resolve_pfsense_target(cfg, target_name)", src)
+        self.assertIn("\"target\": pf_label", src)
+        self.assertIn("\"ip\": pf_ip", src)
+        serve_body = src.split("def _serve_pfsense", 1)[1].split("\n    def _serve_", 1)[0]
+        self.assertNotIn("pf_ip = cfg.pfsense_ip", serve_body)
+
+    def test_pfsense_target_resolver_supports_lab_vm_inventory(self):
+        from freq.modules.serve import _resolve_pfsense_target
+
+        cfg = SimpleNamespace(
+            pfsense_ip="10.25.255.1",
+            fleet_boundaries=SimpleNamespace(physical={}),
+            hosts=[
+                SimpleNamespace(
+                    ip="10.25.10.200",
+                    label="pfsense-lab",
+                    htype="linux",
+                    groups="lab",
+                    vmid=5000,
+                    all_ips=["192.168.255.1", "10.25.10.200"],
+                    display_name="",
+                    hostname="",
+                )
+            ],
+        )
+
+        core = _resolve_pfsense_target(cfg)
+        lab = _resolve_pfsense_target(cfg, "pfsense-lab")
+
+        self.assertEqual(core.ip, "10.25.255.1")
+        self.assertEqual(getattr(core, "scope", ""), "core")
+        self.assertEqual(lab.ip, "10.25.10.200")
+        self.assertEqual(getattr(lab, "scope", ""), "lab")
+        self.assertEqual(getattr(lab, "device_type", ""), "pfsense")
+
+    def test_pfsense_target_resolver_can_adopt_inventory_description_ip(self):
+        src = _serve_py()
+        body = src.split("def _resolve_pfsense_target", 1)[1].split("\ndef _redact_device_command_output", 1)[0]
+        self.assertIn('"pve-inventory.toml"', body)
+        self.assertIn("def _inventory_target", body)
+        self.assertIn("api_endpoint=f\"/nodes/{node}/qemu/{vmid}/config\"", body)
+        self.assertIn("description = str(vm_cfg.get(\"description\") or description)", body)
+        self.assertIn("ip = _first_description_ip(description)", body)
+        self.assertIn("target_l not in \" \".join((identity, description.lower(), ip))", body)
 
 
 class TestSilentRefreshStructuralSanity(unittest.TestCase):

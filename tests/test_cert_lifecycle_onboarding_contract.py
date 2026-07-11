@@ -75,6 +75,9 @@ def test_ssl_onboarding_adopt_existing_is_base_domain_wide_not_per_target():
     assert detection["adopt_existing_scope"]["mode"] == "wildcard_base_domain"
     assert detection["adopt_existing_scope"]["single_apply_registers_all_inferred_targets"] is True
     assert detection["adopt_existing_scope"]["infer_targets_default"] is True
+    assert "reverse_proxy_upstream_scheme" in detection
+    assert "reverse_proxy_upstream_tls_verify" in detection
+    assert "reverse_proxy_upstream_protocol_when_adopting_existing_proxy" in contract["ask_user"]
 
 
 def test_ssl_onboarding_dashboard_https_gap_is_explicit():
@@ -128,6 +131,72 @@ def test_ssl_onboarding_detects_existing_proxy_dashboard_https():
     assert contract["dashboard_https"]["state"] == "managed"
     assert contract["dashboard_https"]["managed_targets"][0]["hostname"] == "pve-freq.dc01.lowfreqlabs.com"
     assert contract["dashboard_https"]["probes"][0]["issuer"] == "Let's Encrypt"
+
+
+def test_adopt_existing_records_reverse_proxy_upstream_contract():
+    from freq.modules.cert_management import _cert_targets_from_catalog, _render_cert_config_block
+
+    settings = {
+        "base_domain": "dc01.lowfreqlabs.com",
+        "management_mode": "adopted_existing",
+        "issuer": "existing",
+        "record_strategy": "existing-dns",
+        "reverse_proxy_host": "10.25.255.38",
+        "reverse_proxy_upstream_scheme": "https",
+        "reverse_proxy_upstream_tls_verify": False,
+        "dashboard_origin_host": "10.25.255.50",
+        "dashboard_origin_port": 8888,
+        "renewal_owner": "external",
+    }
+    targets = _cert_targets_from_catalog(
+        [
+            {
+                "name": "pve-freq",
+                "hostname": "pve-freq.dc01.lowfreqlabs.com",
+                "mode": "behind-proxy",
+                "origin_ip": "10.25.255.50",
+                "origin_port": 8888,
+                "origin_scheme": "https",
+                "origin_tls_verify": False,
+            }
+        ],
+        "dc01.lowfreqlabs.com",
+        reverse_proxy_host="10.25.255.38",
+    )
+    block = _render_cert_config_block(settings, targets)
+
+    assert targets[0]["origin_scheme"] == "https"
+    assert targets[0]["origin_tls_verify"] is False
+    assert 'reverse_proxy_upstream_scheme = "https"' in block
+    assert "reverse_proxy_upstream_tls_verify = false" in block
+    assert 'dashboard_origin_host = "10.25.255.50"' in block
+    assert "dashboard_origin_port = 8888" in block
+    assert 'origin_scheme = "https"' in block
+    assert "origin_tls_verify = false" in block
+
+
+def test_inferred_dashboard_target_uses_submitted_proxy_upstream_truth():
+    from freq.modules.cert_management import _infer_cert_targets
+
+    cfg = _cfg(
+        certificates={
+            "base_domain": "dc01.lowfreqlabs.com",
+            "management_mode": "adopted_existing",
+            "reverse_proxy_host": "10.25.255.38",
+            "reverse_proxy_upstream_scheme": "https",
+            "reverse_proxy_upstream_tls_verify": False,
+            "dashboard_origin_host": "10.25.255.50",
+            "dashboard_origin_port": 8888,
+        }
+    )
+    target = next(t for t in _infer_cert_targets(cfg, "dc01.lowfreqlabs.com") if t["label"] == "pve-freq-dashboard")
+
+    assert target["hostname"] == "pve-freq.dc01.lowfreqlabs.com"
+    assert target["ip"] == "10.25.255.38"
+    assert target["origin_ip"] == "10.25.255.50"
+    assert target["origin_port"] == 8888
+    assert target["origin_scheme"] == "https"
+    assert target["origin_tls_verify"] is False
 
 
 def test_cert_lifecycle_registers_onboarding_endpoint():

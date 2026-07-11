@@ -68,7 +68,9 @@ class TestUnmanagedHostsSkipped(unittest.TestCase):
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         idx = src.find("Fleet host connectivity — ALL platform types")
         block = src[idx:idx + 3000]
-        self.assertIn('getattr(h, "managed", True)', block)
+        self.assertIn("managed_probe_hosts(cfg)", block)
+        helper = (FREQ_ROOT / "freq" / "core" / "host_scope.py").read_text()
+        self.assertIn('getattr(host, "managed", True)', helper)
 
 
 if __name__ == "__main__":

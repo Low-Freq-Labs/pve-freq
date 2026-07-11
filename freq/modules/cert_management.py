@@ -56,6 +56,11 @@ DEFAULT_CERT_SETTINGS = {
     "cloudflare_zone_id": "",
     "record_strategy": "public-private-a",
     "reverse_proxy_host": "",
+    "reverse_proxy_upstream_scheme": "http",
+    "reverse_proxy_upstream_tls_verify": True,
+    "dashboard_hostname": "",
+    "dashboard_origin_host": "",
+    "dashboard_origin_port": 8888,
     "renewal_owner": "",
 }
 
@@ -206,6 +211,8 @@ def _ssl_onboarding_contract(cfg):
             "deploy_model",
             "targets_to_cover",
             "reverse_proxy_vm_template_node_storage_network_when_creating_proxy",
+            "reverse_proxy_upstream_protocol_when_adopting_existing_proxy",
+            "reverse_proxy_upstream_tls_verification_when_upstream_is_https",
         ],
         "never_assume": [
             "reverse_proxy_exists",
@@ -292,6 +299,10 @@ def _ssl_onboarding_contract(cfg):
             "existing_acme_hint": existing_acme_hint,
             "configured_targets": len(targets),
             "reverse_proxy_host": settings.get("reverse_proxy_host", ""),
+            "reverse_proxy_upstream_scheme": settings.get("reverse_proxy_upstream_scheme", "http"),
+            "reverse_proxy_upstream_tls_verify": settings.get("reverse_proxy_upstream_tls_verify", True),
+            "dashboard_origin_host": settings.get("dashboard_origin_host", ""),
+            "dashboard_origin_port": settings.get("dashboard_origin_port", 8888),
             "management_mode": settings.get("management_mode") or "managed",
             "cloudflare_token": _cloudflare_token_status(cfg, settings),
             "adopt_existing_scope": {
@@ -339,6 +350,16 @@ def _cert_settings(cfg):
     if isinstance(raw, dict):
         settings.update({k: v for k, v in raw.items() if v is not None})
     settings["wildcard"] = str(settings.get("wildcard", "true")).lower() not in ("0", "false", "no", "off")
+    scheme = str(settings.get("reverse_proxy_upstream_scheme") or "http").strip().lower()
+    settings["reverse_proxy_upstream_scheme"] = scheme if scheme in ("http", "https") else "http"
+    settings["reverse_proxy_upstream_tls_verify"] = _as_bool(
+        settings.get("reverse_proxy_upstream_tls_verify"),
+        settings["reverse_proxy_upstream_scheme"] == "https",
+    )
+    try:
+        settings["dashboard_origin_port"] = int(settings.get("dashboard_origin_port") or 8888)
+    except (TypeError, ValueError):
+        settings["dashboard_origin_port"] = 8888
     data_dir = getattr(cfg, "data_dir", "") or os.path.join(getattr(cfg, "conf_dir", "."), "data")
     if settings.get("management_mode") != "adopted_existing":
         if not settings.get("acme_home"):
@@ -609,6 +630,8 @@ def _cert_targets(cfg):
                 "mode": str(raw.get("mode", "")).strip(),
                 "origin_ip": str(raw.get("origin_ip", "")).strip(),
                 "origin_port": int(raw.get("origin_port", 0) or 0),
+                "origin_scheme": str(raw.get("origin_scheme", "")).strip().lower(),
+                "origin_tls_verify": _as_bool(raw.get("origin_tls_verify"), False),
                 "service_tag": service_tag,
                 "identity_source": identity_source,
                 "credential_ref": str(raw.get("credential_ref", "")).strip(),
@@ -675,6 +698,18 @@ def _cert_targets_from_catalog(catalog, base_domain, reverse_proxy_host=""):
         origin_port = int(raw.get("origin_port") or raw.get("port") or (443 if not behind_proxy else 0) or 0)
         proxy_ip = str(raw.get("proxy_ip") or raw.get("reverse_proxy_ip") or "").strip()
         connect_ip = proxy_ip if behind_proxy else origin_ip
+        origin_scheme = str(
+            raw.get("origin_scheme")
+            or raw.get("upstream_scheme")
+            or raw.get("reverse_proxy_upstream_scheme")
+            or ("http" if behind_proxy else "")
+        ).strip().lower()
+        if origin_scheme not in ("http", "https", ""):
+            origin_scheme = "http"
+        origin_tls_verify = _as_bool(
+            raw.get("origin_tls_verify", raw.get("upstream_tls_verify", raw.get("reverse_proxy_upstream_tls_verify"))),
+            origin_scheme == "https",
+        )
 
         targets.append(
             {
@@ -687,6 +722,8 @@ def _cert_targets_from_catalog(catalog, base_domain, reverse_proxy_host=""):
                 "port": int(raw.get("tls_port") or raw.get("public_port") or (443 if behind_proxy else origin_port) or 443),
                 "origin_ip": origin_ip if behind_proxy else str(raw.get("origin_ip") or "").strip(),
                 "origin_port": origin_port if behind_proxy else int(raw.get("origin_port") or 0),
+                "origin_scheme": origin_scheme,
+                "origin_tls_verify": origin_tls_verify,
                 "mode": "behind_proxy" if behind_proxy else "direct",
                 "deploy_driver": str(
                     raw.get("deploy_driver") or ("reverse_proxy" if behind_proxy else raw.get("type") or "web_ui_direct")
@@ -1651,7 +1688,15 @@ def _infer_cert_targets(cfg, base_domain):
         seen.add(key)
         targets.append(target)
 
-    reverse_proxy_host = str((getattr(cfg, "certificates", {}) or {}).get("reverse_proxy_host", "") or "").strip()
+    cert_settings = _cert_settings(cfg)
+    reverse_proxy_host = str(cert_settings.get("reverse_proxy_host", "") or "").strip()
+    dashboard_origin_host = str(cert_settings.get("dashboard_origin_host", "") or "").strip()
+    dashboard_origin_port = int(cert_settings.get("dashboard_origin_port") or getattr(cfg, "dashboard_port", 8888) or 8888)
+    upstream_scheme = str(cert_settings.get("reverse_proxy_upstream_scheme") or "http").strip().lower()
+    upstream_tls_verify = _as_bool(
+        cert_settings.get("reverse_proxy_upstream_tls_verify"),
+        upstream_scheme == "https",
+    )
     if reverse_proxy_host:
         add_target(
             {
@@ -1661,6 +1706,10 @@ def _infer_cert_targets(cfg, base_domain):
                 "hostname": f"pve-freq.{base_domain}",
                 "ip": reverse_proxy_host,
                 "port": 443,
+                "origin_ip": dashboard_origin_host,
+                "origin_port": dashboard_origin_port,
+                "origin_scheme": upstream_scheme,
+                "origin_tls_verify": upstream_tls_verify,
                 "mode": "behind_proxy",
                 "deploy_driver": "reverse_proxy",
                 "cert_source": "wildcard",
@@ -1687,6 +1736,8 @@ def _infer_cert_targets(cfg, base_domain):
                         "port": 443,
                         "origin_ip": getattr(vm, "ip", ""),
                         "origin_port": int(getattr(container, "port", 0) or 0),
+                        "origin_scheme": "http",
+                        "origin_tls_verify": False,
                         "mode": "behind_proxy",
                         "deploy_driver": "reverse_proxy",
                         "cert_source": "wildcard",
@@ -1831,6 +1882,11 @@ def _render_cert_config_block(settings, targets):
         "cloudflare_zone_id",
         "record_strategy",
         "reverse_proxy_host",
+        "reverse_proxy_upstream_scheme",
+        "reverse_proxy_upstream_tls_verify",
+        "dashboard_hostname",
+        "dashboard_origin_host",
+        "dashboard_origin_port",
         "renewal_owner",
     ):
         if key in settings and settings[key] != "":
@@ -1848,6 +1904,8 @@ def _render_cert_config_block(settings, targets):
             "mode",
             "origin_ip",
             "origin_port",
+            "origin_scheme",
+            "origin_tls_verify",
             "deploy_driver",
             "cert_source",
             "restart_policy",

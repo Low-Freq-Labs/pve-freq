@@ -1,4 +1,4 @@
-/* PVE FREQ — DC01 Fleet Dashboard
+/* PVE FREQ — Fleet Dashboard
  * Dark theme, evidence-first status surfaces, calm operational tone. */
 
 /* ── Fonts ──
@@ -1434,6 +1434,7 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 .cert-dashboard-card.is-failing { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.045); }
 .cert-choice-card.is-primary { border-color: rgba(168,85,247,0.32); background: rgba(168,85,247,0.055); }
 .cert-token-panel {
+  grid-column: 1 / -1;
   margin-top: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1471,7 +1472,7 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 }
 .cert-token-form {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gap-sm);
   align-items: end;
   margin-top: 9px;
@@ -1483,9 +1484,15 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   min-height: 34px;
 }
 .cert-token-actions {
+  display: flex;
+  width: 100%;
   margin: 0;
   align-self: end;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+}
+.cert-token-actions .fleet-btn {
+  flex: 1 1 130px;
+  justify-content: center;
 }
 .cert-token-foot,
 .cert-token-result-note {
@@ -2069,6 +2076,9 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   .cert-dashboard-state,
   .cert-onboarding-grid { grid-template-columns: 1fr; }
 }
+@media(max-width: 900px) {
+  .cert-choice-grid { grid-template-columns: 1fr; }
+}
 @media(max-width: 720px) {
   .cert-form-grid,
   .cert-action-grid,
@@ -2085,6 +2095,13 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   .cert-action-card p { min-height: 0; }
   .cert-action-row .fleet-btn,
   .cert-action-card .fleet-btn { flex: 1 1 120px; }
+  .fleet-network-grid { grid-template-columns:1fr; }
+  .fleet-network-panel-head { align-items:flex-start;flex-direction:column; }
+  .fleet-network-stats { justify-content:stretch;width:100%; }
+  .fleet-network-stats .st { flex:1 1 92px; }
+  .topo-legend { gap:8px 12px;font-size:12px; }
+  .lab-role-card .lab-metrics { grid-template-columns:1fr; }
+  .vault-stat-strip { grid-template-columns:1fr; }
 }
 
 /* ── Toast Notifications ── */
@@ -2197,6 +2214,16 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-gutter: stable;
+}
+.vmt-network-warning {
+  border: 1px solid var(--yellow);
+  color: var(--yellow);
+  background: rgba(245,158,11,0.08);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 10px;
 }
 .vmt-nic-row {
   border: 1px solid var(--border);
@@ -2660,12 +2687,18 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 }
 .device-assignment-table th,
 .device-assignment-table td { vertical-align: middle; }
+.device-identity-stack {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+}
 .device-props-grid {
   display: grid;
-  grid-template-columns: minmax(92px, .7fr) minmax(130px, 1fr);
+  grid-template-columns: minmax(92px, .65fr) minmax(120px, .85fr) minmax(130px, 1fr);
   gap: 6px;
   align-items: center;
 }
+.device-display-input { font-weight: 700; }
 .device-prop-select,
 .device-prop-input {
   width: 100%;
@@ -2818,6 +2851,8 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 #rescan-results { display:none;margin-bottom:12px }
 #compose-out { min-height:80px }
 .vault-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.vault-stat-strip { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap-sm);margin:0 0 14px;align-items:stretch }
+.vault-stat-strip .st { max-width:none;min-width:0;width:100% }
 .vault-scope-tabs { display:flex; gap:8px; flex-wrap:wrap; }
 .vault-scope-note { border:1px solid rgba(168,85,247,0.22); background:rgba(168,85,247,0.045); color:var(--text-dim); font-size:12px; line-height:1.45; padding:10px 12px; border-radius:var(--radius-sm); margin-bottom:14px; }
 .vault-credential-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:var(--gap-sm); }
@@ -2841,7 +2876,31 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 .vault-notes { grid-column:1 / -1; }
 .vault-editor-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; flex-wrap:wrap; }
 #log-out { max-height:400px;overflow-y:auto }
-#topo-svg { margin:0 -16px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:visible }
+#topo-svg { margin:0;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:visible;width:100%;display:block }
+.topo-legend { display:flex;align-items:center;gap:14px;flex-wrap:wrap;color:var(--text-dim);font-size:13px;margin-bottom:10px }
+.topo-legend span { margin-right:4px }
+.fleet-network-grid { display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:var(--gap-sm);align-items:start }
+.fleet-network-panel { border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--card);padding:14px;min-width:0 }
+.fleet-network-panel-head { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;min-width:0 }
+.fleet-network-panel-head h4 { margin:0;color:var(--text-bright);font-size:12px;text-transform:uppercase;letter-spacing:2px }
+.fleet-network-stats { margin:0;justify-content:flex-end }
+.fleet-network-stats .st { flex:0 1 auto;min-width:86px;max-width:none }
+.lab-card-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--gap-sm);width:100% }
+.lab-role-card { min-height:190px;display:flex;flex-direction:column;gap:10px }
+.lab-role-card .lab-role-top { display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);padding-bottom:9px }
+.lab-role-card .lab-title { margin:0;color:var(--text-bright);font-size:15px;letter-spacing:1.4px;text-transform:uppercase;overflow-wrap:anywhere }
+.lab-role-card .lab-meta { color:var(--text-dim);font-size:11px;line-height:1.5;text-transform:uppercase;letter-spacing:.8px }
+.lab-role-card .lab-kind { border:1px solid var(--border);border-radius:999px;padding:4px 8px;color:var(--text);font-size:10px;font-weight:800;letter-spacing:1px;white-space:nowrap }
+.lab-role-card .lab-metrics { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px }
+.lab-role-card .lab-metric { border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-sm);background:rgba(255,255,255,.025);padding:8px 9px;min-width:0 }
+.lab-role-card .lab-metric span { display:block;color:var(--text-dim);font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px }
+.lab-role-card .lab-metric strong { display:block;color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.lab-role-card .lab-actions { display:flex;flex-wrap:wrap;gap:7px;margin-top:auto }
+.lab-role-card .lab-actions .fleet-btn { flex:1 1 92px;justify-content:center;min-width:0 }
+.lab-card-firewall { border-color:rgba(248,81,73,.32) }
+.lab-card-nas { border-color:rgba(88,166,255,.3) }
+.lab-card-pve { border-color:rgba(168,85,247,.34) }
+.lab-card-vm { border-color:rgba(63,185,80,.28) }
 #pb-runner-title { font-size:13px;color:var(--text) }
 #go-actions { gap:8px;margin-bottom:12px }
 #go-diff-content { font-size:11px;color:var(--text);background:rgba(0,0,0,0.3);padding:12px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto }
@@ -2868,7 +2927,7 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
    Replaces the ~16 remaining inline styles on the terminal shell,
    global search, shortcuts modal, chaos destructive banner, and home
    view toolbar with true semantic class names. Every class named
-   here carries DC01/ops-console intent, not generic bootstrap-y
+   here carries ops-console intent, not generic bootstrap-y
    abstraction: .term-shell-* anchors the terminal, .search-overlay-*
    anchors the global search, etc.
    Each extraction drops one hash from the Q unsafe-hashes CSP list
@@ -3179,7 +3238,12 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 }
 .stream-status.s-dead .stream-dot { background: var(--red); }
 .watchdog-label { font-size: 11px; font-weight: 600; }
+.watchdog-full { display: inline; }
 .watchdog-compact { display: none; }
+@media(max-width: 720px) {
+  .watchdog-full { display: none; }
+  .watchdog-compact { display: inline; }
+}
 
 /* M-RESILIENCE-OPERATOR-TRUTH-20260413AI: persistent post-auth truth
    banner. Renders under the header on authenticated views whenever

@@ -133,6 +133,7 @@ class TestEnsurePostInitDataOwnership(unittest.TestCase):
                 return True
 
             with mock.patch.dict(os.environ, {"FREQ_WEB_INIT": "1", "SUDO_USER": "freq"}), \
+                 mock.patch.object(init_cmd, "_is_container_runtime", return_value=True), \
                  mock.patch.object(init_cmd, "_chown", side_effect=fake_chown), \
                  mock.patch("pwd.getpwnam", return_value=self._fake_pwnam()):
                 ok = init_cmd._ensure_post_init_data_ownership(cfg, "freq-admin")

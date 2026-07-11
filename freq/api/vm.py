@@ -642,52 +642,18 @@ def _vlan_options(cfg):
 
 
 def _vm_create_vlan_catalog(cfg):
-    """Return configured plus observed networks for the create wizard."""
+    """Return configured VM networks for the create wizard.
+
+    VM Create must not infer VLAN IDs, gateways, or subnets from private IP
+    shape. Those are site policy. Init/discovery can collect facts, but VM
+    provisioning only plans against explicit VLAN/network-profile config.
+    """
     by_id = {}
     for vlan in getattr(cfg, "vlans", []) or []:
         try:
             by_id[int(getattr(vlan, "id", 0))] = vlan
         except (TypeError, ValueError):
             continue
-    observed = set()
-    for host in getattr(cfg, "hosts", []) or []:
-        for ip_value in [getattr(host, "ip", "")] + list(getattr(host, "all_ips", []) or []):
-            ip_text = str(ip_value or "").split("/", 1)[0]
-            try:
-                ip_obj = ipaddress.ip_address(ip_text)
-            except ValueError:
-                continue
-            if ip_obj.version != 4:
-                continue
-            parts = ip_text.split(".")
-            if len(parts) != 4:
-                continue
-            if parts[0] == "10" and parts[1] == "25":
-                net_octet = int(parts[2])
-                vlan_id = 2550 if net_octet == 255 else net_octet
-                observed.add((vlan_id, f"10.25.{net_octet}.0/24", f"10.25.{net_octet}"))
-    for ip_text in getattr(cfg, "pve_nodes", []) or []:
-        try:
-            ip_obj = ipaddress.ip_address(str(ip_text))
-        except ValueError:
-            continue
-        if ip_obj.version == 4 and str(ip_text).startswith("10.25."):
-            parts = str(ip_text).split(".")
-            net_octet = int(parts[2])
-            vlan_id = 2550 if net_octet == 255 else net_octet
-            observed.add((vlan_id, f"10.25.{net_octet}.0/24", f"10.25.{net_octet}"))
-    for vlan_id, subnet, prefix in observed:
-        if vlan_id in by_id:
-            existing = by_id[vlan_id]
-            if not getattr(existing, "gateway", ""):
-                existing.gateway = f"{prefix}.1"
-            if not getattr(existing, "subnet", ""):
-                existing.subnet = subnet
-            if not getattr(existing, "prefix", ""):
-                existing.prefix = prefix
-            continue
-        name = "Management" if vlan_id == 2550 else f"VLAN{vlan_id}"
-        by_id[vlan_id] = VLAN(id=vlan_id, name=name, subnet=subnet, prefix=prefix, gateway=f"{prefix}.1")
     return [by_id[k] for k in sorted(by_id)]
 
 
@@ -793,24 +759,14 @@ def _profile_key(value: str) -> str:
 def _default_network_profile_for_vlan(cfg, vlan):
     vlan_id = int(getattr(vlan, "id", 0) or 0)
     name = getattr(vlan, "name", "") or f"VLAN{vlan_id}"
-    defaults = {
-        2550: ("management", "Management", "management", "none"),
-        25: ("storage", "Storage", "storage", "none"),
-        10: ("compute-dev", "Compute / Dev", "trusted-dev", "none"),
-        5: ("internal-internet", "Internal Internet", "internal-egress", "default"),
-        66: ("dirty-public", "Dirty / Public", "public-egress", "default"),
-    }
-    pid, label, purpose, gateway_role = defaults.get(
-        vlan_id,
-        (_profile_key(name) or f"vlan-{vlan_id}", name, "", ""),
-    )
+    pid = _profile_key(name) or f"vlan-{vlan_id}"
     return {
         "id": pid,
-        "name": label,
+        "name": name,
         "vlan": vlan_id,
         "bridge": getattr(cfg, "nic_bridge", "vmbr0"),
-        "purpose": purpose,
-        "gateway_role": gateway_role,
+        "purpose": "",
+        "gateway_role": "",
         "description": "",
     }
 
@@ -997,7 +953,7 @@ def _vlan_rule_token(vlan):
 
 
 def _gateway_policy(cfg):
-    """Return operator-editable VM gateway rules, with DC01 auto-detect fallback."""
+    """Return operator-editable VM gateway rules."""
     raw = getattr(cfg, "vm_gateway_rules", {}) or {}
 
     def _token_set(value):
@@ -1013,11 +969,6 @@ def _gateway_policy(cfg):
     if not mode:
         mode = "single_egress" if egress else "vlan_then_global"
 
-    vlan_ids = {str(getattr(v, "id", "")).lower() for v in _vm_create_vlan_catalog(cfg)}
-    if not raw and {"5", "10", "25", "66"}.issubset(vlan_ids):
-        egress = {"5", "66"}
-        no_default = {"10", "25", "255", "2550"}
-        mode = "single_egress"
     return {"mode": mode, "egress": egress, "no_default": no_default}
 
 
@@ -1171,9 +1122,10 @@ def _vm_create_options_payload(cfg):
     for vlan in _vm_create_vlan_catalog(cfg):
         key = str(getattr(vlan, "id", "") or getattr(vlan, "name", ""))
         ip_suggestions[key] = _inventory_ip_suggestions(cfg, vlan)
+    network_setup_required = not network_profiles
     return {
         "ok": True,
-        "schema_version": 3,
+        "schema_version": 4,
         "cache_ttl_s": _VM_CREATE_OPTIONS_TTL,
         "nodes": nodes,
         "storage": storage,
@@ -1193,6 +1145,9 @@ def _vm_create_options_payload(cfg):
             "multi_nic": True,
             "primary_input": "network_profile",
             "bridge_input": "advanced",
+            "network_setup_required": network_setup_required,
+            "network_setup_hint": "Configure VM Network Profiles before creating static-IP VMs." if network_setup_required else "",
+            "site_inference": False,
         },
         "cpu": {
             "default": getattr(cfg, "vm_cpu", "x86-64-v2-AES"),
