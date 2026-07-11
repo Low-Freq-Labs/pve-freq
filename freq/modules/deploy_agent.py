@@ -10,8 +10,9 @@ Replaces: Prometheus node_exporter + Ansible deploy playbook,
           Telegraf ($0 but heavy config), manual agent installs
 
 Architecture:
-    - Agent binary is agent_collector.py, copied via SSH (SCP)
-    - Systemd unit generated dynamically with configurable port
+    - agent_deployment.py owns upload, service, restart, and verification
+    - Agent binary is agent_collector.py, written through the shared SSH path
+    - One systemd unit is generated dynamically with configurable port
     - Agent serves JSON metrics over HTTP on localhost
     - Status check polls agent HTTP endpoint from Nexus
 
@@ -21,42 +22,17 @@ Design decisions:
 """
 
 import json
-import os
-import time
 import urllib.error
 import urllib.request
 
 from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run
+from freq.modules.agent_deployment import deploy_to_host, load_agent_source
 
-# Deploy timeouts
-DEPLOY_CMD_TIMEOUT = 10
-DEPLOY_UPLOAD_TIMEOUT = 15
-DEPLOY_QUICK_TIMEOUT = 5
 AGENT_CHECK_TIMEOUT = 3
 
 AGENT_PORT = 9990  # default — overridden by cfg.agent_port at deploy time
-from freq.modules.init_cmd import AGENT_REMOTE_PATH
-SERVICE_NAME = "freq-agent"
-
-
-def _systemd_unit(port):
-    return f"""[Unit]
-Description=FREQ Metrics Collector
-After=network.target
-
-[Service]
-Type=simple
-Environment=FREQ_AGENT_PORT={port}
-ExecStart=/usr/bin/env python3 {AGENT_REMOTE_PATH}
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-"""
 
 
 def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
@@ -86,12 +62,10 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Read the agent collector source
-    agent_src = os.path.join(os.path.dirname(os.path.dirname(__file__)), "agent_collector.py")
     try:
-        with open(agent_src) as f:
-            agent_code = f.read()
-    except FileNotFoundError:
-        fmt.error(f"Agent source not found: {agent_src}")
+        agent_code, _agent_src = load_agent_source(cfg.install_dir)
+    except FileNotFoundError as exc:
+        fmt.error(f"Agent source not found: {exc}")
         return 1
 
     ok_count = 0
@@ -100,92 +74,16 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
     for h in hosts:
         fmt.step_start(f"{h.label}")
 
-        # Step 1: Create directory
-        r = ssh_run(
-            host=h.ip,
-            command="mkdir -p /opt/freq-agent",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=DEPLOY_QUICK_TIMEOUT,
-            command_timeout=DEPLOY_CMD_TIMEOUT,
-            htype=h.htype,
-            use_sudo=True,
-        )
-        if r.returncode != 0:
-            fmt.step_fail(f"{h.label}: cannot create directory")
-            fail_count += 1
-            continue
-
-        # Step 2: Upload agent code via SSH (cat into file)
-        # Escape for shell
-        escaped = agent_code.replace("'", "'\\''")
-        upload_cmd = f"cat > {AGENT_REMOTE_PATH} << 'FREQAGENTEOF'\n{agent_code}\nFREQAGENTEOF"
-        r = ssh_run(
-            host=h.ip,
-            command=upload_cmd,
-            key_path=cfg.ssh_key_path,
-            connect_timeout=DEPLOY_QUICK_TIMEOUT,
-            command_timeout=DEPLOY_UPLOAD_TIMEOUT,
-            htype=h.htype,
-            use_sudo=True,
-        )
-        if r.returncode != 0:
-            fmt.step_fail(f"{h.label}: cannot upload agent")
-            fail_count += 1
-            continue
-
-        # Step 3: Make executable
-        ssh_run(
-            host=h.ip,
-            command=f"chmod +x {AGENT_REMOTE_PATH}",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=DEPLOY_QUICK_TIMEOUT,
-            command_timeout=DEPLOY_QUICK_TIMEOUT,
-            htype=h.htype,
-            use_sudo=True,
-        )
-
-        # Step 4: Create systemd service
-        unit_content = _systemd_unit(AGENT_PORT)
-        service_cmd = f"cat > /etc/systemd/system/{SERVICE_NAME}.service << 'FREQSVCEOF'\n{unit_content}\nFREQSVCEOF"
-        r = ssh_run(
-            host=h.ip,
-            command=service_cmd,
-            key_path=cfg.ssh_key_path,
-            connect_timeout=DEPLOY_QUICK_TIMEOUT,
-            command_timeout=DEPLOY_CMD_TIMEOUT,
-            htype=h.htype,
-            use_sudo=True,
-        )
-
-        # Step 5: Enable and start
-        ssh_run(
-            host=h.ip,
-            command=f"systemctl daemon-reload && systemctl enable {SERVICE_NAME} && systemctl restart {SERVICE_NAME}",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=DEPLOY_QUICK_TIMEOUT,
-            command_timeout=DEPLOY_UPLOAD_TIMEOUT,
-            htype=h.htype,
-            use_sudo=True,
-        )
-
-        # Step 6: Verify
-        time.sleep(1)
-        r = ssh_run(
-            host=h.ip,
-            command=f"curl -s http://localhost:{AGENT_PORT}/health 2>/dev/null",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=DEPLOY_QUICK_TIMEOUT,
-            command_timeout=DEPLOY_QUICK_TIMEOUT,
-            htype=h.htype,
-            use_sudo=False,
-        )
-
-        if r.returncode == 0 and "ok" in r.stdout:
+        outcome = deploy_to_host(cfg, h, agent_code=agent_code)
+        if outcome["status"] == "deployed":
             fmt.step_ok(f"{h.label}: agent running on port {AGENT_PORT}")
             ok_count += 1
-        else:
+        elif outcome["status"] == "deployed_unverified":
             fmt.step_warn(f"{h.label}: deployed but health check failed (may need a moment)")
-            ok_count += 1  # Still counts as deployed
+            ok_count += 1
+        else:
+            fmt.step_fail(f"{h.label}: {outcome.get('error', 'deployment failed')}")
+            fail_count += 1
 
     fmt.blank()
     fmt.divider("Summary")
@@ -193,7 +91,7 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
     fmt.line(f"  {fmt.C.GREEN}{ok_count}{fmt.C.RESET} deployed  {fmt.C.RED}{fail_count}{fmt.C.RESET} failed")
     fmt.blank()
     fmt.line(f"  {fmt.C.GRAY}Metrics: curl http://<host>:{AGENT_PORT}/metrics{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.GRAY}Service: systemctl status {SERVICE_NAME}{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.GRAY}Service: systemctl status freq-agent{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0 if fail_count == 0 else 1

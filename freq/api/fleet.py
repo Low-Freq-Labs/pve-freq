@@ -735,142 +735,16 @@ def handle_deploy_agent(handler):
             return
         hosts = [h]
 
-    # Read agent source
-    agent_src = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent_collector.py")
+    from freq.modules.agent_deployment import deploy_to_host, load_agent_source
+
     try:
-        with open(agent_src) as f:
-            agent_code = f.read()
-    except FileNotFoundError:
-        json_response(handler, {"error": f"Agent source not found: {agent_src}"}, 500)
+        agent_code, _agent_src = load_agent_source(cfg.install_dir)
+    except FileNotFoundError as exc:
+        json_response(handler, {"error": f"Agent source not found: {exc}"}, 500)
         return
 
-    from freq.modules.init_cmd import AGENT_REMOTE_PATH, AGENT_REMOTE_DIR
-
     agent_port = cfg.agent_port
-    remote_path = AGENT_REMOTE_PATH
-    service_name = "freq-agent"
-
-    results = []
-    for h in hosts:
-        host_result = {"host": h.label, "ip": h.ip, "steps": []}
-
-        # Step 1: Create directory
-        r = ssh_single(
-            host=h.ip,
-            command=f"mkdir -p {AGENT_REMOTE_DIR}",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=3,
-            command_timeout=10,
-            htype=h.htype,
-            use_sudo=True,
-            cfg=cfg,
-        )
-        if r.returncode != 0:
-            host_result["status"] = "failed"
-            host_result["error"] = "Cannot create directory"
-            host_result["steps"].append({"step": "mkdir", "ok": False})
-            results.append(host_result)
-            continue
-        host_result["steps"].append({"step": "mkdir", "ok": True})
-
-        # Step 2: Upload agent
-        upload_cmd = f"cat > {remote_path} << 'FREQAGENTEOF'\n{agent_code}\nFREQAGENTEOF"
-        r = ssh_single(
-            host=h.ip,
-            command=upload_cmd,
-            key_path=cfg.ssh_key_path,
-            connect_timeout=3,
-            command_timeout=30,
-            htype=h.htype,
-            use_sudo=True,
-            cfg=cfg,
-        )
-        if r.returncode != 0:
-            host_result["status"] = "failed"
-            host_result["error"] = "Cannot upload agent"
-            host_result["steps"].append({"step": "upload", "ok": False})
-            results.append(host_result)
-            continue
-        host_result["steps"].append({"step": "upload", "ok": True})
-
-        # Step 3: chmod + systemd unit
-        r = ssh_single(
-            host=h.ip,
-            command=f"chmod +x {remote_path}",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=3,
-            command_timeout=5,
-            htype=h.htype,
-            use_sudo=True,
-            cfg=cfg,
-        )
-        host_result["steps"].append({"step": "chmod", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
-        if r.returncode != 0:
-            host_result["status"] = "failed"
-            host_result["error"] = "chmod failed"
-            results.append(host_result)
-            continue
-
-        unit = (
-            f"[Unit]\nDescription=FREQ Metrics Agent\nAfter=network.target\n\n"
-            f"[Service]\nExecStart=/usr/bin/python3 {remote_path} --port {agent_port}\n"
-            f"Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\n"
-        )
-        svc_cmd = f"cat > /etc/systemd/system/{service_name}.service << 'FREQSVCEOF'\n{unit}\nFREQSVCEOF"
-        r = ssh_single(
-            host=h.ip,
-            command=svc_cmd,
-            key_path=cfg.ssh_key_path,
-            connect_timeout=3,
-            command_timeout=10,
-            htype=h.htype,
-            use_sudo=True,
-            cfg=cfg,
-        )
-        host_result["steps"].append({"step": "systemd_unit", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
-        if r.returncode != 0:
-            host_result["status"] = "failed"
-            host_result["error"] = "systemd unit creation failed"
-            results.append(host_result)
-            continue
-
-        # Step 4: Enable and start
-        r = ssh_single(
-            host=h.ip,
-            command=f"systemctl daemon-reload && systemctl enable {service_name} && systemctl restart {service_name}",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=3,
-            command_timeout=30,
-            htype=h.htype,
-            use_sudo=True,
-            cfg=cfg,
-        )
-        host_result["steps"].append({"step": "start", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
-        if r.returncode != 0:
-            host_result["status"] = "failed"
-            host_result["error"] = "service start failed"
-            results.append(host_result)
-            continue
-
-        # Step 5: Verify
-        time.sleep(1)
-        from freq.modules.agent_health import remote_agent_health_command
-
-        r = ssh_single(
-            host=h.ip,
-            command=remote_agent_health_command(agent_port),
-            key_path=cfg.ssh_key_path,
-            connect_timeout=3,
-            command_timeout=5,
-            htype=h.htype,
-            use_sudo=False,
-            cfg=cfg,
-        )
-        healthy = r.returncode == 0 and "ok" in r.stdout
-        host_result["steps"].append({"step": "verify", "ok": healthy})
-        host_result["status"] = "deployed" if healthy else "deployed_unverified"
-        host_result["agent_port"] = agent_port
-        results.append(host_result)
+    results = [deploy_to_host(cfg, host, agent_code=agent_code) for host in hosts]
 
     deployed = sum(1 for r in results if r.get("status") == "deployed")
     failed = sum(1 for r in results if r.get("status") == "failed")

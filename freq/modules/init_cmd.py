@@ -52,6 +52,12 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.host_scope import managed_probe_hosts
 from freq.core.ssh import PLATFORM_SSH
+from freq.modules.agent_deployment import (
+    AGENT_REMOTE_DIR,
+    AGENT_REMOTE_PATH,
+    deploy_to_host as deploy_metrics_agent,
+    load_agent_source,
+)
 
 
 # Device types that support per-device credentials
@@ -129,10 +135,6 @@ IDRAC_PASSWORD_MAX_LEN = 20
 IOS_KEY_LINE_WIDTH = 72
 
 _OPERATOR_AUTO_EXCLUDE_LABELS = {"nexus", "pve-freq"}
-
-# Agent deployment — single source of truth for remote path
-AGENT_REMOTE_PATH = "/opt/freq-agent/collector.py"
-AGENT_REMOTE_DIR = "/opt/freq-agent"
 
 # Error markers in remote deployment scripts
 MARKER_DEPLOY_OK = "DEPLOY_OK"
@@ -5923,28 +5925,18 @@ def _phase_fleet_configure(cfg, ctx):
         fmt.line(f"  {fmt.C.BOLD}Metrics Agent Deployment ({len(agent_hosts)} hosts){fmt.C.RESET}")
         fmt.blank()
 
-        # Find the agent_collector.py source file — check relative to this module, then install_dir
-        agent_src = None
-        for candidate in [
-            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent_collector.py"),
-            os.path.join(cfg.install_dir, "freq", "agent_collector.py"),
-        ]:
-            if os.path.isfile(candidate):
-                agent_src = candidate
-                break
-
-        if not agent_src:
+        try:
+            agent_code, _agent_src = load_agent_source(cfg.install_dir)
+        except FileNotFoundError:
             fmt.step_warn("agent_collector.py not found — skipping agent deployment")
         else:
-            agent_port = getattr(cfg, "agent_port", 9990) or 9990
             agent_ok = agent_fail = 0
             failed_agents = []
 
             for h in agent_hosts:
-                ssh_target = f"{svc_name}@{h.ip}"
-                ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [ssh_target]
-
-                # Test connectivity first
+                # Init owns trust establishment; the shared deployer owns every
+                # mutation after a clean service-account SSH round trip.
+                ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [f"{svc_name}@{h.ip}"]
                 rc, _, err = _run_ssh_with_stale_hostkey_retry(
                     ssh_cmd + ["echo ok"],
                     QUICK_CHECK_TIMEOUT,
@@ -5953,67 +5945,24 @@ def _phase_fleet_configure(cfg, ctx):
                 )
                 if rc != 0:
                     agent_fail += 1
-                    failed_agents.append(f"{h.label} ({h.ip}) connect rc={rc}: {_ssh_error_msg(rc, err)}")
-                    continue
-
-                # Upload agent via SSH + cat
-                try:
-                    with open(agent_src) as f:
-                        agent_code = f.read()
-                except OSError:
-                    fmt.step_warn(f"Cannot read {agent_src}")
-                    break
-
-                # Create dir + upload
-                setup_script = (
-                    f"sudo mkdir -p {AGENT_REMOTE_DIR} && "
-                    f"sudo tee {AGENT_REMOTE_PATH} > /dev/null && "
-                    f"sudo chmod +x {AGENT_REMOTE_PATH}"
-                )
-                try:
-                    # No -n flag here — we pipe agent_code via stdin to tee
-                    r = subprocess.run(
-                        ["ssh"] + ssh_base_opts + [ssh_target, setup_script],
-                        input=agent_code, capture_output=True, text=True, timeout=DEFAULT_CMD_TIMEOUT,
+                    failed_agents.append(
+                        f"{h.label} ({h.ip}) connect rc={rc}: {_ssh_error_msg(rc, err)}"
                     )
-                    if r.returncode != 0:
-                        agent_fail += 1
-                        failed_agents.append(
-                            f"{h.label} ({h.ip}) upload rc={r.returncode}: "
-                            f"{(r.stderr or r.stdout).strip()[:160]}"
-                        )
-                        continue
-                except Exception as e:
-                    agent_fail += 1
-                    failed_agents.append(f"{h.label} ({h.ip}) upload exception: {e}")
                     continue
-
-                # Create systemd service
-                unit = (
-                    "[Unit]\n"
-                    "Description=FREQ Metrics Agent\n"
-                    "After=network.target\n"
-                    "\n"
-                    "[Service]\n"
-                    f"Environment=FREQ_AGENT_PORT={agent_port}\n"
-                    f"ExecStart=/usr/bin/env python3 {AGENT_REMOTE_PATH}\n"
-                    "Restart=always\n"
-                    "RestartSec=10\n"
-                    "\n"
-                    "[Install]\n"
-                    "WantedBy=multi-user.target\n"
+                outcome = deploy_metrics_agent(
+                    cfg,
+                    h,
+                    agent_code=agent_code,
+                    key_path=key_path,
                 )
-                unit_cmd = (
-                    f"echo '{unit}' | sudo tee /etc/systemd/system/freq-agent.service > /dev/null && "
-                    "sudo systemctl daemon-reload && "
-                    "sudo systemctl enable freq-agent --now 2>/dev/null"
-                )
-                rc, _, _ = _run(ssh_cmd + [unit_cmd], timeout=DEFAULT_CMD_TIMEOUT)
-                if rc == 0:
+                if outcome["status"] == "deployed":
                     agent_ok += 1
                 else:
                     agent_fail += 1
-                    failed_agents.append(f"{h.label} ({h.ip}) service rc={rc}")
+                    failed_agents.append(
+                        f"{h.label} ({h.ip}) {outcome['status']}: "
+                        f"{outcome.get('error', 'deployment failed')}"
+                    )
 
             if agent_fail:
                 fmt.step_fail(f"Agent deployed: {agent_ok} OK, {agent_fail} failed")
