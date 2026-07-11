@@ -176,6 +176,44 @@ test.describe('hermetic dashboard behavior oracle', () => {
     await expect(panel.locator(':scope > .section-body > .panel-updated')).toHaveText(successfulStamp);
   });
 
+  test('chaos injection uses the styled non-blocking confirmation flow', async ({ page }) => {
+    let runRequests = 0;
+    await page.route('**/api/chaos/run?*', route => {
+      runRequests += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ result: { status: 'completed', recovery_time: 3 } })
+      });
+    });
+    await page.route('**/api/chaos/log', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ experiments: [] })
+    }));
+    await loginInBrowser(page);
+    await page.locator('#nav-items [data-view="tools"]').click();
+    await page.locator('#subtabs-tools [data-view="chaos"]').click();
+    await page.locator('#chaos-name').fill('styled-confirm-proof');
+    await page.locator('#chaos-type').selectOption('service_restart');
+    await page.locator('#chaos-target').evaluate(select => {
+      const option = document.createElement('option');
+      option.value = 'pve-hermetic';
+      option.textContent = 'pve-hermetic';
+      select.appendChild(option);
+    });
+    await page.locator('#chaos-target').selectOption('pve-hermetic');
+    await page.locator('#chaos-service').fill('proof-service');
+    await page.locator('#chaos-view [data-action="chaosRun"]').click();
+
+    await expect(page.locator('#modal-container')).toBeVisible();
+    await expect(page.locator('#modal-container')).toContainText('styled-confirm-proof');
+    expect(runRequests).toBe(0);
+    await page.locator('#modal-confirm-btn').click();
+    await expect.poll(() => runRequests).toBe(1);
+    await expect(page.locator('#toast-container')).toContainText('Experiment completed');
+  });
+
   test('authenticated fleet overview returns cache truth', async ({ request }) => {
     const session = await bearerSession(request);
     const response = await request.get('/api/fleet/overview', {

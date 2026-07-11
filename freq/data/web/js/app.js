@@ -13065,18 +13065,19 @@ function chaosRun(){
   var service=document.getElementById('chaos-service').value.trim();
   var duration=document.getElementById('chaos-duration').value||'60';
   if(!name||!type||!target){toast('Name, type, and target are required','error');return;}
-  if(!confirm('Run chaos experiment "'+name+'" ('+type+') on '+target+'? This will intentionally disrupt the service.')){return;}
-  toast('Running experiment...','info');
-  var q='/api/chaos/run?name='+encodeURIComponent(name)+'&type='+encodeURIComponent(type);
-  q+='&target='+encodeURIComponent(target)+'&service='+encodeURIComponent(service)+'&duration='+duration;
-  _authFetch(q).then(function(r){return r.json()}).then(function(d){
-    if(d.error){toast('Error: '+d.error,'error');return;}
-    var r=d.result||{};
-    if(r.status==='completed')toast('Experiment completed — recovery: '+(r.recovery_time||0)+'s','success');
-    else if(r.status==='blocked')toast('Blocked: '+(r.error||'safety gate'),'error');
-    else toast('Status: '+r.status+' '+(r.error||''),'error');
-    loadChaos();
-  }).catch(function(e){toast('Failed: '+e,'error');});
+  confirmAction('Run chaos experiment <strong>"'+_esc(name)+'"</strong> ('+_esc(type)+') on <strong>'+_esc(target)+'</strong>?<br>This will intentionally disrupt the service.',function(){
+    toast('Running experiment...','info');
+    var q='/api/chaos/run?name='+encodeURIComponent(name)+'&type='+encodeURIComponent(type);
+    q+='&target='+encodeURIComponent(target)+'&service='+encodeURIComponent(service)+'&duration='+duration;
+    _authFetch(q).then(function(r){return r.json()}).then(function(d){
+      if(d.error){toast('Error: '+d.error,'error');return;}
+      var r=d.result||{};
+      if(r.status==='completed')toast('Experiment completed — recovery: '+(r.recovery_time||0)+'s','success');
+      else if(r.status==='blocked')toast('Blocked: '+(r.error||'safety gate'),'error');
+      else toast('Status: '+r.status+' '+(r.error||''),'error');
+      loadChaos();
+    }).catch(function(e){toast('Failed: '+e,'error');});
+  });
 }
 
 function runDoctor(){
