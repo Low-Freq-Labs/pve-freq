@@ -38,10 +38,11 @@ test.describe('hermetic dashboard behavior oracle', () => {
     await expect(page.locator('#login-overlay')).toHaveCSS('display', /^(flex|block)$/);
   });
 
-  test('generated Security and System subnav strips stay complete and self-active', async ({ page }) => {
+  test('generated Fleet, Security, and System subnav strips stay complete and self-active', async ({ page }) => {
     await page.goto('/');
     const result = await page.evaluate(() => {
       const expected = {
+        fleet: ['fleet', 'network'],
         security: ['security', 'sec-hardening', 'sec-access', 'sec-compliance', 'firewall', 'certs', 'vpn'],
         system: ['tools', 'playbooks', 'gitops', 'chaos', 'dns', 'dr', 'incidents', 'metrics', 'automation', 'plugins']
       };
@@ -54,7 +55,7 @@ test.describe('hermetic dashboard behavior oracle', () => {
         chaosRed: mount.dataset.subnavGroup !== 'system' || mount.querySelector('[data-view="chaos"]').classList.contains('c-red')
       }));
     });
-    expect(result).toHaveLength(17);
+    expect(result).toHaveLength(19);
     for (const strip of result) {
       expect(strip.views).toEqual(strip.expected);
       expect(strip.activeViews).toEqual([strip.active]);
@@ -63,6 +64,7 @@ test.describe('hermetic dashboard behavior oracle', () => {
 
     await loginInBrowser(page);
     for (const [topView, views] of [
+      ['fleet', ['fleet', 'network']],
       ['security', ['security', 'sec-hardening', 'sec-access', 'sec-compliance', 'firewall', 'certs', 'vpn']],
       ['tools', ['tools', 'playbooks', 'gitops', 'chaos', 'dns', 'dr', 'incidents', 'metrics', 'automation', 'plugins']]
     ]) {
@@ -210,7 +212,7 @@ test.describe('hermetic dashboard behavior oracle', () => {
     await page.route('**/api/netmon/data', route => {
       netmonRequests += 1;
       if (netmonRequests > 1) {
-        return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'proof failure' }) });
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ error: 'proof failure' }) });
       }
       return route.fulfill({
         status: 200,
@@ -230,6 +232,12 @@ test.describe('hermetic dashboard behavior oracle', () => {
 
     const panel = page.locator('#network-netmon-out').locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " section ")][1]');
     const header = panel.locator(':scope > .section-header');
+    await panel.locator(':scope > .section-body').evaluate(body => {
+      const hidden = document.createElement('button');
+      hidden.dataset.action = 'loadNetmonData';
+      hidden.style.display = 'none';
+      body.prepend(hidden);
+    });
     await header.click();
     await expect(panel).toHaveClass(/collapsed/);
     expect(netmonRequests).toBe(0);
@@ -239,9 +247,46 @@ test.describe('hermetic dashboard behavior oracle', () => {
     await expect(panel.locator(':scope > .section-body > .panel-updated')).toHaveText(/^AS OF \d{2}:\d{2}:\d{2}$/);
     const successfulStamp = await panel.locator(':scope > .section-body > .panel-updated').textContent();
 
-    await panel.locator('[data-action="loadNetmonData"]').click();
+    await panel.evaluate(section => { section.dataset.expandFetch = 'off'; });
+    await header.click();
+    await header.click();
+    expect(netmonRequests).toBe(1);
+
+    await panel.getByRole('button', { name: 'POLL DATA' }).click();
     await expect.poll(() => netmonRequests).toBe(2);
     await expect(panel.locator(':scope > .section-body > .panel-updated')).toHaveText(successfulStamp);
+  });
+
+  test('verified Fleet writes stamp both sections and cache-only renders do not', async ({ page }) => {
+    await loginInBrowser(page);
+    await page.evaluate(() => {
+      clearInterval(window._healthTimer);
+      clearInterval(window._fleetTimer);
+      clearInterval(window._activityTimer);
+    });
+    await page.locator('#nav-items [data-view="fleet"]').click();
+
+    const statsStamp = page.locator('#fleet-sec-stats > .section-body > .panel-updated');
+    const cardsStamp = page.locator('#fleet-sec-infra > .section-body > .panel-updated');
+    await expect(statsStamp).toHaveText(/^AS OF \d{2}:\d{2}:\d{2}$/);
+    await expect(cardsStamp).toHaveText(/^AS OF \d{2}:\d{2}:\d{2}$/);
+    const before = await statsStamp.getAttribute('title');
+    expect(await cardsStamp.getAttribute('title')).toBe(before);
+
+    await page.evaluate(() => window._renderFleetData(
+      window._fleetCache.fo,
+      window._fleetCache.hd,
+      window._fleetCache.md,
+      window._fleetCache.ct,
+      false
+    ));
+    expect(await statsStamp.getAttribute('title')).toBe(before);
+    expect(await cardsStamp.getAttribute('title')).toBe(before);
+
+    await page.waitForTimeout(1100);
+    await page.evaluate(() => { window._fleetInFlight = false; window._silentFleetRefresh(); });
+    await expect.poll(() => statsStamp.getAttribute('title')).not.toBe(before);
+    expect(await cardsStamp.getAttribute('title')).toBe(await statsStamp.getAttribute('title'));
   });
 
   test('chaos injection uses the styled non-blocking confirmation flow', async ({ page }) => {

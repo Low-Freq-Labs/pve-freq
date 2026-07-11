@@ -22,13 +22,28 @@ class TestDataFreshnessUIContract(unittest.TestCase):
 
     def test_failed_or_unparseable_fetches_do_not_advance_freshness(self):
         self.assertIn("contentType.indexOf('json')>=0?copy.json():copy.text()", self.js)
-        self.assertIn(".then(function(){_markPanelFetched(section,Date.now());}).catch(function(){})", self.js)
+        self.assertIn("function _payloadHasError(payload)", self.js)
+        self.assertIn("if(_payloadHasError(payload))return", self.js)
+        self.assertIn("_markPanelFetched(section,Date.now())", self.js)
+
+    def test_loader_and_auto_refresh_stamps_follow_declared_writes(self):
+        self.assertIn("function _stampFleetSections(at)", self.js)
+        self.assertIn("if(!psBad&&!structReason)_stampFleetSections(Date.now())", self.js)
+        self.assertIn("if(!fpsBad&&!foReason)_stampFleetSections(Date.now())", self.js)
+        self.assertIn("if(stampVerifiedWrite)_stampFleetSections(Date.now())", self.js)
+        self.assertIn("_renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct,false)", self.js)
+
+    def test_chaos_duration_is_query_encoded(self):
+        self.assertIn("'&duration='+encodeURIComponent(duration)", self.js)
 
     def test_expanding_section_invokes_only_read_loader_actions(self):
         self.assertIn("function _fetchSectionOnExpand(section)", self.js)
         self.assertIn('[data-action^="load"]', self.js)
         self.assertIn('[data-action^="fetch"]', self.js)
         self.assertNotIn('[data-action^="run"]', self.js)
+        self.assertIn("section.dataset.expandFetch==='off'", self.js)
+        self.assertIn("trigger.dataset.expandFetch==='off'", self.js)
+        self.assertIn("!trigger.getClientRects().length", self.js)
 
     def test_timestamp_uses_existing_dim_visual_language(self):
         self.assertIn(".panel-updated", self.css)

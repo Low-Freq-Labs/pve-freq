@@ -1,8 +1,8 @@
 """Sub-navigation symmetry contract.
 
-Fleet has a two-item static strip. Security and System are generated from one
-definition per group so a new sibling cannot disappear from one copied row.
-Each view owns only a mount declaring its group and active view.
+Fleet, Security, and System are generated from one definition per group so a
+new sibling cannot disappear from one copied row. Each view owns only a mount
+declaring its group and active view.
 """
 
 import os
@@ -54,7 +54,8 @@ def _extract_view_block(html: str, view: str) -> str:
 
 
 def _group_definition(js: str, group: str) -> str:
-    match = re.search(rf"\n  {re.escape(group)}:\[(.*?)\n  \]", js, re.DOTALL)
+    subnav = js.split("var SUBNAV_GROUPS={", 1)[1].split("\n};", 1)[0]
+    match = re.search(rf"\n  {re.escape(group)}:\[(.*?)\n  \]", subnav, re.DOTALL)
     if not match:
         raise AssertionError(f"missing SUBNAV_GROUPS.{group} definition")
     return match.group(1)
@@ -70,15 +71,8 @@ class TestClusterSubTabSymmetry(unittest.TestCase):
         cls.html = _read("freq/data/web/app.html")
         cls.js = _read("freq/data/web/js/app.js")
 
-    def test_fleet_static_rows_remain_complete_and_active(self):
-        for view in CLUSTERS["fleet"]:
-            block = _extract_view_block(self.html, view)
-            for sibling in CLUSTERS["fleet"]:
-                self.assertIn(f'data-view="{sibling}"', block)
-            self.assertRegex(
-                block,
-                rf'class="sub-tab active-sub" data-view="{re.escape(view)}"',
-            )
+    def test_fleet_has_one_complete_canonical_definition(self):
+        self.assertEqual(_group_views(self.js, "fleet"), CLUSTERS["fleet"])
 
     def test_security_has_one_complete_canonical_definition(self):
         self.assertEqual(_group_views(self.js, "security"), CLUSTERS["security"])
@@ -87,7 +81,7 @@ class TestClusterSubTabSymmetry(unittest.TestCase):
         self.assertEqual(_group_views(self.js, "system"), CLUSTERS["system"])
 
     def test_every_generated_view_declares_its_group_and_active_state(self):
-        for group in ("security", "system"):
+        for group in CLUSTERS:
             for view in CLUSTERS[group]:
                 with self.subTest(group=group, view=view):
                     block = _extract_view_block(self.html, view)
@@ -95,7 +89,7 @@ class TestClusterSubTabSymmetry(unittest.TestCase):
                     self.assertIn(f'data-subnav-active="{view}"', block)
 
     def test_generated_mounts_do_not_copy_buttons(self):
-        for group in ("security", "system"):
+        for group in CLUSTERS:
             for view in CLUSTERS[group]:
                 block = _extract_view_block(self.html, view)
                 match = re.search(
@@ -112,7 +106,7 @@ class TestClusterSubTabSymmetry(unittest.TestCase):
         self.assertIn("button.dataset.view=item.view", self.js)
 
     def test_every_canonical_target_has_a_view_element(self):
-        referenced = set(CLUSTERS["fleet"])
+        referenced = set(_group_views(self.js, "fleet"))
         referenced.update(_group_views(self.js, "security"))
         referenced.update(_group_views(self.js, "system"))
         missing = [view for view in referenced if f'id="{view}-view"' not in self.html]

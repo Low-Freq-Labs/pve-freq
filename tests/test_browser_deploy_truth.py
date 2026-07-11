@@ -107,7 +107,8 @@ class TestPveNodeCardContract(unittest.TestCase):
     def test_docker_counts_keep_media_cache_across_rerenders(self):
         self.assertIn("var _fleetCache={fo:null,hd:null,md:null,ct:null}", self.js_source)
         self.assertIn("if(md)_fleetCache.md=md", self.js_source)
-        self.assertIn("_renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct)", self.js_source)
+        self.assertIn("_renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct,false)", self.js_source)
+        self.assertIn("_renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct,true)", self.js_source)
         self.assertIn("c.vm_id!=null?c.vm_id:c.vmid", self.js_source)
 
     def test_freshness_chip_centers_with_create_vm_action(self):

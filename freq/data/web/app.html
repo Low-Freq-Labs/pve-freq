@@ -95,10 +95,7 @@
 </div><!-- close home-view -->
 <!-- FLEET VIEW (hidden by default) -->
 <div id="fleet-view" class="d-none">
-<div class="sub-tabs" id="subtabs-fleet">
-  <button class="sub-tab active-sub" data-view="fleet">Infra</button>
-  <button class="sub-tab" data-view="network">Network</button>
-</div>
+<div class="sub-tabs" id="subtabs-fleet" data-subnav-group="fleet" data-subnav-active="fleet"></div>
 <!-- Fleet Stats group -->
 <div class="section layout-section" id="fleet-sec-stats">
   <div class="section-header"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
@@ -174,7 +171,7 @@
   </div>
 </div>
 <div class="section layout-section" id="fleet-sec-network-topology">
-  <div class="section-header"><h3>Network Topology</h3><div class="flex-1"></div><button class="fleet-btn mr-4" data-action="resetTopoLayout">RESET LAYOUT</button><button class="fleet-btn" data-action="loadTopology">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Network Topology</h3><div class="flex-1"></div><button class="fleet-btn mr-4" data-action="resetTopoLayout">RESET LAYOUT</button><button class="fleet-btn" data-action="loadTopology" data-expand-fetch="off">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="topo-legend" class="topo-legend">
       <span style="color:var(--purple-light)">&#9632;</span> PVE Node
@@ -188,7 +185,7 @@
   </div>
 </div>
 <div class="section layout-section" id="fleet-sec-network-monitoring">
-  <div class="section-header"><h3>Network Monitoring</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadNetworkPage">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Network Monitoring</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadNetworkPage" data-expand-fetch="off">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="fleet-network-grid">
       <div class="fleet-network-panel">
@@ -823,10 +820,7 @@
      NETWORK VIEW — Switch management, SNMP, topology intelligence
      ============================================================ -->
 <div id="network-view" class="d-none">
-<div class="sub-tabs" id="subtabs-network">
-  <button class="sub-tab" data-view="fleet">Infra</button>
-  <button class="sub-tab active-sub" data-view="network">Network</button>
-</div>
+<div class="sub-tabs" id="subtabs-network" data-subnav-group="fleet" data-subnav-active="network"></div>
 <div class="section">
   <div class="section-header"><h3>Config Backups</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">

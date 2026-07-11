@@ -289,13 +289,27 @@ function _markPanelFetched(section,at){
   stamp.setAttribute('aria-label','Data fetched at '+label);
   stamp.title='Last successful fetch: '+new Date(when).toISOString();
 }
+function _stampSection(sectionOrId,at){
+  var section=typeof sectionOrId==='string'?document.getElementById(sectionOrId):sectionOrId;
+  _markPanelFetched(section,at);
+}
+function _stampFleetSections(at){
+  _stampSection('fleet-sec-stats',at);
+  _stampSection('fleet-sec-infra',at);
+}
+function _payloadHasError(payload){
+  return !!(payload&&typeof payload==='object'&&payload.error);
+}
 function _verifyAndMarkPanelFetch(response,section){
   if(!section||!response||!response.ok||!response.clone)return;
   try{
     var copy=response.clone();
     var contentType=copy.headers.get('content-type')||'';
     var verified=contentType.indexOf('json')>=0?copy.json():copy.text();
-    Promise.resolve(verified).then(function(){_markPanelFetched(section,Date.now());}).catch(function(){});
+    Promise.resolve(verified).then(function(payload){
+      if(_payloadHasError(payload))return;
+      _markPanelFetched(section,Date.now());
+    }).catch(function(){});
   }catch(e){}
 }
 function _authFetch(url, opts) {
@@ -507,9 +521,16 @@ function confirmDestructive(msg,expected,onConfirm){
 }
 /* === Section toggle === */
 function _fetchSectionOnExpand(section){
-  if(!section||!section.querySelector)return;
-  var trigger=section.querySelector(':scope > .section-header [data-action^="load"], :scope > .section-header [data-action^="fetch"], :scope > .section-body [data-action^="load"], :scope > .section-body [data-action^="fetch"]');
-  if(trigger&&!trigger.disabled)trigger.click();
+  if(!section||!section.querySelectorAll||section.dataset.expandFetch==='off')return;
+  var triggers=section.querySelectorAll(':scope > .section-header [data-action^="load"], :scope > .section-header [data-action^="fetch"], :scope > .section-body [data-action^="load"], :scope > .section-body [data-action^="fetch"]');
+  for(var i=0;i<triggers.length;i++){
+    var trigger=triggers[i];
+    if(trigger.disabled||trigger.dataset.expandFetch==='off'||trigger.hidden)continue;
+    var style=getComputedStyle(trigger);
+    if(style.display==='none'||style.visibility==='hidden'||!trigger.getClientRects().length)continue;
+    trigger.click();
+    return;
+  }
 }
 function toggleSection(el){
   var section=el.closest('.section');
@@ -2487,6 +2508,10 @@ var VIEW_IDS=['home','fleet','network','docker','security','sec-hardening','sec-
 var VIEW_ALIASES={media:'docker'};
 var VIEW_TITLES={home:'HOME',fleet:'FLEET',network:'NETWORK',docker:'DOCKER',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',vault:'VAULT',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS',infra:'INFRASTRUCTURE',system:'SYSTEM'};
 var SUBNAV_GROUPS={
+  fleet:[
+    {view:'fleet',label:'Infra'},
+    {view:'network',label:'Network'}
+  ],
   security:[
     {view:'security',label:'Overview'},
     {view:'sec-hardening',label:'Hardening'},
@@ -2715,6 +2740,7 @@ function _silentHealthRefresh(){
     var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<60?_age+'s':Math.round(_age/60)+'m';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
     var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');if(ldEl){ldEl.textContent=_ageLbl;ldEl.style.color=_ageClr;}
     var ci=document.getElementById('sse-conn-status');if(ci){if(hd.probe_status==='error'){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}else{var _live=_evtSource&&_evtSource.readyState===1;ci.textContent=_live?'LIVE':'CACHED';ci.style.color=_live?'var(--green)':'var(--yellow)';}}
+    if(!psBad&&!structReason)_stampFleetSections(Date.now());
   }).catch(function(){
     _healthInFlight=false;
     _healthFailStreak++;
@@ -2804,6 +2830,7 @@ function _silentFleetRefresh(){
       var ci=document.getElementById('sse-conn-status');
       if(ci){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}
     }
+    if(!fpsBad&&!foReason)_stampFleetSections(Date.now());
   }).catch(function(){
     _fleetInFlight=false;
     _fleetFailStreak++;
@@ -3430,7 +3457,7 @@ function _applyCompactMode(on){
 function loadFleetPage(){
   /* Render from cache immediately if available — never show skeletons on page switch */
   if(_fleetCache.fo||_fleetCache.hd){
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct);
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct,false);
   } else {
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
@@ -5866,9 +5893,10 @@ function loadLxcContainers(){
   });
 }
 function refreshLxcWorkloads(){
-  _authFetch(API.CT_LIST,{silent:true}).then(function(r){return r.ok?r.json():{containers:[]};}).then(function(d){
-    _fleetCache.ct=d||{containers:[]};
-    if(_currentView==='fleet')_renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct);
+  _authFetch(API.CT_LIST,{silent:true}).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    if(!d||_payloadHasError(d))return;
+    _fleetCache.ct=d;
+    if(_currentView==='fleet')_renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct,true);
     var section=document.getElementById('fleet-sec-ct');
     if(section&&section.style.display!=='none'&&!section.classList.contains('d-none'))loadLxcContainers();
   }).catch(function(){if(_currentView==='fleet')loadMetricsQuick();});
@@ -7101,7 +7129,7 @@ var INFRA_ACTIONS={
 function loadMetricsQuick(){
   /* If we have cached data, render instantly — no skeletons, no wait */
   if(_fleetCache.fo||_fleetCache.hd){
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct);
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct,false);
   } else {
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
@@ -7111,14 +7139,17 @@ function loadMetricsQuick(){
     _authFetch(API.FLEET_OVERVIEW,{silent:true}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
     _authFetch(API.HEALTH,{silent:true}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
     _authFetch(API.MEDIA_STATUS,{silent:true}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
-    _authFetch(API.CT_LIST,{silent:true}).then(function(r){return r.ok?r.json():{containers:[]};}).catch(function(){return {containers:[]};})
+    _authFetch(API.CT_LIST,{silent:true}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;})
   ]).then(function(results){
-    var fo=results[0];var hd=results[1];var md=results[2];var ctd=results[3];
+    var fo=_payloadHasError(results[0])?null:results[0];
+    var hd=_payloadHasError(results[1])?null:results[1];
+    var md=_payloadHasError(results[2])?null:results[2];
+    var ctd=_payloadHasError(results[3])?null:results[3];
     if(fo)_fleetCache.fo=fo;
     if(hd)_fleetCache.hd=hd;
     if(md)_fleetCache.md=md;
     if(ctd)_fleetCache.ct=ctd;
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct);
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct,!!(fo||hd||md||ctd));
   });
 }
 /* ── Fleet rendering helpers (hoisted from _renderFleetData) ── */
@@ -7478,7 +7509,7 @@ function _enrichFleetNtpUpdates(){
     });
   }).catch(function(e){console.error('API error:',e);document.querySelectorAll('[id^="upd-"] .metric-val').forEach(function(el){el.textContent='UNAVAILABLE';});});
 }
-function _renderFleetData(fo,hd,md,ctd){
+function _renderFleetData(fo,hd,md,ctd,stampVerifiedWrite){
   try{
     if(!fo&&!hd){document.getElementById('metrics-cards').innerHTML='<p class="c-red">Both fleet overview and health APIs failed.</p>';return;}
     /* Guard against null sub-fields */
@@ -7638,6 +7669,7 @@ function _renderFleetData(fo,hd,md,ctd){
     }
     /* Fleet stats */
     _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDuration,hdDuration,labPveNodes);
+    if(stampVerifiedWrite)_stampFleetSections(Date.now());
     try{if(fo){_renderFleetOverview(fo);_loadFleetOverviewMedia();}}catch(e){console.error('Overview render error:',e);}
     _enrichInfraCards();
   }catch(e){console.error('_renderFleetData error:',e);document.getElementById('metrics-cards').innerHTML='<p class="c-red">Render error: '+e.message+'</p>';}
@@ -13091,7 +13123,7 @@ function chaosRun(){
   confirmAction('Run chaos experiment <strong>"'+_esc(name)+'"</strong> ('+_esc(type)+') on <strong>'+_esc(target)+'</strong>?<br>This will intentionally disrupt the service.',function(){
     toast('Running experiment...','info');
     var q='/api/chaos/run?name='+encodeURIComponent(name)+'&type='+encodeURIComponent(type);
-    q+='&target='+encodeURIComponent(target)+'&service='+encodeURIComponent(service)+'&duration='+duration;
+    q+='&target='+encodeURIComponent(target)+'&service='+encodeURIComponent(service)+'&duration='+encodeURIComponent(duration);
     _authFetch(q).then(function(r){return r.json()}).then(function(d){
       if(d.error){toast('Error: '+d.error,'error');return;}
       var r=d.result||{};
