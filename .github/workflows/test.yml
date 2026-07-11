@@ -95,9 +95,9 @@ jobs:
         shell: sh
         run: freq --version
 
-      - name: Verify freq doctor runs
+      - name: Verify freq doctor --local passes
         shell: sh
-        run: freq doctor || true
+        run: freq doctor --local
         env:
           FREQ_DIR: /tmp/freq-ci-runtime
 
@@ -222,9 +222,9 @@ jobs:
         shell: sh
         run: freq --version
 
-      - name: Verify freq doctor runs
+      - name: Verify freq doctor --local passes
         shell: sh
-        run: freq doctor || true
+        run: freq doctor --local
         env:
           FREQ_DIR: /tmp/freq-ci-runtime
 
