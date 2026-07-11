@@ -369,6 +369,10 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12-wrap">
       <button class="fleet-btn c-purple-active" data-action="runHarden" >FULL HARDENING AUDIT</button>
+      <select id="harden-target" class="input-field w-180" aria-label="Hardening remediation target">
+        <option value="">Select remediation target...</option>
+        <option value="all">ALL FLEET HOSTS</option>
+      </select>
       <button class="fleet-btn" data-action="hardenAction" data-arg="disable-root">DISABLE ROOT SSH</button>
       <button class="fleet-btn" data-action="hardenAction" data-arg="key-only">ENFORCE KEY-ONLY AUTH</button>
       <button class="fleet-btn" data-action="hardenAction" data-arg="disable-empty">BLOCK EMPTY PASSWORDS</button>
@@ -770,7 +774,7 @@
   <div class="section">
     <div class="section-header"><h3>Device Assignment</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div class="helptext-mb12">Classify hosts and existing VMs as PROD, LAB, TEMP, or OOC. Name physical devices and keep raw labels visible as secondary identity. Unmanaged inventory-only devices stay visible without alerts or doctor degradation.</div>
+      <div class="helptext-mb12">Classify hosts and existing VMs as PROD, LAB, TEMP, or OOC (out of contract). Name physical devices and keep raw labels visible as secondary identity. Unmanaged inventory-only devices stay visible without alerts or doctor degradation.</div>
       <div id="lab-assign-list"><div class="skeleton"></div></div>
       <div id="device-admin-mount" class="device-admin-mount"></div>
     </div>
@@ -1379,7 +1383,7 @@
     <h3 class="shortcuts-heading" id="shortcuts-heading">Keyboard Shortcuts</h3>
     <div class="shortcuts-grid">
       <kbd class="kbd-tag">Ctrl+K</kbd><span>Global search</span>
-      <kbd class="kbd-tag">1-8</kbd><span>Navigate to view</span>
+      <kbd class="kbd-tag">1-6</kbd><span>Home / Fleet / Docker / Certificates / System / Settings</span>
       <kbd class="kbd-tag">Esc</kbd><span>Close overlay</span>
       <kbd class="kbd-tag">?</kbd><span>This help</span>
     </div>

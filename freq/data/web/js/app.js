@@ -1245,6 +1245,11 @@ function _showApp(){
        * file re-hides via inline display, so the symmetry holds. */
       var body=document.getElementById('mn-body');
       if(body){body.classList.remove('d-none');body.style.display='';}
+      /* Do not leave keyboard focus trapped in the now-hidden login
+       * fields. Besides being dishonest to assistive technology, that
+       * stale INPUT focus suppresses the dashboard's ? and number-key
+       * shortcuts until the operator happens to click elsewhere. */
+      if(document.activeElement&&login.contains(document.activeElement))document.activeElement.blur();
       login.style.display='none';
       /* Update header user button */
       var btn=document.getElementById('header-user-btn');if(btn)btn.style.display='flex';
@@ -3869,7 +3874,7 @@ function loadSecurityOverview(){
    * self-contained. */
   loadRisk();loadSecPosture();loadPolicies();
 }
-function loadSecHardening(){/* audit + hardening sections are button-triggered */}
+function loadSecHardening(){_populateHardeningTargets();}
 function loadSecAccess(){loadUsers();loadKeys();}
 function loadSecCompliance(){loadPoliciesPage();loadComplianceData();}
 function loadSecPosture(){
@@ -10588,10 +10593,14 @@ function hardenAction(action){
     'ssh-restart':{name:'Restart SSHD',cmd:"systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo OK || echo FAIL"}
   };
   var c=cmds[action];if(!c)return;
-  confirmAction('Run <strong>'+c.name+'</strong> on ALL fleet hosts?<br><br>This modifies system configuration.',function(){
-    toast('Running '+c.name+'...','info');
+  var targetSelect=document.getElementById('harden-target');
+  var target=targetSelect?targetSelect.value:'';
+  if(!target){toast('Select a hardening target','error');return;}
+  var targetLabel=target==='all'?'ALL fleet hosts':target.toUpperCase();
+  confirmAction('Run <strong>'+c.name+'</strong> on <strong>'+_esc(targetLabel)+'</strong>?<br><br>This modifies system configuration.',function(){
+    toast('Running '+c.name+' on '+targetLabel+'...','info');
     var out=document.getElementById('harden-c');out.innerHTML='<div class="skeleton"></div>';
-    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(c.cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target='+encodeURIComponent(target)+'&cmd='+encodeURIComponent(c.cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       var html='<h3 style="color:var(--purple-light);margin-bottom:8px">'+c.name+'</h3><table><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -10604,6 +10613,18 @@ function hardenAction(action){
       toast(c.name+': '+ok+'/'+d.results.length+' hosts',ok===d.results.length?'success':'error');
     });
   });
+}
+function _populateHardeningTargets(){
+  var el=document.getElementById('harden-target');if(!el)return;
+  var current=el.value;
+  _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
+    var opts='<option value="">Select remediation target...</option><option value="all">ALL FLEET HOSTS</option>';
+    (d.hosts||[]).forEach(function(h){
+      opts+='<option value="'+_esc(h.label)+'">'+_esc(h.label.toUpperCase())+' ('+_esc(h.ip)+')</option>';
+    });
+    el.innerHTML=opts;
+    if(current)el.value=current;
+  }).catch(function(e){console.error('API error:',e);});
 }
 function runSshSweep(){
   document.getElementById('sweep-c').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
@@ -12235,7 +12256,7 @@ function _populateHostDropdowns(){
       var val=el.value;
       var opts='<option value="">Select host...</option>';
       hosts.forEach(function(h){
-        opts+='<option value="'+h.label+'">'+h.label.toUpperCase()+' ('+h.ip+')</option>';
+        opts+='<option value="'+_esc(h.label)+'">'+_esc(h.label.toUpperCase())+' ('+_esc(h.ip)+')</option>';
       });
       el.innerHTML=opts;
       if(val)el.value=val;
@@ -13385,11 +13406,11 @@ document.addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openSearch();return;}
   /* ? — keyboard shortcuts help */
   if(e.key==='?'&&!e.ctrlKey&&!e.metaKey&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
-    var m=document.getElementById('shortcuts-modal');if(m)m.style.display=m.style.display==='none'?'block':'none';return;
+    var m=document.getElementById('shortcuts-modal');if(m)m.style.display=getComputedStyle(m).display==='none'?'block':'none';return;
   }
   /* Escape — close everything */
   if(e.key==='Escape'){closeSearch();closeHost();closeModal();var sm=document.getElementById('shortcuts-modal');if(sm)sm.style.display='none';return;}
-  /* 1-8 — navigate views (only when not in input) */
+  /* 1-6 — navigate the six mapped top-level destinations (only when not in input) */
   if(_NAV_KEYS[e.key]&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'&&!e.ctrlKey&&!e.metaKey){
     showView(_NAV_KEYS[e.key]);return;
   }
