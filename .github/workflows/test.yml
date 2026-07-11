@@ -312,6 +312,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       checks: write
       pull-requests: write
     steps:
@@ -319,7 +320,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: test-results-smoke-*
-          merge-multiple: true
+          merge-multiple: false
           path: smoke-results/
         continue-on-error: true
 
@@ -327,7 +328,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: test-results-full-*
-          merge-multiple: true
+          merge-multiple: false
           path: full-results/
         continue-on-error: true
 
