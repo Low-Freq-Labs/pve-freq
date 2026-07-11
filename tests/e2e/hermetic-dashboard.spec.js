@@ -70,6 +70,73 @@ test.describe('hermetic dashboard behavior oracle', () => {
     await expect(page.locator('body')).toContainText(/FREQ|FLEET|Dashboard/i);
   });
 
+  test('Network actions render into the active view instead of hidden Fleet panels', async ({ page }) => {
+    let snmpPlanCalls = 0;
+    await page.route('**/api/netmon/data', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        snapshots: [{
+          time: '2026-07-11T17:30:00Z',
+          host: 'active-network-proof',
+          interfaces: [{ name: 'eth0', rx: '1', tx: '2', errors: '0' }]
+        }]
+      })
+    }));
+    await page.route('**/api/netmon/interfaces', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        total_interfaces: 1,
+        hosts: [{
+          host: 'active-interfaces-proof',
+          interfaces: [{ name: 'eth0', state: 'up', ips: ['192.0.2.8'], mac: '00:00:5e:00:53:01', mtu: 1500 }]
+        }]
+      })
+    }));
+    await page.route('**/api/v1/net/snmp/setup/plan*', route => {
+      snmpPlanCalls += 1;
+      const label = snmpPlanCalls === 1 ? 'fleet-snmp-proof' : 'network-snmp-proof';
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          credential_ready: true,
+          targets: [{
+            label,
+            ip: '192.0.2.9',
+            setup_class: 'linux_snmpd',
+            mutation: 'configure',
+            current_state: { reachable: true, version: 'v3' },
+            caveats: []
+          }]
+        })
+      });
+    });
+    await page.route('**/api/v1/net/snmp/setup/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ state: 'never_run' })
+    }));
+    await loginInBrowser(page);
+    await page.locator('#nav-items [data-view="fleet"]').click();
+    await expect(page.locator('#fleet-snmp-setup-main')).toContainText('fleet-snmp-proof');
+    await page.locator('#subtabs-fleet [data-view="network"]').click();
+
+    await expect(page.locator('#network-view')).toBeVisible();
+    await expect(page.locator('#fleet-view')).toBeHidden();
+    await page.locator('#network-view [data-action="loadNetmonData"]').click();
+    await expect(page.locator('#network-netmon-out')).toContainText('active-network-proof');
+    await expect(page.locator('#network-netmon-out')).toBeVisible();
+    await expect(page.locator('#fleet-netmon-out')).not.toContainText('active-network-proof');
+    await page.locator('#network-view [data-action="loadNetmonInterfaces"]').click();
+    await expect(page.locator('#network-netmon-out')).toContainText('active-interfaces-proof');
+    await expect(page.locator('#fleet-netmon-out')).not.toContainText('active-interfaces-proof');
+    await expect(page.locator('#network-snmp-setup-main')).toContainText('network-snmp-proof');
+    await expect(page.locator('#network-snmp-setup-main')).toBeVisible();
+    await expect(page.locator('#fleet-snmp-setup-main')).not.toContainText('network-snmp-proof');
+  });
+
   test('authenticated fleet overview returns cache truth', async ({ request }) => {
     const session = await bearerSession(request);
     const response = await request.get('/api/fleet/overview', {

@@ -4122,8 +4122,15 @@ function runImpactAnalysis(){
     if(out)out.innerHTML=h;
   }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
 }
+function _networkSurfaceRoot(){
+  return document.getElementById((_currentView==='network'?'network':'fleet')+'-view');
+}
+function _networkSurfaceElement(role,root){
+  root=root||_networkSurfaceRoot();
+  return root?root.querySelector('[data-network-role="'+role+'"]'):null;
+}
 function loadNetmonData(){
-  var out=document.getElementById('netmon-out');
+  var out=_networkSurfaceElement('netmon-out');
   if(out)out.innerHTML='<div class="skeleton h-40"></div>';
   _authFetch(API.NETMON_DATA).then(function(r){return r.json()}).then(function(d){
     var snaps=d.snapshots||[];
@@ -4169,8 +4176,9 @@ function _snmpClassLabel(v){
 }
 function _snmpTargets(plan){return (plan&&Array.isArray(plan.targets))?plan.targets:[];}
 function _snmpTargetKey(t){return String((t&&t.label)||t.ip||'').trim();}
-function _snmpSelectedTargets(){
-  return Array.prototype.slice.call(document.querySelectorAll('.snmp-target-check:checked')).map(function(el){return el.value;}).filter(Boolean);
+function _snmpSelectedTargets(root){
+  root=root||_networkSurfaceRoot();
+  return Array.prototype.slice.call(root?root.querySelectorAll('.snmp-target-check:checked'):[]).map(function(el){return el.value;}).filter(Boolean);
 }
 function _snmpCurrentStateText(t){
   var s=(t&&t.current_state)||{};
@@ -4205,12 +4213,12 @@ function _renderSnmpResult(d,title){
   }
   return h+'</div>';
 }
-function _renderSnmpSetup(plan,status){
+function _renderSnmpSetup(plan,status,root){
   plan=plan||{};status=status||{};
   var targets=_snmpTargets(plan);
   var classCounts={};
   targets.forEach(function(t){var k=t.setup_class||'unknown';classCounts[k]=(classCounts[k]||0)+1;});
-  var stats=document.getElementById('snmp-setup-stats');
+  var stats=_networkSurfaceElement('snmp-setup-stats',root);
   if(stats)stats.innerHTML=_statCards([
     {l:'Credentials',v:plan.credential_ready?'READY':'SETUP NEEDED',c:plan.credential_ready?'green':'yellow'},
     {l:'Targets',v:targets.length,c:'purple'},
@@ -4223,18 +4231,18 @@ function _renderSnmpSetup(plan,status){
   h+='<div class="snmp-panel '+(plan.credential_ready?'is-ready':'is-needed')+'">'+
     '<div class="snmp-panel-head"><div><h4>Credential Setup</h4><p>Write-only SNMPv3 credential intake. Secrets are stored server-side and are never echoed back to the browser.</p></div>'+_snmpBadge(plan.credential_ready?'ready':'setup needed')+'</div>'+
     '<div class="snmp-credential-grid">'+
-      '<label class="cert-field"><span>SNMP user</span><input id="snmp-user" class="input" type="text" autocomplete="off" placeholder="freqsnmp"></label>'+
-      '<label class="cert-field"><span>Auth password</span><input id="snmp-auth-password" class="input" type="password" autocomplete="new-password" placeholder="auth passphrase"></label>'+
-      '<label class="cert-field"><span>Privacy password</span><input id="snmp-priv-password" class="input" type="password" autocomplete="new-password" placeholder="privacy passphrase"></label>'+
-      '<label class="cert-field"><span>Auth protocol</span><select id="snmp-auth-protocol" class="input"><option>SHA</option><option>SHA-256</option><option>SHA-512</option><option>MD5</option></select></label>'+
-      '<label class="cert-field"><span>Privacy protocol</span><select id="snmp-priv-protocol" class="input"><option>AES</option><option>AES128</option><option>AES-128</option><option>DES</option></select></label>'+
+      '<label class="cert-field"><span>SNMP user</span><input data-network-role="snmp-user" class="input" type="text" autocomplete="off" placeholder="freqsnmp"></label>'+
+      '<label class="cert-field"><span>Auth password</span><input data-network-role="snmp-auth-password" class="input" type="password" autocomplete="new-password" placeholder="auth passphrase"></label>'+
+      '<label class="cert-field"><span>Privacy password</span><input data-network-role="snmp-priv-password" class="input" type="password" autocomplete="new-password" placeholder="privacy passphrase"></label>'+
+      '<label class="cert-field"><span>Auth protocol</span><select data-network-role="snmp-auth-protocol" class="input"><option>SHA</option><option>SHA-256</option><option>SHA-512</option><option>MD5</option></select></label>'+
+      '<label class="cert-field"><span>Privacy protocol</span><select data-network-role="snmp-priv-protocol" class="input"><option>AES</option><option>AES128</option><option>AES-128</option><option>DES</option></select></label>'+
     '</div>'+
     '<div class="snmp-action-row"><button class="fleet-btn btn-cyan" data-action="snmpSetupCredentialDryRun">PREVIEW STORE</button><button class="fleet-btn btn-green" data-action="snmpSetupCredentialSave">SAVE CREDENTIALS</button></div>'+
   '</div>';
   h+='<div class="snmp-panel">'+
     '<div class="snmp-panel-head"><div><h4>Setup Control</h4><p>Dry-run first, then apply only the selected targets after confirmation. pfSense and BMC rows stay explicit decision/adopt states.</p></div>'+_snmpBadge(_snmpSetupState.probe?'probe':'plan')+'</div>'+
     '<div class="snmp-class-pills">'+(classPills||'<span class="snmp-mini-pill">no targets</span>')+'</div>'+
-    '<label class="cert-check snmp-check"><input type="checkbox" id="snmp-include-probe" '+(_snmpSetupState.probe?'checked':'')+'> <span>Probe current SNMP state</span></label>'+
+    '<label class="cert-check snmp-check"><input type="checkbox" data-network-role="snmp-include-probe" '+(_snmpSetupState.probe?'checked':'')+'> <span>Probe current SNMP state</span></label>'+
     '<div class="snmp-action-row"><button class="fleet-btn" data-action="snmpSetupSelectAll">SELECT ALL</button><button class="fleet-btn" data-action="snmpSetupSelectNone">SELECT NONE</button><button class="fleet-btn btn-cyan" data-action="snmpSetupDryRun">DRY RUN SELECTED</button><button class="fleet-btn btn-green" data-action="snmpSetupApply">APPLY SELECTED</button></div>'+
   '</div>';
   h+='</div>';
@@ -4259,15 +4267,16 @@ function _renderSnmpSetup(plan,status){
     }).join('');
   }
   h+='</tbody></table></div>';
-  h+='<div id="snmp-setup-result" class="snmp-evidence">'+_renderSnmpResult(_snmpSetupState.lastDryRun||status,'Result Evidence')+'</div>';
+  h+='<div data-network-role="snmp-setup-result" class="snmp-evidence">'+_renderSnmpResult(_snmpSetupState.lastDryRun||status,'Result Evidence')+'</div>';
   h+='</div>';
-  var main=document.getElementById('snmp-setup-main');
+  var main=_networkSurfaceElement('snmp-setup-main',root);
   if(main)main.innerHTML=h;
-  _enhanceResponsiveTables(document.getElementById('snmp-setup-section')||document);
+  _enhanceResponsiveTables(_networkSurfaceElement('snmp-setup-section',root)||document);
 }
-function loadSnmpSetup(probe){
+function loadSnmpSetup(probe,root){
   _snmpSetupState.probe=!!probe;
-  var main=document.getElementById('snmp-setup-main');
+  root=root||_networkSurfaceRoot();
+  var main=_networkSurfaceElement('snmp-setup-main',root);
   if(main)main.innerHTML='<div class="skeleton h-60"></div>';
   var q='?probe='+(_snmpSetupState.probe?'1':'0');
   Promise.all([
@@ -4276,7 +4285,7 @@ function loadSnmpSetup(probe){
   ]).then(function(res){
     _snmpSetupState.plan=res[0]||{};
     _snmpSetupState.status=res[1]||{};
-    _renderSnmpSetup(_snmpSetupState.plan,_snmpSetupState.status);
+    _renderSnmpSetup(_snmpSetupState.plan,_snmpSetupState.status,root);
   }).catch(function(e){
     if(main)main.innerHTML='<div class="exec-out" style="color:var(--red)">Failed to load SNMP setup: '+_esc(e.toString())+'</div>';
   });
@@ -4284,14 +4293,14 @@ function loadSnmpSetup(probe){
 function _snmpClearDryRun(){_snmpSetupState.lastDryRun=null;_snmpSetupState.lastDryRunTargets='';_snmpSetupState.lastDryRunProbe=false;}
 function snmpSetupRefresh(){_snmpClearDryRun();loadSnmpSetup(false);}
 function snmpSetupProbe(){_snmpClearDryRun();loadSnmpSetup(true);}
-function snmpSetupSelectAll(){Array.prototype.slice.call(document.querySelectorAll('.snmp-target-check')).forEach(function(el){el.checked=true;});}
-function snmpSetupSelectNone(){Array.prototype.slice.call(document.querySelectorAll('.snmp-target-check')).forEach(function(el){el.checked=false;});}
-function _snmpCredentialBody(dryRun){
-  var user=(document.getElementById('snmp-user')||{}).value||'';
-  var auth=(document.getElementById('snmp-auth-password')||{}).value||'';
-  var priv=(document.getElementById('snmp-priv-password')||{}).value||'';
-  var authProto=(document.getElementById('snmp-auth-protocol')||{}).value||'SHA';
-  var privProto=(document.getElementById('snmp-priv-protocol')||{}).value||'AES';
+function snmpSetupSelectAll(){var root=_networkSurfaceRoot();Array.prototype.slice.call(root?root.querySelectorAll('.snmp-target-check'):[]).forEach(function(el){el.checked=true;});}
+function snmpSetupSelectNone(){var root=_networkSurfaceRoot();Array.prototype.slice.call(root?root.querySelectorAll('.snmp-target-check'):[]).forEach(function(el){el.checked=false;});}
+function _snmpCredentialBody(dryRun,root){
+  var user=(_networkSurfaceElement('snmp-user',root)||{}).value||'';
+  var auth=(_networkSurfaceElement('snmp-auth-password',root)||{}).value||'';
+  var priv=(_networkSurfaceElement('snmp-priv-password',root)||{}).value||'';
+  var authProto=(_networkSurfaceElement('snmp-auth-protocol',root)||{}).value||'SHA';
+  var privProto=(_networkSurfaceElement('snmp-priv-protocol',root)||{}).value||'AES';
   if(!user.trim()){toast('SNMP user is required','error');return null;}
   if(auth.length<8||priv.length<8){toast('SNMP passphrases must be at least 8 characters','error');return null;}
   return {dry_run:dryRun,confirm:!dryRun,user:user.trim(),auth_password:auth,priv_password:priv,auth_protocol:authProto,priv_protocol:privProto};
@@ -4299,19 +4308,20 @@ function _snmpCredentialBody(dryRun){
 function snmpSetupCredentialDryRun(){_snmpStoreCredentials(true);}
 function snmpSetupCredentialSave(){_snmpStoreCredentials(false);}
 function _snmpStoreCredentials(dryRun){
-  var body=_snmpCredentialBody(dryRun);
+  var root=_networkSurfaceRoot();
+  var body=_snmpCredentialBody(dryRun,root);
   if(!body)return;
   function run(){
-    var out=document.getElementById('snmp-setup-result');
+    var out=_networkSurfaceElement('snmp-setup-result',root);
     if(out)out.innerHTML='<div class="skeleton h-60"></div>';
     _snmpPostJson(API.SNMP_SETUP_CREDENTIALS,body).then(function(d){
       if(out)out.innerHTML=_renderSnmpResult({ok:!d.error,state:d.stored?'stored':(d.dry_run?'dry_run':'ok'),summary:{total:1},results:[]},d.dry_run?'Credential Store Preview':'Credential Store');
       if(d.error){toast(d.error,'error');return;}
       toast(dryRun?'Credential store preview complete':'SNMP credentials stored','success');
       if(!dryRun){
-        ['snmp-auth-password','snmp-priv-password'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+        ['snmp-auth-password','snmp-priv-password'].forEach(function(role){var el=_networkSurfaceElement(role,root);if(el)el.value='';});
         _snmpClearDryRun();
-        loadSnmpSetup(false);
+        loadSnmpSetup(false,root);
       }
     }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
   }
@@ -4321,9 +4331,10 @@ function _snmpStoreCredentials(dryRun){
 function snmpSetupDryRun(){_snmpApply(true);}
 function snmpSetupApply(){_snmpApply(false);}
 function _snmpApply(dryRun){
-  var targets=_snmpSelectedTargets();
+  var root=_networkSurfaceRoot();
+  var targets=_snmpSelectedTargets(root);
   if(!targets.length){toast('Select at least one SNMP setup target','error');return;}
-  var probe=!!((document.getElementById('snmp-include-probe')||{}).checked);
+  var probe=!!((_networkSurfaceElement('snmp-include-probe',root)||{}).checked);
   var targetSig=targets.slice().sort().join('|');
   if(!dryRun&&!_snmpSetupState.lastDryRun){toast('Run a dry run before applying SNMP setup','error');return;}
   if(!dryRun&&(_snmpSetupState.lastDryRunTargets!==targetSig||_snmpSetupState.lastDryRunProbe!==probe)){
@@ -4332,14 +4343,14 @@ function _snmpApply(dryRun){
   }
   var body={dry_run:dryRun,confirm:!dryRun,targets:targets,probe:probe};
   function run(){
-    var out=document.getElementById('snmp-setup-result');
+    var out=_networkSurfaceElement('snmp-setup-result',root);
     if(out)out.innerHTML='<div class="skeleton h-60"></div>';
     _snmpPostJson(API.SNMP_SETUP_APPLY,body).then(function(d){
       if(dryRun){_snmpSetupState.lastDryRun=d;_snmpSetupState.lastDryRunTargets=targetSig;_snmpSetupState.lastDryRunProbe=probe;}
       if(out)out.innerHTML=_renderSnmpResult(d,dryRun?'SNMP Dry Run':'SNMP Apply');
       if(d.error){toast(d.error,'error');return;}
       toast(dryRun?'SNMP dry run complete':'SNMP setup apply complete','success');
-      if(!dryRun){_snmpClearDryRun();loadSnmpSetup(probe);}
+      if(!dryRun){_snmpClearDryRun();loadSnmpSetup(probe,root);}
     }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
   }
   if(dryRun)run();
@@ -6196,7 +6207,7 @@ function loadPatchCompliance(){
 }
 /* Netmon interfaces */
 function loadNetmonInterfaces(){
-  var el=document.getElementById('netmon-out');if(!el)return;
+  var el=_networkSurfaceElement('netmon-out');if(!el)return;
   el.innerHTML='<div class="skeleton h-40"></div>';
   _authFetch(API.NETMON_INTERFACES).then(function(r){return r.json()}).then(function(d){
     var allHosts=d.hosts||[];

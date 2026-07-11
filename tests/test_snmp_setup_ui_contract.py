@@ -12,10 +12,21 @@ class TestSNMPSetupUIContract(unittest.TestCase):
         self.css = (ROOT / "freq/data/web/css/app.css").read_text()
 
     def test_network_page_mounts_guided_snmp_setup(self):
-        self.assertIn('id="snmp-setup-section"', self.html)
-        self.assertIn('id="snmp-setup-stats"', self.html)
-        self.assertIn('id="snmp-setup-main"', self.html)
+        for prefix in ("fleet", "network"):
+            self.assertIn(f'id="{prefix}-snmp-setup-section"', self.html)
+            self.assertIn(f'id="{prefix}-snmp-setup-stats"', self.html)
+            self.assertIn(f'id="{prefix}-snmp-setup-main"', self.html)
+        self.assertEqual(self.html.count('data-network-role="snmp-setup-section"'), 2)
+        self.assertEqual(self.html.count('data-network-role="snmp-setup-stats"'), 2)
+        self.assertEqual(self.html.count('data-network-role="snmp-setup-main"'), 2)
         self.assertIn('data-action="snmpSetupProbe"', self.html)
+
+    def test_network_surface_ids_are_unique_and_js_scopes_to_active_view(self):
+        for duplicate_id in ("netmon-out", "snmp-setup-section", "snmp-setup-stats", "snmp-setup-main"):
+            self.assertNotIn(f'id="{duplicate_id}"', self.html)
+        self.assertIn("function _networkSurfaceRoot()", self.js)
+        self.assertIn("_networkSurfaceElement('netmon-out')", self.js)
+        self.assertNotIn("getElementById('netmon-out')", self.js)
 
     def test_js_uses_backend_contract_and_action_allowlist(self):
         for token in (

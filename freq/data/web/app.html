@@ -204,15 +204,15 @@
           <button class="fleet-btn" data-action="loadNetmonData">POLL DATA</button>
           <button class="fleet-btn" data-action="loadNetmonInterfaces">INTERFACES</button>
         </div>
-        <div class="exec-out mt-8" id="netmon-out">Click to load network monitoring data.</div>
+        <div class="exec-out mt-8" id="fleet-netmon-out" data-network-role="netmon-out">Click to load network monitoring data.</div>
       </div>
     </div>
-    <div class="fleet-network-panel mt-12" id="snmp-setup-section">
+    <div class="fleet-network-panel mt-12" id="fleet-snmp-setup-section" data-network-role="snmp-setup-section">
       <div class="fleet-network-panel-head">
         <h4>SNMP Setup</h4>
-        <div class="stats compact-stats fleet-network-stats" id="snmp-setup-stats"></div>
+        <div class="stats compact-stats fleet-network-stats" id="fleet-snmp-setup-stats" data-network-role="snmp-setup-stats"></div>
       </div>
-      <div id="snmp-setup-main"><div class="skeleton h-60"></div></div>
+      <div id="fleet-snmp-setup-main" data-network-role="snmp-setup-main"><div class="skeleton h-60"></div></div>
     </div>
   </div>
 </div>
@@ -927,14 +927,14 @@
   <div class="section-body">
     <button class="fleet-btn" data-action="loadNetmonData">POLL DATA</button>
     <button class="fleet-btn" data-action="loadNetmonInterfaces">INTERFACES</button>
-    <div class="exec-out mt-8" id="netmon-out">Click to load network monitoring data.</div>
+    <div class="exec-out mt-8" id="network-netmon-out" data-network-role="netmon-out">Click to load network monitoring data.</div>
   </div>
 </div>
-<div class="section" id="snmp-setup-section">
+<div class="section" id="network-snmp-setup-section" data-network-role="snmp-setup-section">
   <div class="section-header"><h3>SNMP Setup</h3><div class="flex-1"></div><button class="fleet-btn mr-4" data-action="snmpSetupProbe">PROBE STATE</button><button class="fleet-btn" data-action="snmpSetupRefresh">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
-    <div class="stats" id="snmp-setup-stats"></div>
-    <div id="snmp-setup-main"><div class="skeleton h-60"></div></div>
+    <div class="stats" id="network-snmp-setup-stats" data-network-role="snmp-setup-stats"></div>
+    <div id="network-snmp-setup-main" data-network-role="snmp-setup-main"><div class="skeleton h-60"></div></div>
   </div>
 </div>
 <div class="section">
