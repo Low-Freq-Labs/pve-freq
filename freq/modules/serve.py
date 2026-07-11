@@ -4894,7 +4894,7 @@ a:hover{{text-decoration:underline}}
 
         body = self._request_body()
         cluster_name = str(body.get("cluster_name", "")).strip()
-        timezone = str(body.get("timezone", "UTC")).strip()
+        timezone = str(body.get("timezone") or "UTC").strip() or "UTC"
         pve_nodes_value = body.get("pve_nodes", [])
         if isinstance(pve_nodes_value, list):
             node_ips = [str(ip).strip() for ip in pve_nodes_value if str(ip).strip()]

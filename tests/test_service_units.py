@@ -1,4 +1,9 @@
-"""Executable contract for the canonical host-systemd service renderer."""
+"""Executable contract for the canonical host-systemd service renderer.
+
+The generated unit is also checked locally with ``systemd-analyze verify``.
+CI containers do not run systemd, so these tests pin the rendered contract but
+must not be mistaken for an in-CI systemd parser or service-start proof.
+"""
 
 from pathlib import Path
 

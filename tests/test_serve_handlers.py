@@ -709,7 +709,7 @@ class TestSetupHandlers:
             h.command = "POST"
             h._request_body = lambda: {
                 "cluster_name": "dc01",
-                "timezone": "UTC",
+                "timezone": "",
                 "pve_nodes": ["10.0.0.1", "10.0.0.2"],
             }
 
@@ -717,9 +717,11 @@ class TestSetupHandlers:
 
             assert h._status_code == 200
             data = _get_json(h)
+            assert data["timezone"] == "UTC"
             assert data["pve_node_names"] == ["pve01", "pve02"]
             with open(os.path.join(td, "freq.toml")) as f:
                 content = f.read()
+            assert 'timezone = "UTC"' in content
             assert 'node_names = ["pve01", "pve02"]' in content
 
     @patch("freq.modules.serve._check_session_role", return_value=("admin", None))

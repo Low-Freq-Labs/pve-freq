@@ -86,11 +86,10 @@ class TestSwitchDeployHasTimeout(unittest.TestCase):
         self.assertIn("SWITCH_CONFIG_TIMEOUT", body)
 
     def test_timeout_wrapper_uses_kill_after(self):
-        """GNU timeout must escalate and normalize timeout exits to rc=124."""
+        """GNU timeout must retain the process-tree kill-after escalation."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         self.assertIn('"timeout", "-k", "5s"', src)
         self.assertNotIn('"timeout", "-s", "KILL"', src)
-        self.assertIn("if rc in (124, 137, 143, -9, -15):", src)
 
 
 if __name__ == "__main__":

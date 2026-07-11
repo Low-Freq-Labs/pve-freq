@@ -113,13 +113,40 @@ class TestRunBoundedTimeoutKillsTree(unittest.TestCase):
         """BusyBox timeout reports SIGTERM while a child may hold pipes."""
         proc = mock.Mock(returncode=-15)
         proc.communicate.return_value = ("", "Terminated")
-        with mock.patch.object(init_cmd.subprocess, "Popen", return_value=proc):
+        with (
+            mock.patch.object(init_cmd.subprocess, "Popen", return_value=proc),
+            mock.patch.object(init_cmd.time, "monotonic", side_effect=[100.0, 102.0]),
+        ):
             rc, out, err = init_cmd._run_bounded(["sleep", "9999"], timeout=2)
 
         self.assertEqual(rc, 124)
         self.assertEqual(out, "")
         self.assertIn("timed out", err)
         proc.communicate.assert_called_once_with(input=None, timeout=4)
+
+    def test_fast_sigterm_exit_is_not_mislabeled_as_timeout(self):
+        """A command that self-terminates promptly is a real signal exit."""
+        rc, out, err = init_cmd._run_bounded(
+            ["sh", "-c", "kill -TERM $$"], timeout=5,
+        )
+
+        self.assertIn(rc, (143, -15))
+        self.assertNotIn("timed out", err.lower())
+
+    def test_inner_timeout_uses_its_os_deadline_not_python_fallback(self):
+        """Password SSH's shorter timeout still normalizes BusyBox SIGTERM."""
+        proc = mock.Mock(returncode=143)
+        proc.communicate.return_value = ("", "Terminated")
+        cmd = ["timeout", "-k", "5s", "2", "sleep", "9999"]
+        with (
+            mock.patch.object(init_cmd.subprocess, "Popen", return_value=proc),
+            mock.patch.object(init_cmd.time, "monotonic", side_effect=[100.0, 102.0]),
+        ):
+            rc, out, err = init_cmd._run_bounded(cmd, timeout=12)
+
+        self.assertEqual(rc, 124)
+        self.assertIn("timed out", err)
+        proc.communicate.assert_called_once_with(input=None, timeout=12)
 
 
 class TestRunDelegatesToRunBounded(unittest.TestCase):

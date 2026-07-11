@@ -1078,13 +1078,22 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
     # Wrap in GNU timeout for hard OS-level kill. Avoid double-wrapping
     # if the caller (e.g., _ssh_with_pass) already added a timeout prefix.
     py_timeout = timeout
+    signal_timeout = float(timeout)
     if cmd and cmd[0] != "timeout":
         cmd = ["timeout", "-k", "5s", str(timeout)] + list(cmd)
         # BusyBox timeout can exit on SIGTERM while a grandchild keeps the
         # captured pipes open. Keep the process-group fallback close enough
         # to the requested ceiling to terminate that tree promptly.
         py_timeout = timeout + 2
+    elif len(cmd) >= 4 and cmd[1] == "-k":
+        # _ssh_with_pass supplies its own shorter GNU timeout and a longer
+        # Python fallback. Normalize SIGTERM only after the OS deadline.
+        try:
+            signal_timeout = float(str(cmd[3]).removesuffix("s"))
+        except ValueError:
+            pass
 
+    started_at = time.monotonic()
     try:
         proc = subprocess.Popen(
             cmd,
@@ -1106,8 +1115,12 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
         # SIGKILL, it can return 137; Python reports -9 when the process
         # group kill catches the wrapper itself. Normalize all timeout
         # shapes so callers see one contract.
-        if rc in (124, 137, 143, -9, -15):
+        if rc in (124, 137, -9):
             return 124, out or "", f"command timed out after {timeout}s"
+        if rc in (143, -15):
+            elapsed = time.monotonic() - started_at
+            if signal_timeout > 0 and elapsed + 0.05 >= signal_timeout:
+                return 124, out or "", f"command timed out after {timeout}s"
         return rc, out or "", err or ""
     except subprocess.TimeoutExpired:
         # Kill the entire process group — reaches ssh grandchild too.
