@@ -58,8 +58,8 @@
 </div>
 <div class="mn-body d-none" id="mn-body">
 
-<!-- ════════ HOME ════════ -->
-<div id="p-home" class="page active">
+<!-- ════════ SINGLE VIEW ROUTER ROOT ════════ -->
+<div id="dashboard-root">
 <!-- Toolbar -->
 <div class="view-toolbar">
 <div class="view-toolbar-row">
@@ -296,8 +296,7 @@
 </div>
 </div><!-- close docker-view -->
 
-<!-- Compatibility route: media is consolidated under Docker > Media. -->
-<div id="media-view" class="d-none"></div>
+<!-- Compatibility route `media` is resolved by VIEW_ALIASES to Docker. -->
 
 <!-- SECURITY VIEW — Overview -->
 <div id="security-view" class="d-none">
@@ -1164,10 +1163,8 @@
 </div>
 </div>
 
-</div><!-- close p-home -->
-
-<!-- ════════ INFRA ════════ -->
-<div id="p-infra" class="page">
+<!-- ════════ INFRA COMPATIBILITY VIEW ════════ -->
+<div id="infra-view" class="d-none">
 <div class="flex-row-8-mb16-center">
   <button class="fleet-btn c-purple-active" data-view="home" >&#9664; HOME</button>
   <button class="fleet-btn" data-action="loadInfraPage">REFRESH</button>
@@ -1210,8 +1207,8 @@
 </div>
 </div>
 
-<!-- ════════ SYSTEM ════════ -->
-<div id="p-system" class="page">
+<!-- ════════ SYSTEM COMPATIBILITY VIEW ════════ -->
+<div id="system-view" class="d-none">
 <div class="flex-row-8-mb16-center">
   <button class="fleet-btn c-purple-active" data-view="home" >&#9664; HOME</button>
   <button class="fleet-btn" data-action="loadSystemPage">REFRESH</button>
@@ -1317,6 +1314,7 @@
 </div>
 </div>
 
+</div><!-- close dashboard-root -->
 </div></div><!-- close mn-body and mn -->
 
 <!-- ═══ HOST DETAIL OVERLAY ═══ -->
@@ -1388,6 +1386,7 @@
   </div>
 </div>
 
+<script src="/static/js/router.js?v={{VERSION}}"></script>
 <script src="/static/js/app.js?v={{VERSION}}"></script>
 </body>
 </html>

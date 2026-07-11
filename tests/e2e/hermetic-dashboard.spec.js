@@ -77,6 +77,35 @@ test.describe('hermetic dashboard behavior oracle', () => {
     }
   });
 
+  test('one view router owns direct, alias, back, and forward navigation', async ({ page }) => {
+    await page.goto('/dashboard/system', { waitUntil: 'domcontentloaded' });
+    await page.locator('#login-user').fill(USER);
+    await page.locator('#login-pass').fill(PASS);
+    await page.locator('#login-form').evaluate(form => form.requestSubmit());
+    await page.locator('#login-overlay').waitFor({ state: 'hidden' });
+    await expect(page.locator('#system-view')).toBeVisible();
+    await expect(page.locator('#nav-items [data-view="tools"]')).toHaveClass(/active-view/);
+
+    for (const route of [
+      { path: 'infra', view: 'infra', nav: 'fleet' },
+      { path: 'lab', view: 'lab', nav: 'tools' },
+      { path: 'media', view: 'docker', nav: 'docker' },
+      { path: 'not-a-view', view: 'home', nav: 'home' }
+    ]) {
+      await page.goto(`/dashboard/${route.path}`, { waitUntil: 'domcontentloaded' });
+      await page.locator('#login-overlay').waitFor({ state: 'hidden' });
+      await expect(page.locator(`#${route.view}-view`)).toBeVisible();
+      await expect(page.locator(`#nav-items [data-view="${route.nav}"]`)).toHaveClass(/active-view/);
+    }
+
+    await page.locator('#nav-items [data-view="fleet"]').click();
+    await page.locator('#nav-items [data-view="docker"]').click();
+    await page.goBack();
+    await expect(page.locator('#fleet-view')).toBeVisible();
+    await page.goForward();
+    await expect(page.locator('#docker-view')).toBeVisible();
+  });
+
   test('bad password is rejected', async ({ request }) => {
     const response = await apiLogin(request, 'wrong-password');
     expect(response.status()).toBe(401);
@@ -345,6 +374,13 @@ test.describe('hermetic dashboard behavior oracle', () => {
     const response = await request.get('/static/js/app.js');
     expect(response.status()).toBe(200);
     const source = fs.readFileSync(path.join(__dirname, '../../freq/data/web/js/app.js'), 'utf8');
+    expect(await response.text()).toBe(source);
+  });
+
+  test('served router is the checked-in zero-dependency view module', async ({ request }) => {
+    const response = await request.get('/static/js/router.js');
+    expect(response.status()).toBe(200);
+    const source = fs.readFileSync(path.join(__dirname, '../../freq/data/web/js/router.js'), 'utf8');
     expect(await response.text()).toBe(source);
   });
 

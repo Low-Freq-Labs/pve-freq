@@ -1278,9 +1278,9 @@ function _showApp(){
        * _startDoctorProbe. */
       _startDoctorProbe();
       try{
-        var _initPath=window.location.pathname.replace('/dashboard/','').replace('/','');
-        if(_initPath&&VIEW_LOADERS[_initPath])switchView(_initPath);
-        else loadHome();
+        var _initView=_viewFromLocation();
+        switchView(_initView,true);
+        _viewRouter.replaceCurrent(_initView);
       }catch(e){console.error('initial route failed:',e);}
       try{setTimeout(_vmCreatePrewarmOptions,1200);}catch(e){console.error('VM create prewarm failed:',e);}
     },600);
@@ -2477,9 +2477,9 @@ var _currentView='home';
 var _viewCleanup=[];
 function _onViewCleanup(fn){_viewCleanup.push(fn);}
 function _runViewCleanup(){_viewCleanup.forEach(function(fn){try{fn();}catch(e){}});_viewCleanup=[];}
-var VIEW_IDS=['home','fleet','network','docker','security','sec-hardening','sec-access','sec-compliance','firewall','certs','vpn','vault','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings'];
-var VIEW_ALIASES={media:'docker',lab:'tools'};
-var VIEW_TITLES={home:'HOME',fleet:'FLEET',network:'NETWORK',docker:'DOCKER',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',vault:'VAULT',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS'};
+var VIEW_IDS=['home','fleet','network','docker','security','sec-hardening','sec-access','sec-compliance','firewall','certs','vpn','vault','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings','infra','system'];
+var VIEW_ALIASES={media:'docker'};
+var VIEW_TITLES={home:'HOME',fleet:'FLEET',network:'NETWORK',docker:'DOCKER',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',vault:'VAULT',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS',infra:'INFRASTRUCTURE',system:'SYSTEM'};
 var SUBNAV_GROUPS={
   security:[
     {view:'security',label:'Overview'},
@@ -2520,66 +2520,28 @@ function _renderSubnavStrips(root){
   (root||document).querySelectorAll('[data-subnav-group]').forEach(_renderSubnavMount);
 }
 _renderSubnavStrips(document);
-var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},vault:function(){loadVaultCredentials()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
+var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},vault:function(){loadVaultCredentials()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()},infra:function(){loadInfraPage()},system:function(){loadSystemPage()}};
 /* Nav grouping — maps sub-views to their parent nav button */
-var VIEW_TO_NAV={home:'home',fleet:'fleet',network:'fleet',docker:'docker',security:'security','sec-hardening':'security','sec-access':'security','sec-compliance':'security',firewall:'security',certs:'security',vpn:'security',vault:'vault',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools',settings:'settings'};
+var VIEW_TO_NAV={home:'home',fleet:'fleet',network:'fleet',docker:'docker',security:'security','sec-hardening':'security','sec-access':'security','sec-compliance':'security',firewall:'security',certs:'security',vpn:'security',vault:'vault',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools',settings:'settings',infra:'fleet',system:'tools'};
 var NAV_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',security:'SECURITY',vault:'VAULT',tools:'SYSTEM',settings:'SETTINGS'};
 
-function nav(p){
-  try{
-    /* Deactivate all pages */
-    document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active')});
-    /* When leaving p-home, hide all views to prevent stale display */
-    if(p!=='home'){
-      VIEW_IDS.forEach(function(v){var el=document.getElementById(v+'-view');if(el)el.style.display='none';});
-      document.querySelectorAll('.view-btn').forEach(function(b){b.classList.remove('active-view');});
-    }
-    var el=document.getElementById('p-'+p);if(el)el.classList.add('active');
-    if(p==='home'){
-      document.getElementById('page-title').textContent=VIEW_TITLES[_currentView]||'HOME';
-      document.getElementById('header-tagline').textContent=rt(VIEW_TO_NAV[_currentView]||'home');
-      _safe(VIEW_LOADERS[_currentView]||loadHome);
-    }else{
-      var titles={infra:'INFRASTRUCTURE',system:'SYSTEM'};
-      document.getElementById('page-title').textContent=titles[p]||p;
-      document.getElementById('header-tagline').textContent=rt(p);
-      load(p);
-    }
-  }catch(e){console.error('nav error:',e);}
-}
-function load(p){
-  try{
-    if(p==='infra')_safe(loadInfraPage);
-    else if(p==='system')_safe(loadSystemPage);
-  }catch(e){console.error('load error:',e);}
-}
-function switchView(view, skipPush){
-  view=VIEW_ALIASES[view]||view;
-  _runViewCleanup();
-  _currentView=view;
-  /* Hide all views */
-  VIEW_IDS.forEach(function(v){var el=document.getElementById(v+'-view');if(el)el.style.display='none';});
-  /* Show selected */
-  var el=document.getElementById(view+'-view');if(el)el.style.display='block';
-  /* Highlight the PARENT nav button, not the sub-view */
-  var navGroup=VIEW_TO_NAV[view]||view;
-  document.querySelectorAll('.view-btn').forEach(function(b){b.classList.remove('active-view');});
-  var activeBtn=document.querySelector('.view-btn[data-view="'+navGroup+'"]');
-  if(activeBtn)activeBtn.classList.add('active-view');
-  /* Update title */
-  document.getElementById('page-title').textContent=NAV_TITLES[navGroup]||VIEW_TITLES[view]||view;
-  /* Update header subtitle — deterministic per-view label from _viewLabels */
-  var tl=document.getElementById('header-tagline');
-  if(tl)tl.textContent=rt(navGroup);
-  refreshWatchdogHeader();
-  /* Make sure we're on p-home */
-  document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active')});
-  document.getElementById('p-home').classList.add('active');
-  /* URL routing — push state for bookmarkable views */
-  if(!skipPush){try{window.history.pushState({view:view},'','/dashboard/'+view);}catch(e){}}
-  /* Load data */
-  _safe(VIEW_LOADERS[view]||loadHome);
-}
+if(!window.FreqViewRouter)throw new Error('FreqViewRouter failed to load');
+var _viewRouter=window.FreqViewRouter.create({
+  viewIds:VIEW_IDS,
+  aliases:VIEW_ALIASES,
+  loaders:VIEW_LOADERS,
+  viewToNav:VIEW_TO_NAV,
+  viewTitles:VIEW_TITLES,
+  navTitles:NAV_TITLES,
+  beforeSwitch:_runViewCleanup,
+  setCurrentView:function(view){_currentView=view;},
+  tagline:function(navGroup){return rt(navGroup);},
+  refreshHeader:refreshWatchdogHeader,
+  runLoader:function(loader){_safe(loader);}
+});
+function _resolveView(view){return _viewRouter.resolve(view);}
+function _viewFromLocation(){return _viewRouter.fromLocation();}
+function switchView(view,skipPush){return _viewRouter.switchView(view,skipPush);}
 var showView=switchView;
 function refreshCurrentView(){refreshWatchdogHeader();_safe(VIEW_LOADERS[_currentView]||loadHome);}
 var _watchdogHeaderTimer=null;
@@ -9469,7 +9431,6 @@ function mediaRestart(name){
 function _containerLogsTarget(){
   var roots=[
     document.getElementById('docker-sub-'+_dockerSub),
-    document.getElementById('media-view'),
     document.getElementById('docker-sub-all')
   ];
   for(var i=0;i<roots.length;i++){
@@ -13434,7 +13395,7 @@ document.addEventListener('keydown',function(e){
 });
 /* URL routing: popstate for back/forward, initial route on load */
 window.addEventListener('popstate',function(e){
-  if(e.state&&e.state.view&&VIEW_LOADERS[e.state.view])switchView(e.state.view,true);
+  _viewRouter.handlePopState(e);
 });
 /* Unauthenticated bootstrap — only touch things that read local state
  * (settings from localStorage). Authenticated work (loadHome, initial

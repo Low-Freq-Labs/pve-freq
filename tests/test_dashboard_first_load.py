@@ -223,7 +223,7 @@ class TestDashboardTone(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
             src = f.read()
         # The home hero section should be gone; toolbar comes right after login overlay end
-        home_section = src.split('id="p-home"')[1].split('<!-- close home-view -->')[0]
+        home_section = src.split('id="dashboard-root"')[1].split('<!-- close home-view -->')[0]
         self.assertNotIn("<!-- Hero -->", home_section,
                           "Home must not have a hero branding section")
         # Count PVE FREQ occurrences in home section — should be 0 (nav has it, footer has version only)

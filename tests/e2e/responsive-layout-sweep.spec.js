@@ -78,7 +78,7 @@ async function assertLayoutClean(page, label) {
       const rect = el.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
     };
-    return Array.from(document.querySelectorAll('.page.active .skeleton')).filter(visible).length === 0;
+    return Array.from(document.querySelectorAll('#dashboard-root .skeleton')).filter(visible).length === 0;
   }, { timeout: 8_000 }).catch(() => {});
 
   const result = await page.evaluate(() => {
@@ -109,7 +109,7 @@ async function assertLayoutClean(page, label) {
         }
       }
     }
-    const stuckSkeletons = Array.from(document.querySelectorAll('.page.active .skeleton'))
+    const stuckSkeletons = Array.from(document.querySelectorAll('#dashboard-root .skeleton'))
       .filter(visible)
       .slice(0, 8)
       .map(el => {

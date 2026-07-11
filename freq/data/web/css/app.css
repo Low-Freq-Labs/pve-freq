@@ -136,9 +136,6 @@ body::before {
 .mn-header h1 { font-size: 13px; font-weight: 700; color: var(--text-bright); letter-spacing: 1.5px; }
 .mn-header .tagline { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: lowercase; }
 .mn-body { padding: 14px 28px; max-width: 1680px; margin: 0 auto; }
-.page { display: none; }
-.page.active { display: block; animation: pageEnter var(--duration-slow) var(--ease-out); }
-@keyframes pageEnter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
 
 /* ── Stats ── */
@@ -2996,7 +2993,7 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
   .chain { flex-direction: column; align-items: flex-start; gap: 4px; }
   .cards { grid-template-columns: 1fr; justify-content: stretch; }
   .grid-auto-280, .grid-auto-300, .grid-auto-240 { grid-template-columns: 1fr; }
-  #p-home > div:first-child pre { font-size: 8px; }
+  #dashboard-root > div:first-child pre { font-size: 8px; }
   .mobile-menu-btn { display: block; }
   .nav-toolbar { display: none !important; flex-direction: column; gap: 4px; width: 100%; }
   .nav-toolbar.open { display: flex !important; }
