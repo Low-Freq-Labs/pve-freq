@@ -301,15 +301,7 @@
 
 <!-- SECURITY VIEW — Overview -->
 <div id="security-view" class="d-none">
-<div class="sub-tabs" id="subtabs-security">
-  <button class="sub-tab active-sub" data-view="security">Overview</button>
-  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab" data-view="firewall">Firewall</button>
-  <button class="sub-tab" data-view="certs">Certs</button>
-  <button class="sub-tab" data-view="vpn">VPN</button>
-</div>
+<div class="sub-tabs" id="subtabs-security" data-subnav-group="security" data-subnav-active="security"></div>
 <div class="section layout-section" id="sec-risk">
   <div class="section-header"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
   <div class="section-body">
@@ -355,15 +347,7 @@
 
 <!-- SECURITY — Hardening -->
 <div id="sec-hardening-view" class="d-none">
-<div class="sub-tabs">
-  <button class="sub-tab" data-view="security">Overview</button>
-  <button class="sub-tab active-sub" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab" data-view="firewall">Firewall</button>
-  <button class="sub-tab" data-view="certs">Certs</button>
-  <button class="sub-tab" data-view="vpn">VPN</button>
-</div>
+<div class="sub-tabs" id="subtabs-sec-hardening" data-subnav-group="security" data-subnav-active="sec-hardening"></div>
 <div class="section layout-section" id="sec-audit">
   <div class="section-header"><h3>Audit</h3><span class="chev">▾</span></div>
   <div class="section-body">
@@ -399,15 +383,7 @@
 
 <!-- SECURITY — Access -->
 <div id="sec-access-view" class="d-none">
-<div class="sub-tabs">
-  <button class="sub-tab" data-view="security">Overview</button>
-  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab active-sub" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab" data-view="firewall">Firewall</button>
-  <button class="sub-tab" data-view="certs">Certs</button>
-  <button class="sub-tab" data-view="vpn">VPN</button>
-</div>
+<div class="sub-tabs" id="subtabs-sec-access" data-subnav-group="security" data-subnav-active="sec-access"></div>
 <div class="section layout-section" id="sec-users">
   <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
   <div class="section-body">
@@ -465,15 +441,7 @@
 
 <!-- SECURITY — Compliance -->
 <div id="sec-compliance-view" class="d-none">
-<div class="sub-tabs">
-  <button class="sub-tab" data-view="security">Overview</button>
-  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab active-sub" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab" data-view="firewall">Firewall</button>
-  <button class="sub-tab" data-view="certs">Certs</button>
-  <button class="sub-tab" data-view="vpn">VPN</button>
-</div>
+<div class="sub-tabs" id="subtabs-sec-compliance" data-subnav-group="security" data-subnav-active="sec-compliance"></div>
 <div class="section">
   <div class="section-header"><h3>Policy Compliance</h3><span class="chev">▾</span></div>
   <div class="section-body">
@@ -512,18 +480,7 @@
      Sections: Diagnostics, Logs, Storage, Network Scanner
      ============================================================ -->
 <div id="tools-view" class="d-none">
-<div class="sub-tabs" id="subtabs-tools">
-  <button class="sub-tab active-sub" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-tools" data-subnav-group="system" data-subnav-active="tools"></div>
 <!-- Diagnostics — health checks and host diagnosis -->
 <div class="section">
   <div class="section-header"><h3>Diagnostics</h3><span class="chev">▾</span></div>
@@ -680,18 +637,7 @@
 
 <!-- PLAYBOOKS VIEW -->
 <div id="playbooks-view" class="d-none">
-<div class="sub-tabs" id="subtabs-playbooks">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab active-sub" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-playbooks" data-subnav-group="system" data-subnav-active="playbooks"></div>
 <div class="card-block-thick">
   <div class="flex-between-mb12">
     <h3 class="section-label-pl-h3">Incident Playbooks</h3>
@@ -720,18 +666,7 @@
 
 <!-- GITOPS VIEW -->
 <div id="gitops-view" class="d-none">
-<div class="sub-tabs" id="subtabs-gitops">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab active-sub" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-gitops" data-subnav-group="system" data-subnav-active="gitops"></div>
 <div class="card-block-thick">
   <div class="flex-between-mb12">
     <h3 class="section-label-pl-h3">GitOps Config Sync</h3>
@@ -759,18 +694,7 @@
 
 <!-- CHAOS VIEW -->
 <div id="chaos-view" class="d-none">
-<div class="sub-tabs" id="subtabs-chaos">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab active-sub c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-chaos" data-subnav-group="system" data-subnav-active="chaos"></div>
 <div class="card-block-thick">
   <div class="flex-between-mb12">
     <h3 style="font-size:14px;color:var(--red)">Chaos Engineering</h3>
@@ -954,15 +878,7 @@
      FIREWALL VIEW — Rules, NAT, states, interfaces
      ============================================================ -->
 <div id="firewall-view" class="d-none">
-<div class="sub-tabs" id="subtabs-firewall">
-  <button class="sub-tab" data-view="security">Overview</button>
-  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab active-sub" data-view="firewall">Firewall</button>
-  <button class="sub-tab" data-view="certs">Certs</button>
-  <button class="sub-tab" data-view="vpn">VPN</button>
-</div>
+<div class="sub-tabs" id="subtabs-firewall" data-subnav-group="security" data-subnav-active="firewall"></div>
 <div class="section">
   <div class="section-header"><h3>Firewall Overview</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadFirewallPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -987,15 +903,7 @@
      CERTIFICATES VIEW — SSL lifecycle manager
      ============================================================ -->
 <div id="certs-view" class="d-none">
-<div class="sub-tabs" id="subtabs-certs">
-  <button class="sub-tab" data-view="security">Overview</button>
-  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab" data-view="firewall">Firewall</button>
-  <button class="sub-tab active-sub" data-view="certs">Certs</button>
-  <button class="sub-tab" data-view="vpn">VPN</button>
-</div>
+<div class="sub-tabs" id="subtabs-certs" data-subnav-group="security" data-subnav-active="certs"></div>
 <div class="cert-manager">
   <div class="section cert-overview-section">
     <div class="section-header"><h3>SSL Manager</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadCertsPage">REFRESH</button><span class="chev">&#9662;</span></div>
@@ -1041,18 +949,7 @@
      DNS VIEW — Records, health checks, resolution
      ============================================================ -->
 <div id="dns-view" class="d-none">
-<div class="sub-tabs" id="subtabs-dns">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab active-sub" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-dns" data-subnav-group="system" data-subnav-active="dns"></div>
 <div class="section">
   <div class="section-header"><h3>DNS Health</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDnsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -1082,15 +979,7 @@
      VPN VIEW — WireGuard and OpenVPN tunnel status
      ============================================================ -->
 <div id="vpn-view" class="d-none">
-<div class="sub-tabs" id="subtabs-vpn">
-  <button class="sub-tab" data-view="security">Overview</button>
-  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab" data-view="firewall">Firewall</button>
-  <button class="sub-tab" data-view="certs">Certs</button>
-  <button class="sub-tab active-sub" data-view="vpn">VPN</button>
-</div>
+<div class="sub-tabs" id="subtabs-vpn" data-subnav-group="security" data-subnav-active="vpn"></div>
 <div class="section">
   <div class="section-header"><h3>VPN Tunnels</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadVpnPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -1107,18 +996,7 @@
      DR VIEW — Disaster recovery, backup policies, runbooks
      ============================================================ -->
 <div id="dr-view" class="d-none">
-<div class="sub-tabs" id="subtabs-dr">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab active-sub" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-dr" data-subnav-group="system" data-subnav-active="dr"></div>
 <div class="section">
   <div class="section-header"><h3>Backup Status</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDrPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -1161,18 +1039,7 @@
      INCIDENTS VIEW — Incident management, change tracking
      ============================================================ -->
 <div id="incidents-view" class="d-none">
-<div class="sub-tabs" id="subtabs-incidents">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab active-sub" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-incidents" data-subnav-group="system" data-subnav-active="incidents"></div>
 <div class="section">
   <div class="section-header"><h3>Active Incidents</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadIncidentsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -1205,18 +1072,7 @@
      METRICS VIEW — Observability metrics, synthetic monitors
      ============================================================ -->
 <div id="metrics-view" class="d-none">
-<div class="sub-tabs" id="subtabs-metrics">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab active-sub" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-metrics" data-subnav-group="system" data-subnav-active="metrics"></div>
 <div class="section">
   <div class="section-header"><h3>Fleet Metrics</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadMetricsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -1255,18 +1111,7 @@
      AUTOMATION VIEW — Reactors, workflows, scheduled jobs
      ============================================================ -->
 <div id="automation-view" class="d-none">
-<div class="sub-tabs" id="subtabs-automation">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab active-sub" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-automation" data-subnav-group="system" data-subnav-active="automation"></div>
 <div class="section">
   <div class="section-header"><h3>Automation Engine</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadAutomationPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -1303,18 +1148,7 @@
      PLUGIN VIEW — Installed plugins, management
      ============================================================ -->
 <div id="plugins-view" class="d-none">
-<div class="sub-tabs" id="subtabs-plugins">
-  <button class="sub-tab" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab active-sub" data-view="plugins">Plugins</button>
-</div>
+<div class="sub-tabs" id="subtabs-plugins" data-subnav-group="system" data-subnav-active="plugins"></div>
 <div class="section">
   <div class="section-header"><h3>Installed Plugins</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadPluginsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">

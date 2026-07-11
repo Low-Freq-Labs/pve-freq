@@ -1,49 +1,30 @@
-"""M-UI-SUBNAV-STATE-CONTRACT-20260413AF — sub-tab symmetry contract.
+"""Sub-navigation symmetry contract.
 
-Sonny observed that after clicking some sub-nav paths, half the nav
-'disappeared' until he backed out to another sub-nav and re-entered.
-The Playwright repro found sec-compliance-view rendered only 5 of the
-8 security sub-tabs — Firewall, Certs, VPN were literally missing
-from that view's `<div class="sub-tabs">` block, making them
-unreachable from the Compliance page. Every other security view had
-all 8 buttons.
-
-This is a content-parity bug, not a dynamic state bug. Each sub-view
-in the fleet/security/system clusters embeds its OWN copy of the
-cluster's sub-tab row (with the active highlight pre-set on the
-matching view). When one copy drifts out of sync, an operator who
-navigates INTO the short copy gets stuck with a truncated nav row
-until they navigate back OUT.
-
-This contract enforces that every sub-view belonging to a cluster
-embeds a sub-tab row containing buttons for every sibling in that
-cluster. Any future edit that forgets to add a new sub-nav button
-to EVERY cluster view breaks the contract loudly instead of being
-discovered by a user.
+Fleet has a two-item static strip. Security and System are generated from one
+definition per group so a new sibling cannot disappear from one copied row.
+Each view owns only a mount declaring its group and active view.
 """
 
 import os
 import re
 import unittest
 
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _html():
-    with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
-        return f.read()
+def _read(path):
+    with open(os.path.join(REPO_ROOT, path)) as handle:
+        return handle.read()
 
 
-# Cluster definition: the canonical set of sub-views for each top-nav
-# cluster. Every sub-view in a cluster must embed a sub-tab row that
-# links to every sibling in this list (plus itself as active-sub).
 CLUSTERS = {
     "fleet": ["fleet", "network"],
     "security": [
-        "security", "sec-hardening", "sec-access",
-        "sec-compliance", "firewall", "certs", "vpn",
+        "security", "sec-hardening", "sec-access", "sec-compliance",
+        "firewall", "certs", "vpn",
     ],
-    "tools": [
+    "system": [
         "tools", "playbooks", "gitops", "chaos", "dns", "dr",
         "incidents", "metrics", "automation", "plugins",
     ],
@@ -51,13 +32,9 @@ CLUSTERS = {
 
 
 def _extract_view_block(html: str, view: str) -> str:
-    """Extract the inner HTML of the <div id='<view>-view'> ... </div>
-    element. Uses a balanced-depth scan to find the matching close tag."""
     marker = f'id="{view}-view"'
     idx = html.index(marker)
-    # walk back to the opening <div
     start = html.rfind("<div", 0, idx)
-    # walk forward to find the matching </div>
     depth = 0
     pos = start
     while pos < len(html):
@@ -70,129 +47,76 @@ def _extract_view_block(html: str, view: str) -> str:
             pos = nxt_open
         else:
             if depth == 0:
-                return html[start: nxt_close + len("</div>")]
+                return html[start:nxt_close + len("</div>")]
             depth -= 1
             pos = nxt_close
     raise AssertionError(f"could not locate closing </div> for {view}-view")
 
 
-def _sub_tab_row(block: str) -> str:
-    """Return the inner contents of the first <div class='sub-tabs'>
-    inside the view block, or '' if none."""
-    m = re.search(r'<div[^>]*class="sub-tabs"[^>]*>(.*?)</div>', block, re.DOTALL)
-    return m.group(1) if m else ""
+def _group_definition(js: str, group: str) -> str:
+    match = re.search(rf"\n  {re.escape(group)}:\[(.*?)\n  \]", js, re.DOTALL)
+    if not match:
+        raise AssertionError(f"missing SUBNAV_GROUPS.{group} definition")
+    return match.group(1)
 
 
-def _sub_tab_views(row: str) -> set:
-    """Extract the set of data-view values on `.sub-tab` buttons in a row."""
-    return set(re.findall(r'class="sub-tab[^"]*"\s+data-view="([^"]+)"', row))
+def _group_views(js: str, group: str) -> list[str]:
+    return re.findall(r"\{view:'([^']+)'", _group_definition(js, group))
 
 
 class TestClusterSubTabSymmetry(unittest.TestCase):
-    """Every sub-view in a cluster must embed a sub-tab row that
-    references every sibling in that cluster."""
+    @classmethod
+    def setUpClass(cls):
+        cls.html = _read("freq/data/web/app.html")
+        cls.js = _read("freq/data/web/js/app.js")
 
-    def setUp(self):
-        self.html = _html()
+    def test_fleet_static_rows_remain_complete_and_active(self):
+        for view in CLUSTERS["fleet"]:
+            block = _extract_view_block(self.html, view)
+            for sibling in CLUSTERS["fleet"]:
+                self.assertIn(f'data-view="{sibling}"', block)
+            self.assertRegex(
+                block,
+                rf'class="sub-tab active-sub" data-view="{re.escape(view)}"',
+            )
 
-    def _assert_cluster_view_covers_all(self, cluster: str, view: str, siblings: list):
-        block = _extract_view_block(self.html, view)
-        row = _sub_tab_row(block)
-        self.assertTrue(
-            row,
-            f"{view}-view must embed a <div class='sub-tabs'> row",
-        )
-        views_in_row = _sub_tab_views(row)
-        missing = set(siblings) - views_in_row
-        self.assertFalse(
-            missing,
-            f"{view}-view sub-tab row is missing siblings from the "
-            f"{cluster!r} cluster: {sorted(missing)!r}. This is the "
-            f"'half the nav disappears' bug — an operator on {view} "
-            f"cannot reach those siblings without navigating away.",
-        )
+    def test_security_has_one_complete_canonical_definition(self):
+        self.assertEqual(_group_views(self.js, "security"), CLUSTERS["security"])
 
-    def test_fleet_cluster_all_views_cover_all_tabs(self):
-        siblings = CLUSTERS["fleet"]
-        for v in siblings:
-            with self.subTest(view=v):
-                self._assert_cluster_view_covers_all("fleet", v, siblings)
+    def test_system_has_one_complete_canonical_definition(self):
+        self.assertEqual(_group_views(self.js, "system"), CLUSTERS["system"])
 
-    def test_security_cluster_all_views_cover_all_tabs(self):
-        """Regression test for the sec-compliance defect — that view
-        shipped with only 5 of 8 security sub-tabs, hiding firewall/
-        certs/vpn when the operator landed on it."""
-        siblings = CLUSTERS["security"]
-        for v in siblings:
-            with self.subTest(view=v):
-                self._assert_cluster_view_covers_all("security", v, siblings)
+    def test_every_generated_view_declares_its_group_and_active_state(self):
+        for group in ("security", "system"):
+            for view in CLUSTERS[group]:
+                with self.subTest(group=group, view=view):
+                    block = _extract_view_block(self.html, view)
+                    self.assertIn(f'data-subnav-group="{group}"', block)
+                    self.assertIn(f'data-subnav-active="{view}"', block)
 
-    def test_system_cluster_all_views_cover_all_tabs(self):
-        siblings = CLUSTERS["tools"]
-        for v in siblings:
-            with self.subTest(view=v):
-                self._assert_cluster_view_covers_all("tools", v, siblings)
+    def test_generated_mounts_do_not_copy_buttons(self):
+        for group in ("security", "system"):
+            for view in CLUSTERS[group]:
+                block = _extract_view_block(self.html, view)
+                match = re.search(
+                    rf'<div class="sub-tabs"[^>]*data-subnav-group="{group}"[^>]*>(.*?)</div>',
+                    block,
+                    re.DOTALL,
+                )
+                self.assertIsNotNone(match, f"missing generated subnav mount for {view}")
+                self.assertNotIn("<button", match.group(1))
 
+    def test_renderer_preserves_active_state_and_chaos_accent(self):
+        self.assertIn("item.view===active?' active-sub':''", self.js)
+        self.assertIn("{view:'chaos',label:'Chaos',className:'c-red'}", self.js)
+        self.assertIn("button.dataset.view=item.view", self.js)
 
-class TestClusterSubTabActiveHighlight(unittest.TestCase):
-    """Each cluster view must mark its own sub-tab button with
-    active-sub — not a sibling. Otherwise the highlight lies about
-    which view the operator is on."""
-
-    def setUp(self):
-        self.html = _html()
-
-    def _assert_self_is_active(self, cluster: str, view: str):
-        block = _extract_view_block(self.html, view)
-        row = _sub_tab_row(block)
-        # Look for `class="sub-tab active-sub[ extra classes]" data-view="<view>"`.
-        # Some views carry extra classes (e.g. chaos uses `c-red` tint)
-        # so the regex must allow trailing tokens inside the class attr.
-        m = re.search(
-            r'class="sub-tab active-sub(?:\s+[\w-]+)*"\s+data-view="' + re.escape(view) + '"',
-            row,
-        )
-        self.assertIsNotNone(
-            m,
-            f"{view}-view sub-tab row must mark its OWN button with "
-            f"the active-sub class so the highlight matches the page",
-        )
-
-    def test_fleet_active_highlight(self):
-        for v in CLUSTERS["fleet"]:
-            with self.subTest(view=v):
-                self._assert_self_is_active("fleet", v)
-
-    def test_security_active_highlight(self):
-        for v in CLUSTERS["security"]:
-            with self.subTest(view=v):
-                self._assert_self_is_active("security", v)
-
-    def test_system_active_highlight(self):
-        for v in CLUSTERS["tools"]:
-            with self.subTest(view=v):
-                self._assert_self_is_active("tools", v)
-
-
-class TestNoOrphanSubTabButtonViews(unittest.TestCase):
-    """Every data-view target referenced from a sub-tab row must
-    correspond to an actual <div id='<view>-view'> in app.html. An
-    orphan button would click into nothing, dropping the operator
-    onto an empty page — another form of 'disappearing nav'."""
-
-    def setUp(self):
-        self.html = _html()
-
-    def test_every_sub_tab_target_has_a_view_element(self):
-        referenced = set()
-        for m in re.finditer(r'class="sub-tab[^"]*"\s+data-view="([^"]+)"', self.html):
-            referenced.add(m.group(1))
-        missing = [v for v in referenced if f'id="{v}-view"' not in self.html]
-        self.assertFalse(
-            missing,
-            f"sub-tab buttons reference views with no matching "
-            f"<div id='<view>-view'> element: {sorted(missing)!r}",
-        )
+    def test_every_canonical_target_has_a_view_element(self):
+        referenced = set(CLUSTERS["fleet"])
+        referenced.update(_group_views(self.js, "security"))
+        referenced.update(_group_views(self.js, "system"))
+        missing = [view for view in referenced if f'id="{view}-view"' not in self.html]
+        self.assertFalse(missing, f"subnav targets have no matching view: {sorted(missing)!r}")
 
 
 if __name__ == "__main__":

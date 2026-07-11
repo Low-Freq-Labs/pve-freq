@@ -190,48 +190,48 @@ class TestDashboardJS(unittest.TestCase):
 
 
 class TestDashboardSubTabs(unittest.TestCase):
-    """Verify sub-tab navigation buttons exist for the listed views.
-
-    Buttons used to be inline `onclick="switchView('X')"`; under
-    R-WEB-INLINE-CSP-CLEANUP-20260413O they were swept to
-    `data-view="X"` so the existing app.js delegator picks them up
-    via `e.target.closest('[data-view]')`. The tab still has to
-    exist — we just look for the new attribute marker.
-    """
+    """Verify static and generated sub-tab navigation targets exist."""
 
     @classmethod
     def setUpClass(cls):
         cls.html = (WEB_DIR / "app.html").read_text()
+        cls.js = (WEB_DIR / "js/app.js").read_text()
+
+    def _assert_subtab_target(self, view):
+        self.assertTrue(
+            f'data-view="{view}"' in self.html or f"{{view:'{view}'," in self.js,
+            f"missing static or generated sub-tab target {view}",
+        )
 
     def test_fleet_network_tab(self):
-        self.assertIn('data-view="network"', self.html)
+        self._assert_subtab_target("network")
 
     def test_security_firewall_tab(self):
-        self.assertIn('data-view="firewall"', self.html)
+        self._assert_subtab_target("firewall")
 
     def test_security_certs_tab(self):
-        self.assertIn('data-view="certs"', self.html)
+        self._assert_subtab_target("certs")
 
     def test_security_vpn_tab(self):
-        self.assertIn('data-view="vpn"', self.html)
+        self._assert_subtab_target("vpn")
 
     def test_tools_dns_tab(self):
-        self.assertIn('data-view="dns"', self.html)
+        self._assert_subtab_target("dns")
 
     def test_tools_dr_tab(self):
-        self.assertIn('data-view="dr"', self.html)
+        self._assert_subtab_target("dr")
 
     def test_tools_incidents_tab(self):
-        self.assertIn('data-view="incidents"', self.html)
+        self._assert_subtab_target("incidents")
 
     def test_tools_metrics_tab(self):
-        self.assertIn('data-view="metrics"', self.html)
+        self._assert_subtab_target("metrics")
 
     def test_tools_automation_tab(self):
-        self.assertIn('data-view="automation"', self.html)
+        self._assert_subtab_target("automation")
 
     def test_tools_plugins_tab(self):
-        self.assertIn('data-view="plugins"', self.html)
+        self._assert_subtab_target("plugins")
 
 
 class TestAPIRoutes(unittest.TestCase):

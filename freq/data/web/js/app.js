@@ -2480,6 +2480,46 @@ function _runViewCleanup(){_viewCleanup.forEach(function(fn){try{fn();}catch(e){
 var VIEW_IDS=['home','fleet','network','docker','security','sec-hardening','sec-access','sec-compliance','firewall','certs','vpn','vault','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings'];
 var VIEW_ALIASES={media:'docker',lab:'tools'};
 var VIEW_TITLES={home:'HOME',fleet:'FLEET',network:'NETWORK',docker:'DOCKER',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',vault:'VAULT',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS'};
+var SUBNAV_GROUPS={
+  security:[
+    {view:'security',label:'Overview'},
+    {view:'sec-hardening',label:'Hardening'},
+    {view:'sec-access',label:'Access'},
+    {view:'sec-compliance',label:'Compliance'},
+    {view:'firewall',label:'Firewall'},
+    {view:'certs',label:'Certs'},
+    {view:'vpn',label:'VPN'}
+  ],
+  system:[
+    {view:'tools',label:'Overview'},
+    {view:'playbooks',label:'Playbooks'},
+    {view:'gitops',label:'Config Sync'},
+    {view:'chaos',label:'Chaos',className:'c-red'},
+    {view:'dns',label:'DNS'},
+    {view:'dr',label:'DR'},
+    {view:'incidents',label:'Incidents'},
+    {view:'metrics',label:'Metrics'},
+    {view:'automation',label:'Automation'},
+    {view:'plugins',label:'Plugins'}
+  ]
+};
+function _renderSubnavMount(mount){
+  var items=SUBNAV_GROUPS[mount.dataset.subnavGroup]||[];
+  var active=mount.dataset.subnavActive||'';
+  while(mount.firstChild)mount.removeChild(mount.firstChild);
+  items.forEach(function(item){
+    var button=document.createElement('button');
+    button.type='button';
+    button.className='sub-tab'+(item.view===active?' active-sub':'')+(item.className?' '+item.className:'');
+    button.dataset.view=item.view;
+    button.textContent=item.label;
+    mount.appendChild(button);
+  });
+}
+function _renderSubnavStrips(root){
+  (root||document).querySelectorAll('[data-subnav-group]').forEach(_renderSubnavMount);
+}
+_renderSubnavStrips(document);
 var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},vault:function(){loadVaultCredentials()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
 /* Nav grouping — maps sub-views to their parent nav button */
 var VIEW_TO_NAV={home:'home',fleet:'fleet',network:'fleet',docker:'docker',security:'security','sec-hardening':'security','sec-access':'security','sec-compliance':'security',firewall:'security',certs:'security',vpn:'security',vault:'vault',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools',settings:'settings'};

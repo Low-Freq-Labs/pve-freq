@@ -38,6 +38,45 @@ test.describe('hermetic dashboard behavior oracle', () => {
     await expect(page.locator('#login-overlay')).toHaveCSS('display', /^(flex|block)$/);
   });
 
+  test('generated Security and System subnav strips stay complete and self-active', async ({ page }) => {
+    await page.goto('/');
+    const result = await page.evaluate(() => {
+      const expected = {
+        security: ['security', 'sec-hardening', 'sec-access', 'sec-compliance', 'firewall', 'certs', 'vpn'],
+        system: ['tools', 'playbooks', 'gitops', 'chaos', 'dns', 'dr', 'incidents', 'metrics', 'automation', 'plugins']
+      };
+      return Array.from(document.querySelectorAll('[data-subnav-group]')).map(mount => ({
+        group: mount.dataset.subnavGroup,
+        active: mount.dataset.subnavActive,
+        expected: expected[mount.dataset.subnavGroup],
+        views: Array.from(mount.querySelectorAll('.sub-tab')).map(button => button.dataset.view),
+        activeViews: Array.from(mount.querySelectorAll('.sub-tab.active-sub')).map(button => button.dataset.view),
+        chaosRed: mount.dataset.subnavGroup !== 'system' || mount.querySelector('[data-view="chaos"]').classList.contains('c-red')
+      }));
+    });
+    expect(result).toHaveLength(17);
+    for (const strip of result) {
+      expect(strip.views).toEqual(strip.expected);
+      expect(strip.activeViews).toEqual([strip.active]);
+      expect(strip.chaosRed).toBe(true);
+    }
+
+    await loginInBrowser(page);
+    for (const [topView, views] of [
+      ['security', ['security', 'sec-hardening', 'sec-access', 'sec-compliance', 'firewall', 'certs', 'vpn']],
+      ['tools', ['tools', 'playbooks', 'gitops', 'chaos', 'dns', 'dr', 'incidents', 'metrics', 'automation', 'plugins']]
+    ]) {
+      await page.locator(`#nav-items [data-view="${topView}"]`).click();
+      let currentView = topView;
+      for (const targetView of views) {
+        await page.locator(`#${currentView}-view > .sub-tabs > .sub-tab[data-view="${targetView}"]`).click();
+        await expect(page.locator(`#${targetView}-view`)).toBeVisible();
+        await expect(page.locator(`#${targetView}-view .sub-tab.active-sub`)).toHaveAttribute('data-view', targetView);
+        currentView = targetView;
+      }
+    }
+  });
+
   test('bad password is rejected', async ({ request }) => {
     const response = await apiLogin(request, 'wrong-password');
     expect(response.status()).toBe(401);
