@@ -106,7 +106,7 @@ jobs:
         run: |
           pip3 install --break-system-packages pytest-cov 2>/dev/null || pip3 install pytest-cov
           python3 -m pytest tests/ -v --tb=short \
-            --cov=freq --cov-report=term-missing --cov-fail-under=20 \
+            --cov=freq --cov-report=term-missing --cov-fail-under=36 \
             --junit-xml=test-results.xml
         env:
           FREQ_DIR: ${{ github.workspace }}
@@ -237,7 +237,7 @@ jobs:
         run: |
           pip3 install --break-system-packages pytest-cov 2>/dev/null || pip3 install pytest-cov
           python3 -m pytest tests/ -v --tb=short \
-            --cov=freq --cov-report=term-missing --cov-fail-under=20 \
+            --cov=freq --cov-report=term-missing --cov-fail-under=36 \
             --junit-xml=test-results.xml
         env:
           FREQ_DIR: ${{ github.workspace }}

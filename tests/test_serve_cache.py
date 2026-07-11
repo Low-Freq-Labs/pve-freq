@@ -13,8 +13,10 @@ Covers:
 import json
 import os
 import sys
+import tempfile
 import threading
 import time
+import types
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -289,16 +291,17 @@ def _make_host(label, ip, htype="linux", groups=""):
     return h
 
 
-def _make_cfg_for_health(hosts, container_vms=None, ssh_key_path="/tmp/k",
+def _make_cfg_for_health(hosts, data_dir, container_vms=None, ssh_key_path="/tmp/k",
                           ssh_rsa_key_path=None, ssh_connect_timeout=2, ssh_max_parallel=2):
-    cfg = MagicMock()
-    cfg.hosts = hosts
-    cfg.container_vms = container_vms or {}
-    cfg.ssh_key_path = ssh_key_path
-    cfg.ssh_rsa_key_path = ssh_rsa_key_path
-    cfg.ssh_connect_timeout = ssh_connect_timeout
-    cfg.ssh_max_parallel = ssh_max_parallel
-    return cfg
+    return types.SimpleNamespace(
+        hosts=hosts,
+        container_vms=container_vms or {},
+        data_dir=data_dir,
+        ssh_key_path=ssh_key_path,
+        ssh_rsa_key_path=ssh_rsa_key_path,
+        ssh_connect_timeout=ssh_connect_timeout,
+        ssh_max_parallel=ssh_max_parallel,
+    )
 
 
 class TestBgProbeHealth(unittest.TestCase):
@@ -306,13 +309,14 @@ class TestBgProbeHealth(unittest.TestCase):
 
     def _run_probe(self, hosts, ssh_side_effect):
         from freq.modules.serve import _bg_probe_health, _bg_cache, _bg_cache_ts, _bg_lock
-        cfg = _make_cfg_for_health(hosts)
+        with tempfile.TemporaryDirectory(prefix="freq_health_probe_") as data_dir:
+            cfg = _make_cfg_for_health(hosts, data_dir=data_dir)
 
-        with patch("freq.modules.serve.load_config", return_value=cfg), \
-             patch("freq.modules.serve.ssh_single", side_effect=ssh_side_effect), \
-             patch("freq.modules.serve._save_disk_cache"), \
-             patch("os.path.isfile", return_value=False):
-            _bg_probe_health()
+            with patch("freq.modules.serve.load_config", return_value=cfg), \
+                 patch("freq.modules.serve.ssh_single", side_effect=ssh_side_effect), \
+                 patch("freq.modules.serve._save_disk_cache"), \
+                 patch("os.path.isfile", return_value=False):
+                _bg_probe_health()
 
         with _bg_lock:
             return _bg_cache["health"], _bg_cache_ts["health"]

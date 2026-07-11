@@ -2917,6 +2917,23 @@ class TestDeviceCredsInteractive(unittest.TestCase):
         import shutil
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
+    def _make_cfg(self, hosts):
+        """Use a real config with every writable path scoped to this test."""
+        from freq.core.config import FreqConfig
+
+        cfg = FreqConfig()
+        cfg.hosts = hosts
+        cfg.conf_dir = os.path.join(self.tmpdir, "conf")
+        cfg.data_dir = os.path.join(self.tmpdir, "data")
+        cfg.credentials_dir = os.path.join(self.tmpdir, "credentials")
+        cfg.key_dir = os.path.join(self.tmpdir, "keys")
+        cfg.ssh_key_path = self.key_path
+        cfg.ssh_rsa_key_path = self.key_path
+        for path in (cfg.conf_dir, cfg.data_dir, cfg.credentials_dir, cfg.key_dir):
+            os.makedirs(path, exist_ok=True)
+        Path(cfg.conf_dir, "freq.toml").write_text('[ssh]\nlegacy_password_file = ""\n')
+        return cfg
+
     def _make_args(self, device_credentials=None, bootstrap_key=None, bootstrap_user=None, hosts_file=None):
         args = MagicMock()
         args.device_credentials = device_credentials
@@ -2931,10 +2948,9 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     @patch("freq.modules.init_cmd.fmt")
     def test_fleet_deploy_uses_device_creds_for_pfsense(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """pfSense host uses credentials from --device-credentials, skipping interactive prompt."""
-        cfg = MagicMock()
         host = MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")
         host.category = "firewall"
-        cfg.hosts = [host]
+        cfg = self._make_cfg([host])
 
         mock_load_dc.return_value = {
             "pfsense": {"user": "admin", "password": "fw-secret"},
@@ -2968,10 +2984,9 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     @patch("freq.modules.init_cmd.fmt")
     def test_fleet_deploy_uses_device_key_for_pfsense(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """pfSense device credentials may provide key auth from ssh_key_file."""
-        cfg = MagicMock()
         host = MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")
         host.category = "firewall"
-        cfg.hosts = [host]
+        cfg = self._make_cfg([host])
 
         mock_load_dc.return_value = {
             "pfsense": {"user": "freq-ops", "password": "", "key_path": "/home/freq-ops/.ssh/fleet_key"},
@@ -2998,12 +3013,11 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     @patch("freq.modules.init_cmd.fmt")
     def test_fleet_deploy_uses_device_creds_per_htype(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """iDRAC and switch get different credentials from device_creds dict."""
-        cfg = MagicMock()
         idrac_host = MagicMock(ip="10.0.0.2", label="idrac01", htype="idrac")
         idrac_host.category = "bmc"
         switch_host = MagicMock(ip="10.0.0.3", label="sw01", htype="switch")
         switch_host.category = "switch"
-        cfg.hosts = [idrac_host, switch_host]
+        cfg = self._make_cfg([idrac_host, switch_host])
 
         mock_load_dc.return_value = {
             "idrac": {"user": "root", "password": "idrac-pass"},
@@ -3037,10 +3051,9 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     @patch("freq.modules.init_cmd.fmt")
     def test_fleet_deploy_device_creds_over_bootstrap(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """--device-credentials takes priority over --bootstrap-key for devices."""
-        cfg = MagicMock()
         host = MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")
         host.category = "firewall"
-        cfg.hosts = [host]
+        cfg = self._make_cfg([host])
 
         mock_load_dc.return_value = {
             "pfsense": {"user": "admin", "password": "creds-password"},
@@ -3070,12 +3083,11 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     @patch("freq.modules.init_cmd.fmt")
     def test_fleet_deploy_mixed_creds(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """Devices with creds use them; devices without fall back to bootstrap key."""
-        cfg = MagicMock()
         idrac_host = MagicMock(ip="10.0.0.2", label="idrac01", htype="idrac")
         idrac_host.category = "bmc"
         switch_host = MagicMock(ip="10.0.0.3", label="sw01", htype="switch")
         switch_host.category = "switch"
-        cfg.hosts = [idrac_host, switch_host]
+        cfg = self._make_cfg([idrac_host, switch_host])
 
         # Only iDRAC has device creds — switch does not
         mock_load_dc.return_value = {
