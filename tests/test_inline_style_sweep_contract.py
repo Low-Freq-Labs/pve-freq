@@ -51,7 +51,6 @@ Q_UTILITY_CLASSES = [
     "helptext-sm-mb8",
     "helptext-mt8",
     "helptext",
-    "section-label-pl-md",
     "section-label-pl-mt12",
     "section-label-pl-h3",
     "w-80", "w-100", "w-120", "w-140", "w-160", "w-180", "w-200", "w-240", "w-260",
@@ -59,9 +58,9 @@ Q_UTILITY_CLASSES = [
     "flex-gap-8", "flex-gap-8-center-wrap",
     "flex-gap-16-wrap-mb16", "flex-row-8-mb12-center-wrap",
     "mt-16", "ml-4", "ml-8", "ml-auto", "mr-4",
-    "card-block-lg", "card-block-thick", "card-block-bg2",
+    "card-block-thick", "card-block-bg2",
     "kbd-tag", "kbd-mono-10",
-    "text-red-border-red", "text-green", "text-dim",
+    "text-green", "text-dim",
     "fs-16", "fs-9-px-2-8",
 ]
 
@@ -88,7 +87,6 @@ Q_ID_RULES = [
     "container-stats",
     "container-logs",
     "rescan-results",
-    "compose-out",
     "log-out",
     "topo-svg",
     "pb-runner-title",

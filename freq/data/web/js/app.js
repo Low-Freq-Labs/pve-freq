@@ -2429,12 +2429,12 @@ var _viewCleanup=[];
 function _onViewCleanup(fn){_viewCleanup.push(fn);}
 function _runViewCleanup(){_viewCleanup.forEach(function(fn){try{fn();}catch(e){}});_viewCleanup=[];}
 var VIEW_IDS=['home','fleet','network','docker','security','sec-hardening','sec-access','sec-compliance','firewall','certs','vpn','vault','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings'];
-var VIEW_ALIASES={security:'certs','sec-hardening':'certs','sec-access':'certs','sec-compliance':'certs',network:'fleet',firewall:'fleet',vpn:'certs',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools'};
+var VIEW_ALIASES={network:'fleet',media:'docker',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools'};
 var VIEW_TITLES={home:'HOME',fleet:'FLEET',network:'NETWORK',docker:'DOCKER',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',vault:'VAULT',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS'};
 var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},vault:function(){loadVaultCredentials()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
 /* Nav grouping — maps sub-views to their parent nav button */
-var VIEW_TO_NAV={home:'home',fleet:'fleet',network:'fleet',docker:'docker',security:'certs','sec-hardening':'certs','sec-access':'certs','sec-compliance':'certs',firewall:'fleet',certs:'certs',vpn:'certs',vault:'vault',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools',settings:'settings'};
-var NAV_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',certs:'SECURITY',vault:'VAULT',tools:'SYSTEM',settings:'SETTINGS'};
+var VIEW_TO_NAV={home:'home',fleet:'fleet',network:'fleet',docker:'docker',security:'security','sec-hardening':'security','sec-access':'security','sec-compliance':'security',firewall:'security',certs:'security',vpn:'security',vault:'vault',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools',settings:'settings'};
+var NAV_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',security:'SECURITY',vault:'VAULT',tools:'SYSTEM',settings:'SETTINGS'};
 
 function nav(p){
   try{
@@ -6465,7 +6465,7 @@ function _loadLabAssignments(){
       if(aLab&&!bLab)return -1;if(!aLab&&bLab)return 1;
       return a.label<b.label?-1:1;
     });
-    var h='<table class="device-assignment-table"><thead><tr><th>Identity</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th><th>Properties</th><th>Management</th><th>Permissions</th><th>Save</th></tr></thead><tbody>';
+    var h='<table class="device-assignment-table"><thead><tr><th>Identity</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th><th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th></tr></thead><tbody>';
     items.forEach(function(it){
       var vmCat=it.source==='pve'?(_deviceCategoryForVmid(it.vmid,admin)||it.vmCategory||''):'';
       var assignment=it.source==='pve'?_deviceAssignmentFromCategory(vmCat,it.serverCat):_deviceAssignment(it.label,it.serverCat);
@@ -6759,9 +6759,8 @@ function loadHome(){
   refreshWatchdogHeader();
 }
 function refreshWatchdogHeader(){
-  /* Watchdog health check / Watchdog probe status — distinguish not-installed (200 or 501 state), down (503), and working (200).
-   * silent:true because this endpoint renders its own UI state for each status
-   * code below; the generic _authFetch toast would overlap with the inline label. */
+  /* Watchdog health check / Watchdog probe status. This endpoint renders its
+   * own evidence for not-installed, daemon-down, healthy, and degraded states. */
   _authFetch(API.WATCHDOG_HEALTH,{silent:true}).then(function(r){
     var status=r.status;
     return r.json().then(function(d){return{status:status,data:d};}).catch(function(){return{status:status,data:{}};});
@@ -6778,25 +6777,26 @@ function refreshWatchdogHeader(){
     }
     /* Installed but daemon unreachable (503) */
     if(res.status===503||d.watchdog_down){
-      el.innerHTML=wdHtml('red','Watchdog: error','wd: error');
+      el.innerHTML=wdHtml('yellow','Watchdog: daemon not reachable','wd: offline');
       return;
     }
     /* Error from daemon itself */
     if(d.error){
-      el.innerHTML=wdHtml('red','Watchdog: error','wd: error');
+      el.innerHTML='<span class="watchdog-label" style="color:var(--yellow)"><span class="watchdog-full">Watchdog: '+_esc(d.error||'probe error')+'</span><span class="watchdog-compact">wd: error</span></span>';
       return;
     }
     /* Working — show local audit evidence */
-    var errors=d.errors||0;var age=d.age_seconds?Math.round(d.age_seconds):null;
+    var errors=parseInt(d.errors,10)||0;var hosts=parseInt(d.hosts,10)||0;var age=d.age_seconds?Math.round(d.age_seconds):null;
     var wdStatus=String(d.status||'unknown');
     var pending=d.pending_count||0;
-    var unhealthy=(errors>0||pending>0||wdStatus==='pending'||wdStatus==='degraded'||(wdStatus!=='healthy'&&wdStatus!=='ok'));
-    var full=unhealthy?'Watchdog: error':'Watchdog: healthy';
+    var degraded=(errors>0||pending>0||wdStatus==='pending'||wdStatus==='degraded');
+    var healthy=(hosts>0&&!degraded&&(wdStatus==='healthy'||wdStatus==='ok'));
+    var full='Watchdog: '+(healthy?'healthy':degraded?'degraded':'no hosts')+' · '+hosts+' hosts observed';
     if(age!==null)full+=' \u00b7 '+age+'s ago';
-    var compact=unhealthy?'wd: error':'wd: healthy';
+    var compact=healthy?'wd: healthy':degraded?'wd: degraded':'wd: no hosts';
     if(age!==null)compact+=' \u00b7 '+age+'s';
-    el.innerHTML=wdHtml(unhealthy?'red':'green',full,compact);
-  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span class="watchdog-label" style="color:var(--red)"><span class="watchdog-full">Watchdog: error</span><span class="watchdog-compact">wd: error</span></span>';});
+    el.innerHTML=wdHtml(healthy?'green':'yellow',full,compact);
+  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span class="watchdog-label" style="color:var(--text-dim)"><span class="watchdog-full">Watchdog: status unavailable</span><span class="watchdog-compact">wd: unavailable</span></span>';});
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -7114,7 +7114,7 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     if(up){
       var _isStorage=h.type==='truenas';
       if(!_resourceMetricsSupported(h)){
-        c+=_labMetric('MANAGEMENT',h.ip||'reachable')+_labMetric('ROLE',(h.type||'linux').toUpperCase());
+        c+=_managementMetricRows(h);
       } else {
         c+=_labMetric('CPU',cores+(cores>1?' cores':' core')+' \u00b7 '+loadPct+'%');
         c+=_labMetric(_isStorage?'RAM (ARC)':'RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal));
@@ -7329,7 +7329,7 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
     /* core-systems-grid uses centered fixed-width tracks so wrapped
      * rows do not hug the left edge. Previously repeat(3,1fr) crushed
      * infra-role-cards on mobile while wide rows stretched unevenly. */
-    out+='<div class="core-systems-grid cards" style="padding:12px 16px 16px">'+infraCards+'</div>';
+    out+='<div class="core-systems-grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));padding:12px 16px 16px">'+infraCards+'</div>';
     out+='</div>';
   }
   var nodeOrder=pveNodes.map(function(n){return n.name;}).sort();
@@ -8883,7 +8883,7 @@ function renderVaultCredentials(){
   }
   var c=document.getElementById('vault-credentials-c');if(!c)return;
   if(!d.initialized||!list.length){
-    c.innerHTML='<div class="empty-state"><p>0 credentials. Add a Global or User credential to start.</p></div>';
+    c.innerHTML='<div class="empty-state"><p>0 vault entries · 0 API keys in vault. Add a Global or User credential to start.</p></div>';
     return;
   }
   var h='';
@@ -10401,6 +10401,7 @@ function loadUsers(){
     html+='</div>';
     /* User table */
     html+='<table class="w-full"><thead><tr><th>USERNAME</th><th>ROLE</th><th>ACTIONS</th></tr></thead><tbody>';
+    if(!d.users.length)html+='<tr><td colspan="3" class="text-dim">0 users in users.conf. Create a user above.</td></tr>';
     d.users.forEach(function(u,i){
       var username=_esc(u.username||'');
       html+='<tr class="user-row" data-role="'+u.role+'">';

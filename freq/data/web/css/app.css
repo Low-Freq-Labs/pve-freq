@@ -999,7 +999,7 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 }
 .pve-node-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 6px;
   grid-column: 1 / -1;
   grid-row: 2;
@@ -2408,15 +2408,13 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   overflow: hidden;
 }
 .core-systems-grid { --card-track: 280px; }
-.core-systems-grid.cards {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+.core-systems-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
   align-items: stretch;
 }
-.core-systems-grid.cards > * {
-  flex: 0 1 var(--card-track);
-  max-width: var(--card-track);
+.core-systems-grid > * {
+  min-width: 0;
 }
 .infra-role-card::before {
   content: '';
@@ -2777,7 +2775,6 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 .helptext-mt8 { margin-top: 8px; font-size: 12px; color: var(--text-dim); }
 .helptext { font-size: 12px; color: var(--text-dim); }
 /* Section headings in purple-light tone */
-.section-label-pl-md { color: var(--purple-light); font-size: 13px; margin: 12px 0 8px; }
 .section-label-pl-mt12 { margin-top: 12px; color: var(--purple-light); }
 .section-label-pl-h3 { font-size: 14px; color: var(--purple-light); }
 /* Width utilities for input / select sizing */
@@ -2804,14 +2801,6 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 .ml-auto { margin-left: auto; }
 .mr-4 { margin-right: 4px; }
 /* Card / container patterns */
-.card-block-lg {
-  background: var(--card);
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
 .card-block-thick {
   background: var(--card);
   border: 3px solid var(--input-border);
@@ -2830,7 +2819,6 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 .kbd-tag { padding: 2px 6px; border: 1px solid var(--border); border-radius: 3px; }
 .kbd-mono-10 { padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; font-family: var(--font-mono); font-size: 10px; }
 /* Misc one-shots that previously lived as inline style attrs */
-.text-red-border-red { color: var(--red); border-color: var(--red); }
 .text-green { color: var(--green); }
 .text-dim { color: var(--text-dim); }
 .fs-16 { font-size: 16px; }
@@ -2849,7 +2837,6 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 #container-stats { margin-bottom:0;flex:1;justify-content:center }
 #container-logs { margin-top:12px;min-height:100px;display:none }
 #rescan-results { display:none;margin-bottom:12px }
-#compose-out { min-height:80px }
 .vault-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
 .vault-stat-strip { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap-sm);margin:0 0 14px;align-items:stretch }
 .vault-stat-strip .st { max-width:none;min-width:0;width:100% }
@@ -2965,6 +2952,9 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 /* ═══════════════════════════════════════════════════════════════════
    MOBILE RESPONSIVE
    ═══════════════════════════════════════════════════════════════════ */
+.header-user-btn {
+  border: 1px solid var(--input-border);
+}
 .mobile-menu-btn {
   display: none;
   background: var(--glass);

@@ -7646,7 +7646,7 @@ a:hover{{text-decoration:underline}}
         #   style-src: the shipped dashboard still uses runtime
         #     element.style writes and generated style="..." fragments
         #     across progress bars, modals, health colors, terminal layout,
-        #     operator cards, and the 43 remaining inline style attributes
+        #     operator cards, and the 34 remaining inline style attributes
         #     in app.html. A previous contract tried to keep
         #     style-src hash-only and rely on style-src-attr for runtime
         #     property writes. Chromium browser smoke proved that was false:

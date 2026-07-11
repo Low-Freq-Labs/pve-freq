@@ -68,7 +68,7 @@
   <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
   <button class="fleet-btn view-btn" data-view="fleet">FLEET</button>
   <button class="fleet-btn view-btn" data-view="docker">DOCKER</button>
-  <button class="fleet-btn view-btn" data-view="certs">SECURITY</button>
+  <button class="fleet-btn view-btn" data-view="security">SECURITY</button>
   <button class="fleet-btn view-btn" data-view="vault">VAULT</button>
   <button class="fleet-btn view-btn" data-view="tools">SYSTEM</button>
   <div class="flex-1"></div>
@@ -84,7 +84,7 @@
      reads the same state without it, faster. -->
 <div id="home-empty">
   <div style="font-size:13px;color:var(--text);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">no widgets configured</div>
-  <div style="font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:14px">Start with the default dashboard set or choose the fleet, docker, security, and system widgets that matter for this install.</div>
+  <div style="font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:14px">QUICK START loads the default operator set. LAYOUT selects the fleet, docker, security, and system widgets that matter for this install.</div>
   <button class="fleet-btn c-purple-active" data-action="openLayoutConfig" >&#9776; CONFIGURE DASHBOARD</button>
 </div>
 <!-- Version and environment are already rendered in the top header,
@@ -95,6 +95,10 @@
 </div><!-- close home-view -->
 <!-- FLEET VIEW (hidden by default) -->
 <div id="fleet-view" class="d-none">
+<div class="sub-tabs" id="subtabs-fleet">
+  <button class="sub-tab active-sub" data-view="fleet">Infra</button>
+  <button class="sub-tab" data-view="network">Network</button>
+</div>
 <!-- Fleet Stats group -->
 <div class="section layout-section" id="fleet-sec-stats">
   <div class="section-header"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
@@ -291,6 +295,9 @@
   </div>
 </div>
 </div><!-- close docker-view -->
+
+<!-- Compatibility route: media is consolidated under Docker > Media. -->
+<div id="media-view" class="d-none"></div>
 
 <!-- SECURITY VIEW — Overview -->
 <div id="security-view" class="d-none">
@@ -828,7 +835,7 @@
   <div class="section">
     <div class="section-header"><h3>Device Assignment</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div class="helptext-mb12">Name and classify hosts, physical devices, and existing VMs as PROD, LAB, TEMP, or OOC. Friendly names drive cards and dropdowns; raw labels stay visible as secondary identity. Unmanaged inventory-only devices stay visible without alerts or doctor degradation.</div>
+      <div class="helptext-mb12">Classify hosts and existing VMs as PROD, LAB, TEMP, or OOC. Name physical devices and keep raw labels visible as secondary identity. Unmanaged inventory-only devices stay visible without alerts or doctor degradation.</div>
       <div id="lab-assign-list"><div class="skeleton"></div></div>
       <div id="device-admin-mount" class="device-admin-mount"></div>
     </div>

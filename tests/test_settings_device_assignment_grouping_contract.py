@@ -23,7 +23,7 @@ def test_fleet_admin_moves_into_device_assignment_not_settings_sibling():
 
 def test_device_assignment_is_the_single_editing_table():
     assert 'class="device-assignment-table"' in APP_JS
-    assert "<th>Assignment</th><th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th>" in APP_JS
+    assert "<th>Identity</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th><th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th>" in APP_JS
     assert "saveDeviceAssignmentRow" in APP_JS
 
 

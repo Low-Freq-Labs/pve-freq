@@ -142,7 +142,7 @@ class TestDelegatedFleetActions(unittest.TestCase):
 
 
 EXPECTED_INLINE_HANDLERS = 0
-EXPECTED_INLINE_STYLES = 43
+EXPECTED_INLINE_STYLES = 34
 
 INLINE_HANDLER_RE = re.compile(r" on[a-z]+=")
 INLINE_STYLE_RE = re.compile(r' style="')

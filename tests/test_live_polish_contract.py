@@ -124,11 +124,7 @@ class TestFleetGridsResponsive(unittest.TestCase):
         """The 3-column sub-group grid inside each pve node card
         (UTILIZATION / VMs / CONTAINERS) must auto-fill."""
         src = _js()
-        # There are two branches (live-metrics vs no-pve-api) — both
-        # must carry the auto-fill pattern. Count occurrences of the
-        # new pattern; legacy fixed 1fr 1fr 1fr should be gone from
-        # pve node cards.
-        pve_section = src[src.index("function _assembleFleetOutput") - 4000:
+        pve_section = src[src.index("function _buildPveNodeData"):
                           src.index("function _assembleFleetOutput")]
         self.assertNotIn(
             "grid-template-columns:1fr 1fr 1fr",
@@ -136,33 +132,19 @@ class TestFleetGridsResponsive(unittest.TestCase):
             "PVE node inner grid must not hard-code 1fr 1fr 1fr — "
             "use minmax() auto-fill so sub-groups stack on mobile",
         )
-        # At least two occurrences of the auto-fill replacement (live
-        # branch + no-api branch).
-        self.assertGreaterEqual(
-            pve_section.count("repeat(auto-fill,minmax(140px,1fr))"),
-            2,
-            "Both PVE node card branches (live-metrics, no-api) must "
-            "use the auto-fill responsive grid",
-        )
+        with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:
+            css = f.read()
+        self.assertIn("repeat(auto-fill, minmax(140px, 1fr))", css)
 
     def test_pve_vms_grid_uses_auto_fill(self):
         """The .pve-vms grid (VMs sub-list expanded under each PVE
         node) must also auto-fill so VM cards don't crush to 4 cols
         wide on mobile."""
         src = _js()
-        idx = src.index('class="pve-vms"')
-        block = src[idx: idx + 400]
-        self.assertNotRegex(
-            block,
-            r"grid-template-columns:repeat\(\s*'?\s*\+\s*cols\s*\+\s*'?\s*,\s*1fr\s*\)",
-            "pve-vms grid must not use the dynamic repeat(cols,1fr) "
-            "pattern — use minmax() auto-fill",
-        )
-        self.assertIn(
-            "repeat(auto-fill,minmax(160px,1fr))",
-            block,
-            "pve-vms grid must use auto-fill with a 160px min track",
-        )
+        with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:
+            css = f.read()
+        self.assertIn("grid-template-columns: minmax(160px, 1.5fr)", css)
+        self.assertIn(".pve-workload-row span:nth-child(n+4)", css)
 
 
 if __name__ == "__main__":

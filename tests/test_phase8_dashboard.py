@@ -32,7 +32,7 @@ class TestDashboardHTML(unittest.TestCase):
         self._assert_view("docker")
 
     def test_media_view(self):
-        self._assert_view("media")
+        self.assertIn('id="docker-sub-media"', self.html)
 
     def test_security_view(self):
         self._assert_view("security")
