@@ -512,6 +512,18 @@
      Sections: Diagnostics, Logs, Storage, Network Scanner
      ============================================================ -->
 <div id="tools-view" class="d-none">
+<div class="sub-tabs" id="subtabs-tools">
+  <button class="sub-tab active-sub" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
+</div>
 <!-- Diagnostics — health checks and host diagnosis -->
 <div class="section">
   <div class="section-header"><h3>Diagnostics</h3><span class="chev">▾</span></div>
@@ -884,6 +896,10 @@
      NETWORK VIEW — Switch management, SNMP, topology intelligence
      ============================================================ -->
 <div id="network-view" class="d-none">
+<div class="sub-tabs" id="subtabs-network">
+  <button class="sub-tab" data-view="fleet">Infra</button>
+  <button class="sub-tab active-sub" data-view="network">Network</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Config Backups</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -971,6 +987,15 @@
      CERTIFICATES VIEW — SSL lifecycle manager
      ============================================================ -->
 <div id="certs-view" class="d-none">
+<div class="sub-tabs" id="subtabs-certs">
+  <button class="sub-tab" data-view="security">Overview</button>
+  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab" data-view="sec-access">Access</button>
+  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
+  <button class="sub-tab" data-view="firewall">Firewall</button>
+  <button class="sub-tab active-sub" data-view="certs">Certs</button>
+  <button class="sub-tab" data-view="vpn">VPN</button>
+</div>
 <div class="cert-manager">
   <div class="section cert-overview-section">
     <div class="section-header"><h3>SSL Manager</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadCertsPage">REFRESH</button><span class="chev">&#9662;</span></div>
