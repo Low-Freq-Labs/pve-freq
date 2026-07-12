@@ -1,13 +1,13 @@
 """Setup wizard and auth operator truth tests.
 
 Proves:
-1. Setup wizard only runs during first-run (gated by _is_first_run)
+1. Only status/create-admin are public during zero-state setup
 2. Setup creates admin with enforced password policy
 3. Login validates against stored hash (not plaintext)
 4. First-login-sets-password only fires when vault has no hash
 5. Password change enforces minimum length
 6. Rate limiting prevents brute force
-7. Setup endpoints return 403 after completion
+7. Completion markers belong only to successful browser-launched init
 """
 
 import os
@@ -24,30 +24,29 @@ class TestSetupWizardGating(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
             return f.read()
 
-    def test_create_admin_gated_by_first_run(self):
+    def test_create_admin_gated_by_existing_users_and_markers(self):
         src = self._serve_src()
         handler = src.split("def _serve_setup_create_admin")[1].split("def _serve_")[0]
-        self.assertIn("_is_first_run()", handler,
-                       "Create admin must check _is_first_run()")
-        self.assertIn("403", handler,
-                       "Must return 403 when setup is complete")
+        self.assertIn("_load_users(cfg)", handler)
+        self.assertIn('"operator_exists"', handler)
+        self.assertIn('"setup_closed"', handler)
 
     def test_configure_gated_by_first_run(self):
         src = self._serve_src()
         handler = src.split("def _serve_setup_configure")[1].split("def _serve_")[0]
         self.assertIn("_is_first_run()", handler)
 
-    def test_complete_gated_by_first_run(self):
+    def test_complete_endpoint_is_disabled(self):
         src = self._serve_src()
         handler = src.split("def _serve_setup_complete")[1].split("def _serve_")[0]
-        self.assertIn("_is_first_run()", handler)
+        self.assertIn("legacy_endpoint_disabled", handler)
+        self.assertNotIn("_write_web_setup_markers", handler)
 
-    def test_setup_complete_creates_marker(self):
-        """Setup complete must create marker file to prevent re-entry."""
+    def test_successful_init_job_owns_web_marker(self):
         src = self._serve_src()
-        handler = src.split("def _serve_setup_complete")[1].split("def _serve_")[0]
-        self.assertIn("setup-complete", handler)
-        self.assertIn(".web-setup-complete", handler)
+        handler = src.split("def _run_setup_init_job")[1].split("def _init_blocker_from_artifacts")[0]
+        self.assertIn("_write_web_setup_markers", handler)
+        self.assertIn("rc == 0 and initialized", handler)
 
 
 class TestPasswordPolicy(unittest.TestCase):

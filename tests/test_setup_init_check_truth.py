@@ -1,7 +1,7 @@
 """Setup/init-check truth tests.
 
 Proves:
-1. Web setup completion writes setup-complete + .web-setup-complete (NOT .initialized)
+1. Successful web init writes setup-complete + .web-setup-complete (NOT .initialized)
 2. .web-setup-complete marker content distinguishes web setup from CLI init
 3. Setup UX text does NOT claim full initialization is complete
 4. Setup summary shows honest "next steps" for fleet configuration
@@ -9,39 +9,45 @@ Proves:
 """
 
 import os
-import re
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class TestSetupCompletionMarkers(unittest.TestCase):
-    """Setup complete writes .web-setup-complete, NOT .initialized."""
+    """Successful web init owns .web-setup-complete marker writes."""
 
-    def _handler_src(self):
+    def _marker_src(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
             src = f.read()
-        return src.split("def _serve_setup_complete")[1].split("def _serve_")[0]
+        return src.split("def _write_web_setup_markers")[1].split("\ndef ")[0]
 
     def test_writes_setup_complete_marker(self):
-        src = self._handler_src()
+        src = self._marker_src()
         self.assertIn("setup-complete", src)
 
     def test_writes_web_setup_marker(self):
-        src = self._handler_src()
+        src = self._marker_src()
         self.assertIn(".web-setup-complete", src)
 
     def test_does_not_write_initialized(self):
         """Web wizard must NOT write .initialized — only freq init does."""
-        src = self._handler_src()
+        src = self._marker_src()
         self.assertNotIn('".initialized"', src,
                           "Web wizard must not write .initialized marker")
 
     def test_web_setup_marker_says_web_setup(self):
         """The .web-setup-complete content must say 'web setup'."""
-        src = self._handler_src()
+        src = self._marker_src()
         self.assertIn("web setup", src,
                        ".web-setup-complete marker must say 'web setup'")
+
+    def test_legacy_complete_endpoint_cannot_write_markers(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        handler = src.split("def _serve_setup_complete")[1].split("def _serve_")[0]
+        self.assertIn("legacy_endpoint_disabled", handler)
+        self.assertNotIn("_write_web_setup_markers", handler)
 
 
 class TestFirstRunDetection(unittest.TestCase):

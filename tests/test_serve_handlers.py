@@ -22,7 +22,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from freq.modules.serve import FreqHandler
 
-
 # ── Mock handler factory ────────────────────────────────────────────────
 
 class MockWfile(io.BytesIO):
@@ -1061,7 +1060,8 @@ class TestOpenAPITruthfulness:
 
         Source-level guard across all freq/api/*.py files.
         """
-        import re, glob
+        import glob
+        import re
         api_dir = os.path.join(os.path.dirname(__file__), "..", "freq", "api")
         bad = []
         for fpath in sorted(glob.glob(os.path.join(api_dir, "*.py"))):
@@ -1103,19 +1103,19 @@ class TestAuthWhitelist:
     """Verify auth whitelist covers required public endpoints."""
 
     def test_setup_endpoints_whitelisted_for_first_run(self):
-        """Only non-probing setup wizard endpoints are public in first-run."""
-        setup_routes = [
-            "/api/setup/status",
-            "/api/setup/create-admin",
-            "/api/setup/configure",
-            "/api/setup/generate-key",
-            "/api/setup/complete",
-        ]
-        for route in setup_routes:
+        """Only status and first-operator creation are public."""
+        for route in ["/api/setup/status", "/api/setup/create-admin"]:
             assert route in FreqHandler._AUTH_WHITELIST, \
                 f"Setup route {route} missing from auth whitelist — first-run will 403"
 
-        assert "/api/setup/test-ssh" not in FreqHandler._AUTH_WHITELIST
+        for route in [
+            "/api/setup/configure",
+            "/api/setup/generate-key",
+            "/api/setup/complete",
+            "/api/setup/test-ssh",
+            "/api/setup/init/start",
+        ]:
+            assert route not in FreqHandler._AUTH_WHITELIST
 
     def test_auth_endpoints_whitelisted(self):
         """Auth login and verify must be public."""

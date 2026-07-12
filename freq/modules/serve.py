@@ -67,6 +67,15 @@ from freq.core.health_state import (
     mark_stale,
 )
 from freq.core.host_scope import managed_probe_hosts
+from freq.core.setup_state import (
+    SCHEMA as ZERO_STATE_WEB_SCHEMA,
+)
+from freq.core.setup_state import (
+    clear_setup_state,
+    ensure_setup_state,
+    load_setup_state,
+    touch_setup_state,
+)
 from freq.core.ssh import run as ssh_single
 from freq.core.validate import (
     label as valid_label,
@@ -2737,9 +2746,6 @@ from freq.api.auth import (  # noqa: E402
 from freq.api.auth import (  # noqa: E402
     request_is_https as _request_is_https,
 )
-from freq.api.auth import (  # noqa: E402
-    verify_password as _verify_password,
-)
 
 
 def _find_reachable_pve_node(cfg):
@@ -3153,6 +3159,50 @@ def _setup_session_payload(handler, username, role="admin", **extra):
     }
     payload.update(extra)
     return payload
+
+
+def _setup_error(handler, status, code, message, *, field="", retryable=False, details=None):
+    error = {
+        "code": code,
+        "message": message,
+        "retryable": bool(retryable),
+    }
+    if field:
+        error["field"] = field
+    if details:
+        error["details"] = list(details)[:50]
+    handler._json_response(
+        {
+            "ok": False,
+            "schema": ZERO_STATE_WEB_SCHEMA,
+            "error": error,
+        },
+        status,
+    )
+
+
+def _setup_forbidden_browser_input(body):
+    """Return the first browser-forbidden legacy field and error code."""
+    if not isinstance(body, dict):
+        return "", ""
+    manual_fields = {
+        "hosts_file",
+        "hosts_import",
+        "vm_contract",
+        "owned_vmids",
+        "template_vmids",
+        "acknowledged_out_of_contract_vmids",
+        "core_devices",
+        "lab_devices",
+        "toml",
+    }
+    for key in body:
+        normalized = str(key or "").strip().lower()
+        if normalized in manual_fields:
+            return str(key), "manual_contract_not_allowed"
+        if normalized.endswith("_file") or normalized.endswith("_path"):
+            return str(key), "path_input_not_allowed"
+    return "", ""
 
 
 def _setup_init_snapshot():
@@ -3994,9 +4044,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/auth/verify",
         "/api/setup/status",
         "/api/setup/create-admin",
-        "/api/setup/configure",
-        "/api/setup/generate-key",
-        "/api/setup/complete",
         "/api/docs",
         "/healthz",
         "/readyz",
@@ -4009,12 +4056,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/auth/logout",
         "/api/setup/status",
         "/api/setup/create-admin",
-        "/api/setup/configure",
-        "/api/setup/generate-key",
-        "/api/setup/complete",
-        "/api/setup/test-ssh",
-        "/api/setup/init/start",
-        "/api/setup/reset",
     })
 
     def _requires_csrf(self, path: str) -> bool:
@@ -4708,7 +4749,47 @@ a:hover{{text-decoration:underline}}
             is_authed = authed_err is None
         except Exception:
             is_authed = False
+        setup_record = load_setup_state(cfg)
+        if dashboard_accounts_configured and is_authed and not (is_initialized and is_web_setup_complete):
+            setup_user = getattr(self, "_session_user", "") or (
+                dashboard_users[0].get("username", "") if dashboard_users else ""
+            )
+            if setup_user:
+                try:
+                    setup_record = ensure_setup_state(cfg, setup_user)
+                    setup_record = touch_setup_state(cfg)
+                except (OSError, ValueError) as exc:
+                    logger.warn(f"setup_status_state_refresh_failed: {exc}")
+
+        job_state = (running_job or {}).get("state", "")
+        if is_initialized and is_web_setup_complete:
+            zero_state = "complete"
+        elif job_state == "running":
+            zero_state = "initializing"
+        elif job_state == "failed" or is_initialized or is_web_setup_complete:
+            zero_state = "blocked"
+        elif not dashboard_accounts_configured:
+            zero_state = "needs_operator"
+        else:
+            candidate = setup_record.get("phase", "collecting") if setup_record else "collecting"
+            zero_state = candidate if candidate in {
+                "collecting", "discovering", "selecting", "credentials", "ready", "blocked"
+            } else "collecting"
+        next_actions = {
+            "needs_operator": "create_operator",
+            "collecting": "start_discovery",
+            "discovering": "poll_discovery",
+            "selecting": "build_contract",
+            "credentials": "store_device_credentials",
+            "ready": "start_init",
+            "initializing": "poll_init",
+            "blocked": "review_blocker",
+            "complete": "open_dashboard",
+        }
         payload = {
+            "ok": True,
+            "schema": ZERO_STATE_WEB_SCHEMA,
+            "state": zero_state,
             "first_run": _is_first_run(),
             "ssh_key_exists": key_exists,
             "ssh_key_readable": key_readable,
@@ -4720,6 +4801,18 @@ a:hover{{text-decoration:underline}}
             "web_setup_complete": is_web_setup_complete,
             "dashboard_accounts_configured": dashboard_accounts_configured,
             "dashboard_passwords_configured": dashboard_passwords_configured,
+            "setup_id": setup_record.get("setup_id") if is_authed and setup_record else None,
+            "active_discovery_id": (
+                setup_record.get("active_discovery_id") if is_authed and setup_record else None
+            ),
+            "active_contract_id": (
+                setup_record.get("active_contract_id") if is_authed and setup_record else None
+            ),
+            "active_init_job_id": (
+                (running_job or {}).get("id")
+                or (setup_record.get("active_init_job_id") if is_authed and setup_record else None)
+            ),
+            "next": next_actions[zero_state],
             "checked_at": time.time(),
         }
         if is_authed:
@@ -4738,150 +4831,150 @@ a:hover{{text-decoration:underline}}
         self._json_response(payload)
 
     def _serve_setup_create_admin(self):
-        """Create admin account during first-run setup.
-
-        Accepts POST with JSON body only. Credentials must not be in URLs.
-        POST body: {"username": "...", "password": "..."} or
-        {"username": "...", "password_file": "/path/to/operator-password"}.
-
-        T-8 of R-SECURITY-ARCH-DEBT-20260413U: wrapped in _setup_lock
-        with a double-checked _is_first_run() inside the lock. Pre-fix
-        two concurrent requests could both pass the first _is_first_run
-        check, both reach users.conf, and land two admin accounts in a
-        single first-run window. The window is narrow (first-run only)
-        but an operator running `curl &` twice during bootstrap, or an
-        attacker racing the legitimate operator, could trip it. Now:
-          - Fast-path reject before attempting the lock.
-          - Non-blocking lock acquire → 409 if another setup mutation
-            is already in flight (parity with _serve_setup_complete).
-          - Re-check _is_first_run INSIDE the lock so a racing
-            complete/create-admin can't slip through.
-        """
+        """Create the one first-run admin from a write-only password value."""
         if self.command != "POST":
-            self._json_response({"error": "Use POST with JSON body"}, 405)
+            _setup_error(self, 405, "method_not_allowed", "Use POST with a JSON body.")
+            return
+        if not _request_is_https(self):
+            _setup_error(
+                self,
+                403,
+                "https_required",
+                "First-operator setup requires the bootstrap HTTPS listener.",
+            )
             return
 
         username = ""
         password = ""
         try:
             body = self._request_body()
-            username = body.get("username", "").strip().lower()
-            if body.get("password_file"):
-                password = _read_setup_secret_file(body.get("password_file"), "operator password")
-            else:
-                password = body.get("password", "")
-        except (ValueError, PermissionError, OSError, subprocess.SubprocessError) as exc:
-            self._json_response({"error": f"Could not read setup admin password file: {exc}"}, 400)
-            return
+            if not isinstance(body, dict):
+                raise ValueError("JSON object required")
+            field, code = _setup_forbidden_browser_input(body)
+            if field:
+                _setup_error(
+                    self,
+                    400,
+                    code,
+                    "Server-side paths and manual contracts are not accepted by browser setup.",
+                    field=field,
+                )
+                return
+            schema = str(body.get("schema") or ZERO_STATE_WEB_SCHEMA)
+            if schema != ZERO_STATE_WEB_SCHEMA:
+                _setup_error(
+                    self,
+                    400,
+                    "unsupported_schema",
+                    f"Unsupported setup schema: {schema}",
+                    field="schema",
+                )
+                return
+            allowed = {"schema", "username", "password", "client_request_id"}
+            unknown = sorted(set(body) - allowed)
+            if unknown:
+                _setup_error(
+                    self,
+                    400,
+                    "unsupported_field",
+                    f"Unsupported setup field: {unknown[0]}",
+                    field=unknown[0],
+                )
+                return
+            username = str(body.get("username") or "").strip().lower()
+            password = str(body.get("password") or "")
         except Exception as exc:
-            self._json_response({"error": f"Invalid setup admin request: {exc}"}, 400)
+            _setup_error(self, 400, "invalid_json", f"Invalid setup admin request: {exc}")
             return
 
         cfg = load_config()
-        if not _is_first_run():
+        try:
+            existing_users = _load_users(cfg)
+        except Exception as exc:
+            _setup_error(self, 500, "operator_state_unreadable", f"Could not read operator state: {exc}")
+            return
+        if existing_users:
             if _setup_marker_exists(cfg):
-                self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
-                return
-            if not username or not password:
-                self._json_response({"error": "Setup admin session resume failed"}, 403)
-                return
-            if not re.match(r"^[a-z_][a-z0-9_-]{0,31}$", username) or len(password) < 8:
-                self._json_response({"error": "Setup admin session resume failed"}, 403)
-                return
-            users = _load_users(cfg)
-            user = next((u for u in users if u.get("username") == username), None)
-            stored_hash = vault_get(cfg, "auth", f"password_{username}") if user else ""
-            if not user or user.get("role") != "admin":
-                password_hashes = []
-                for existing in users:
-                    existing_name = existing.get("username", "")
-                    if existing_name:
-                        password_hashes.append(bool(vault_get(cfg, "auth", f"password_{existing_name}")))
-                if users and not any(password_hashes):
-                    store_error = _setup_store_admin_password(cfg, username, password)
-                    if store_error:
-                        self._json_response({"error": f"Failed to store password: {store_error}"}, 500)
-                        return
-                    repaired_users = [{"username": username, "role": "admin", "groups": ""}]
-                    save_error = _save_users_error(cfg, repaired_users)
-                    if save_error:
-                        self._json_response({"error": f"Failed to save user: {save_error}"}, 500)
-                        return
-                    self._json_response(_setup_session_payload(
-                        self, username, "admin", resumed=True, repaired=True, replaced_passwordless_user=True
-                    ))
-                    return
-                self._json_response({"error": "Setup admin session resume failed"}, 403)
-                return
-            if not stored_hash:
-                store_error = _setup_store_admin_password(cfg, username, password)
-                if store_error:
-                    self._json_response({"error": f"Failed to store password: {store_error}"}, 500)
-                    return
-                self._json_response(_setup_session_payload(self, username, "admin", resumed=True, repaired=True))
-                return
-            if not _verify_password(password, stored_hash):
-                self._json_response({"error": "Setup admin session resume failed"}, 403)
-                return
-            try:
-                self._json_response(_setup_session_payload(self, username, "admin", resumed=True))
-            except Exception as e:
-                logger.warn(f"setup_create_admin_resume_session_failed: {e}")
-                self._json_response({"error": "Setup admin session resume failed"}, 500)
+                _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
+            else:
+                _setup_error(
+                    self,
+                    409,
+                    "operator_exists",
+                    "The first operator already exists; resume through /api/auth/verify.",
+                )
             return
 
         if not username or not password:
-            self._json_response({"error": "Username and password required"}, 400)
+            field = "username" if not username else "password"
+            _setup_error(self, 400, "required_field", "Username and password are required.", field=field)
             return
 
-        # Validate username
         if not re.match(r"^[a-z_][a-z0-9_-]{0,31}$", username):
-            self._json_response(
-                {"error": "Invalid username (lowercase, 1-32 chars, alphanumeric/hyphens/underscores)"},
+            _setup_error(
+                self,
                 400,
+                "invalid_username",
+                "Username must be lowercase and contain only letters, digits, hyphens, or underscores.",
+                field="username",
             )
             return
 
         if len(password) < 8:
-            self._json_response({"error": "Password must be at least 8 characters"}, 400)
+            _setup_error(
+                self,
+                400,
+                "invalid_password",
+                "Password must be at least 8 characters.",
+                field="password",
+            )
             return
 
-        # T-8: serialize setup mutations. Non-blocking acquire — a
-        # concurrent create-admin/configure/complete returns 409.
         if not _setup_lock.acquire(blocking=False):
-            self._json_response({"error": "Setup already in progress"}, 409)
+            _setup_error(self, 409, "setup_busy", "Another setup mutation is in progress.", retryable=True)
             return
         try:
-            # Double-checked locking: another request may have completed
-            # setup between our first _is_first_run() check above and the
-            # lock acquire.
-            if not _is_first_run():
-                self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
-                return
-
-            # Create user in users.conf
             users = _load_users(cfg)
-            if any(u["username"] == username for u in users):
-                self._json_response({"error": f"User '{username}' already exists"}, 409)
+            if users:
+                if _setup_marker_exists(cfg):
+                    _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
+                else:
+                    _setup_error(self, 409, "operator_exists", "The first operator already exists.")
                 return
 
             store_error = _setup_store_admin_password(cfg, username, password)
             if store_error:
-                self._json_response({"error": f"Failed to store password: {store_error}"}, 500)
+                _setup_error(self, 500, "operator_password_store_failed", f"Failed to store password: {store_error}")
                 return
 
+            clear_setup_state(cfg)
+            try:
+                setup_record = ensure_setup_state(cfg, username)
+            except (OSError, ValueError) as exc:
+                _setup_error(self, 500, "setup_state_write_failed", f"Failed to create setup state: {exc}")
+                return
             users.append({"username": username, "role": "admin", "groups": ""})
             os.makedirs(cfg.conf_dir, exist_ok=True)
             save_error = _save_users_error(cfg, users)
             if save_error:
-                self._json_response({"error": f"Failed to save user: {save_error}"}, 500)
+                clear_setup_state(cfg)
+                _setup_error(self, 500, "operator_write_failed", f"Failed to save user: {save_error}")
                 return
 
             try:
-                self._json_response(_setup_session_payload(self, username, "admin"))
+                self._json_response(
+                    _setup_session_payload(
+                        self,
+                        username,
+                        "admin",
+                        schema=ZERO_STATE_WEB_SCHEMA,
+                        setup_id=setup_record["setup_id"],
+                        state="collecting",
+                    )
+                )
             except Exception as e:
                 logger.warn(f"setup_create_admin_session_failed: {e}")
-                self._json_response({"error": "Setup admin session creation failed"}, 500)
+                _setup_error(self, 500, "session_create_failed", "Setup admin session creation failed.")
         finally:
             _setup_lock.release()
 
@@ -5063,46 +5156,16 @@ a:hover{{text-decoration:underline}}
         self._json_response({"ok": True, "exists": False, "pubkey": pubkey, "key_path": ed_key})
 
     def _serve_setup_complete(self):
-        """Mark setup as complete — writes marker file."""
-        if not _is_first_run() and not _allow_setup_admin_window(self):
-            return
-
+        """Legacy endpoint; completion belongs exclusively to successful init."""
         if self.command != "POST":
-            self._json_response({"error": "Use POST to complete setup"}, 405)
+            _setup_error(self, 405, "method_not_allowed", "Use POST with a JSON body.")
             return
-
-        if not _setup_lock.acquire(blocking=False):
-            self._json_response({"error": "Setup already in progress"}, 409)
-            return
-
-        try:
-            # Re-check after acquiring lock (another request may have completed setup)
-            if not _is_first_run() and not _allow_setup_admin_window(self):
-                return
-
-            cfg = load_config()
-            # Write setup-complete + .web-setup-complete markers. The marker
-            # content says "web setup" so status can distinguish the browser
-            # setup path from full init.
-            # These markers are
-            # distinct from the init marker, which is ONLY written by freq
-            # init after a successful fleet deploy.
-            try:
-                _write_web_setup_markers(cfg)
-            except OSError:
-                pass  # Non-fatal — setup-complete marker is primary
-
-            # Auto-trigger hosts sync so fleet populates immediately
-            try:
-                threading.Thread(target=_bg_sync_hosts, daemon=True).start()
-            except Exception as e:
-                logger.warning(f"Post-setup hosts sync failed to start: {e}")
-
-            self._json_response({"ok": True, "message": "Web setup complete — run freq init to deploy the fleet service account"})
-        except OSError as e:
-            self._json_response({"error": f"Failed to write setup marker: {e}"}, 500)
-        finally:
-            _setup_lock.release()
+        _setup_error(
+            self,
+            409,
+            "legacy_endpoint_disabled",
+            "Browser setup completes only after web-launched init succeeds.",
+        )
 
     def _serve_setup_test_ssh(self):
         """Test SSH connectivity to a PVE node during setup.
@@ -5337,7 +5400,10 @@ a:hover{{text-decoration:underline}}
     def _serve_setup_page(self):
         """Serve the setup wizard while setup/init has not completed."""
         cfg = load_config()
-        if os.path.isfile(os.path.join(cfg.conf_dir, ".initialized")) and _setup_marker_exists(cfg):
+        if (
+            os.path.isfile(os.path.join(cfg.conf_dir, ".initialized"))
+            and os.path.isfile(os.path.join(cfg.conf_dir, ".web-setup-complete"))
+        ):
             self._serve_app()
             return
         from freq.modules.web_ui import SETUP_HTML
