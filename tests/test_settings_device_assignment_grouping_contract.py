@@ -25,8 +25,22 @@ def test_fleet_admin_moves_into_device_assignment_not_settings_sibling():
 
 def test_device_assignment_is_the_single_editing_table():
     assert 'class="device-assignment-table"' in APP_JS
-    assert "<th>Identity</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th><th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th>" in APP_JS
+    assert "<th>Identity</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th>" in APP_JS
+    assert "canEditAssignments?'<th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th>'" in APP_JS
     assert "saveDeviceAssignmentRow" in APP_JS
+
+
+def test_device_assignment_is_read_only_without_admin_role():
+    assignment_loader = APP_JS.split("function _loadLabAssignments(){", 1)[1].split(
+        "\nfunction toggleDeviceAssign", 1
+    )[0]
+    assert "var canEditAssignments=_currentRole==='admin'||_currentRole==='protected';" in assignment_loader
+    assert "canEditAssignments" in assignment_loader
+    assert ":Promise.resolve({})" in assignment_loader
+    assert "device-assignment-readonly" in assignment_loader
+    assert "An admin role is required to change assignment" in assignment_loader
+    assert "if(!canEditAssignments){" in assignment_loader
+    assert "ADMIN REQUIRED TO EDIT" in assignment_loader
 
 
 def test_old_subpanel_labels_do_not_render_under_device_assignment():

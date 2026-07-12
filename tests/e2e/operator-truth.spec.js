@@ -11,7 +11,39 @@ async function login(page) {
   await page.locator('#login-overlay').waitFor({ state: 'hidden' });
 }
 
+async function loginWithClientRole(page, role) {
+  await page.route('**/api/auth/login', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.role = role;
+    await route.fulfill({ response, json: body });
+  });
+  await login(page);
+}
+
 test.describe('operator-facing truth', () => {
+  test('device assignment is read-only and makes no admin request for operators', async ({ page }) => {
+    let adminRequests = 0;
+    await page.route('**/api/admin/fleet-boundaries', route => {
+      adminRequests += 1;
+      return route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Admin role required' })
+      });
+    });
+
+    await loginWithClientRole(page, 'operator');
+    await page.locator('#nav-items [data-view="settings"]').click();
+
+    const assignments = page.locator('#lab-assign-list');
+    await expect(assignments.locator('.device-assignment-readonly')).toContainText('READ ONLY');
+    await expect(assignments.locator('.device-assignment-table tbody tr').first()).toBeVisible();
+    await expect(assignments.locator('[data-action="saveDeviceAssignmentRow"]')).toHaveCount(0);
+    await expect(assignments.locator('select, input')).toHaveCount(0);
+    expect(adminRequests).toBe(0);
+  });
+
   test('hardening remediation requires an explicit host or fleet target', async ({ page }) => {
     let execRequests = 0;
     page.on('request', request => {

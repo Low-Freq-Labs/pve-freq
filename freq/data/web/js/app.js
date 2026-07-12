@@ -6510,14 +6510,17 @@ function _deviceGroupsForAssignment(groups,assignment){
 }
 function _loadLabAssignments(){
   var el=document.getElementById('lab-assign-list');if(!el)return;
+  var canEditAssignments=_currentRole==='admin'||_currentRole==='protected';
   /* Need both fleet overview (for VMs) and health (for hosts) */
   Promise.all([
     _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json();}),
     _authFetch(API.HEALTH).then(function(r){return r.json();}),
-    _authFetch(API.ADMIN_BOUNDARIES).then(function(r){return r.ok?r.json():{};}).catch(function(){return {};})
+    canEditAssignments
+      ?_authFetch(API.ADMIN_BOUNDARIES).then(function(r){return r.ok?r.json():{};}).catch(function(){return {};})
+      :Promise.resolve({})
   ]).then(function(results){
     var fo=results[0],hd=results[1],admin=results[2]||{};
-    _fleetAdminData=admin;
+    _fleetAdminData=canEditAssignments?admin:null;
     var items=[];
     var adminHosts={};
     (admin.hosts||[]).forEach(function(h){adminHosts[_rawLabel(h)]=h;});
@@ -6557,21 +6560,40 @@ function _loadLabAssignments(){
     });
     /* Sort: lab items first, then alphabetical */
     items.sort(function(a,b){
-      var aLab=_deviceAssignment(a.label,a.serverCat)==='lab';
-      var bLab=_deviceAssignment(b.label,b.serverCat)==='lab';
+      var aAssignment=canEditAssignments?_deviceAssignment(a.label,a.serverCat):_deviceAssignmentFromCategory(a.serverCat,'prod');
+      var bAssignment=canEditAssignments?_deviceAssignment(b.label,b.serverCat):_deviceAssignmentFromCategory(b.serverCat,'prod');
+      var aLab=aAssignment==='lab';
+      var bLab=bAssignment==='lab';
       if(aLab&&!bLab)return -1;if(!aLab&&bLab)return 1;
       return a.label<b.label?-1:1;
     });
-    var h='<table class="device-assignment-table"><thead><tr><th>Identity</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th><th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th></tr></thead><tbody>';
+    var h='';
+    if(!canEditAssignments){
+      h+='<div class="exec-out device-assignment-readonly" role="status"><strong>READ ONLY</strong> — Current assignments come from operator-visible fleet inventory. An admin role is required to change assignment, identity, host properties, or management state.</div>';
+    }
+    h+='<table class="device-assignment-table"><thead><tr><th>Identity</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th>'+
+      (canEditAssignments?'<th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th>':'<th>Access</th>')+
+      '</tr></thead><tbody>';
     items.forEach(function(it){
       var vmCat=it.source==='pve'?(_deviceCategoryForVmid(it.vmid,admin)||it.vmCategory||''):'';
-      var assignment=it.source==='pve'?_deviceAssignmentFromCategory(vmCat,it.serverCat):_deviceAssignment(it.label,it.serverCat);
+      var assignment=it.source==='pve'
+        ?_deviceAssignmentFromCategory(vmCat,it.serverCat)
+        :(canEditAssignments?_deviceAssignment(it.label,it.serverCat):_deviceAssignmentFromCategory(it.serverCat,'prod'));
       var statusColor=it.status==='online'||it.status==='running'?'var(--green)':'var(--text-dim)';
       var rowId=_deviceRowId((it.source==='pve'?'vm-'+it.vmid:it.label));
       var manageable=it.source==='host';
       var physical=it.source==='physical';
       var permissionHtml=it.source==='pve'?_devicePermissionTags(admin,vmCat):'<span class="tag">'+(it.managed?'managed':'inventory')+'</span>';
       if(physical)permissionHtml='<span class="tag">'+_esc(String(it.scope||'core').toUpperCase())+'</span>';
+      if(!canEditAssignments){
+        h+='<tr><td>'+_deviceIdentityInput(rowId,it,false)+(it.vmid?'<div class="text-sub">VMID '+_esc(String(it.vmid))+'</div>':'')+'</td>';
+        h+='<td class="mono-11">'+_esc((it.type||'unknown').toUpperCase())+'</td>';
+        h+='<td class="mono-11">'+_esc(it.ip||it.node||'-')+'</td>';
+        h+='<td><span style="color:'+statusColor+'">'+_esc(String(it.status||'unknown').toUpperCase())+'</span></td>';
+        h+='<td><span class="tag">'+_esc(assignment.toUpperCase())+'</span></td>';
+        h+='<td><span class="text-sub">ADMIN REQUIRED TO EDIT</span></td></tr>';
+        return;
+      }
       h+='<tr><td>'+_deviceIdentityInput(rowId,it,manageable||physical)+(it.vmid?'<div class="text-sub">VMID '+_esc(String(it.vmid))+'</div>':'')+'</td>';
       h+='<td class="mono-11">'+_esc((it.type||'unknown').toUpperCase())+'</td>';
       h+='<td class="mono-11">'+_esc(it.ip||it.node||'-')+'</td>';
