@@ -3627,8 +3627,8 @@ class TestPhaseDiscoverScopedHosts(unittest.TestCase):
             "key_path": "/tmp/fake",
             "svc_name": "freq-admin",
             "device_creds": {
-                "pfsense": {"user": "freq-ops", "password": "", "key_path": "/tmp/fake", "host": "10.25.255.1"},
-                "switch": {"user": "freq-ops", "password": "secret", "host": "10.25.255.5"},
+                "pfsense-a1": {"type": "pfsense", "user": "freq-ops", "password": "", "key_path": "/tmp/fake", "host": "10.25.255.1", "label": "firewall"},
+                "switch-b1": {"type": "switch", "user": "freq-ops", "password": "secret", "host": "10.25.255.5", "label": "switch"},
                 "idrac": {"user": "freq-ops", "password": "secret", "hosts": ["10.25.255.10", "10.25.255.11"]},
                 "truenas": {"api_key": "secret", "api_key_only": True, "host": "10.25.255.25"},
                 "truenas-lab": {"api_key": "secret", "api_key_only": True, "host": "10.25.10.201"},

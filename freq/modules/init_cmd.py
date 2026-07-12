@@ -5193,7 +5193,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             fmt.step_ok(f"Switch from device credentials: {ip} [{sw_scope}]")
             break
     for name, cred in sorted((device_creds or {}).items()):
-        if name == "idrac" or str(name).startswith("idrac-"):
+        declared_type = str((cred or {}).get("type") or "").strip().lower()
+        if declared_type == "idrac" or name == "idrac" or str(name).startswith("idrac-"):
             for ip in _credential_hosts(name):
                 label = f"bmc-{ip.split('.')[-1]}"
                 cred = device_creds.get(name, {}) if isinstance(device_creds, dict) else {}
@@ -5202,7 +5203,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 if ip not in infra_idrac_ips:
                     infra_idrac_ips.append(ip)
                     fmt.step_ok(f"iDRAC from device credentials: {label} ({ip}) [{scope}]")
-        elif str(name).startswith("truenas-"):
+        elif declared_type == "truenas" or str(name).startswith("truenas-"):
             for ip in _credential_hosts(name):
                 label = str(name).replace("_", "-")
                 cred = device_creds.get(name, {}) if isinstance(device_creds, dict) else {}
@@ -5222,6 +5223,32 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 )
                 if scope == "core" and not infra_truenas:
                     infra_truenas = ip
+        elif declared_type == "pfsense":
+            for ip in _credential_hosts(name):
+                label = str(cred.get("label") or "firewall")
+                scope = _device_scope_for(
+                    ip=ip, label=label, key=name, cred=cred,
+                    overrides=scope_overrides,
+                )
+                _add_staged_device(
+                    ip, label, "pfsense",
+                    managed=_device_cred_has_ssh_material(cred),
+                    cred=cred, scope=scope, key=name,
+                )
+                if scope == "core" and not infra_pfsense:
+                    infra_pfsense = ip
+        elif declared_type == "switch":
+            for ip in _credential_hosts(name):
+                label = str(cred.get("label") or "switch")
+                scope = _device_scope_for(
+                    ip=ip, label=label, key=name, cred=cred,
+                    overrides=scope_overrides,
+                )
+                _add_staged_device(
+                    ip, label, "switch", cred=cred, scope=scope, key=name
+                )
+                if scope == "core" and not infra_switch:
+                    infra_switch = ip
 
     if not infra_truenas and not infra_switch and not infra_idrac_ips:
         fmt.line(f"  {fmt.C.DIM}No additional infrastructure devices auto-detected.{fmt.C.RESET}")
