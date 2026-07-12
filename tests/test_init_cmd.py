@@ -1895,7 +1895,7 @@ class TestPveUninstall(unittest.TestCase):
 
         ssh = MagicMock(side_effect=[
             (0, "OK\n", ""),
-            (0, "NOT_FOUND\n", ""),
+            (0, "NOT_FOUND\nPOSTCHECK_OK\n", ""),
         ])
         mock_auth_ssh.return_value = ssh
 
@@ -1909,6 +1909,62 @@ class TestPveUninstall(unittest.TestCase):
         self.assertEqual(reason, "not_found")
         cleanup_cmd = ssh.call_args_list[1].args[0]
         self.assertIn("sudo -n sh -c", cleanup_cmd)
+        self.assertIn("systemctl disable --now freq-agent.service", cleanup_cmd)
+        self.assertIn("systemctl is-active --quiet freq-agent.service", cleanup_cmd)
+        self.assertIn("systemctl is-enabled --quiet freq-agent.service", cleanup_cmd)
+        self.assertIn("find / -xdev -uid", cleanup_cmd)
+        self.assertIn("POSTCHECK_OK", cleanup_cmd)
+
+    @patch("freq.modules.init_cmd._uninstall_auth_ssh")
+    def test_linux_bootstrap_cleanup_rejects_false_green_residue(self, mock_auth_ssh):
+        from freq.modules.init_cmd import _remove_unix_with_auth
+
+        ssh = MagicMock(side_effect=[
+            (0, "OK\n", ""),
+            (6, "POSTCHECK_ACCOUNT_PRESENT\nPOSTCHECK_AGENT_ACTIVE\n", ""),
+        ])
+        mock_auth_ssh.return_value = ssh
+
+        ok, reason = _remove_unix_with_auth(
+            "10.25.255.40",
+            "freq-admin",
+            {"user": "freq-ops", "key_path": "/tmp/bootstrap", "password": ""},
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("POSTCHECK_ACCOUNT_PRESENT", reason)
+        self.assertIn("POSTCHECK_AGENT_ACTIVE", reason)
+
+    @patch("freq.modules.init_cmd._remove_unix_with_auth")
+    @patch("freq.modules.init_cmd._remove_linux")
+    def test_linux_dispatch_prefers_keeper_auth_for_verified_cleanup(
+        self, mock_remove_linux, mock_remove_unix_with_auth
+    ):
+        from freq.modules.init_cmd import _remove_from_host_dispatch
+
+        bootstrap_auth = {
+            "user": "freq-ops",
+            "key_path": "/tmp/bootstrap",
+            "password": "",
+        }
+        mock_remove_unix_with_auth.return_value = (True, "")
+
+        with patch("freq.modules.init_cmd.os.path.isfile", return_value=True):
+            ok, reason = _remove_from_host_dispatch(
+                "10.25.255.40",
+                "linux",
+                "freq-admin",
+                "/tmp/freq_id_ed25519",
+                "/tmp/freq_id_rsa",
+                bootstrap_auth=bootstrap_auth,
+            )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        mock_remove_unix_with_auth.assert_called_once_with(
+            "10.25.255.40", "freq-admin", bootstrap_auth, htype="linux"
+        )
+        mock_remove_linux.assert_not_called()
 
     @patch("freq.modules.init_cmd._remove_switch_with_auth")
     @patch("freq.deployers.get_deployer")

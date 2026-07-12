@@ -7694,7 +7694,7 @@ def _sudo_shell(script):
 
 
 def _remove_unix_with_auth(ip, svc_name, auth, htype="linux"):
-    """Remove service account from Linux/Unix-family hosts via bootstrap auth."""
+    """Remove and verify service-account residue via independent bootstrap auth."""
     if not _has_uninstall_auth(auth):
         return False, "no bootstrap auth available"
     _ssh = _uninstall_auth_ssh(
@@ -7710,12 +7710,19 @@ def _remove_unix_with_auth(ip, svc_name, auth, htype="linux"):
 
     quoted_user = shlex.quote(svc_name)
     script = f"""
-set -u
+set -eu
 svc={quoted_user}
-removed=0
+svc_uid=""
+account_was_present=0
+if getent passwd "$svc" >/dev/null 2>&1; then
+  svc_uid=$(id -u "$svc")
+  account_was_present=1
+fi
 systemctl disable --now freq-agent.service >/dev/null 2>&1 || true
 rm -f /etc/systemd/system/freq-agent.service /etc/sudoers.d/freq-$svc /usr/local/etc/sudoers.d/freq-$svc 2>/dev/null || true
 rm -rf {shlex.quote(AGENT_REMOTE_DIR)} 2>/dev/null || true
+systemctl daemon-reload >/dev/null 2>&1 || true
+systemctl reset-failed freq-agent.service >/dev/null 2>&1 || true
 gpasswd -d "$svc" docker >/dev/null 2>&1 || true
 if command -v midclt >/dev/null 2>&1; then
   python3 - "$svc" <<'PY'
@@ -7752,14 +7759,29 @@ if id "$svc" >/dev/null 2>&1; then
   sleep 1
   pkill -9 -u "$svc" >/dev/null 2>&1 || true
   userdel -r "$svc" >/dev/null 2>&1 || userdel "$svc" >/dev/null 2>&1 || {{ echo REMOVE_FAIL_USERDEL; exit 5; }}
-  echo ACCOUNT_REMOVED
-else
-  echo NOT_FOUND
 fi
+if [ -n "$svc_uid" ]; then
+  find / -xdev -uid "$svc_uid" -delete >/dev/null 2>&1 || true
+fi
+post_fail=0
+if getent passwd "$svc" >/dev/null 2>&1; then echo POSTCHECK_ACCOUNT_PRESENT; post_fail=1; fi
+if systemctl is-active --quiet freq-agent.service; then echo POSTCHECK_AGENT_ACTIVE; post_fail=1; fi
+if systemctl is-enabled --quiet freq-agent.service; then echo POSTCHECK_AGENT_ENABLED; post_fail=1; fi
+if [ -e /etc/systemd/system/freq-agent.service ]; then echo POSTCHECK_AGENT_UNIT_PRESENT; post_fail=1; fi
+if [ -e {shlex.quote(AGENT_REMOTE_DIR)} ]; then echo POSTCHECK_AGENT_DIR_PRESENT; post_fail=1; fi
+if [ -n "$svc_uid" ] && find / -xdev -uid "$svc_uid" -print -quit 2>/dev/null | grep -q .; then
+  echo POSTCHECK_ORPHAN_UID_PRESENT
+  post_fail=1
+fi
+if [ "$post_fail" -ne 0 ]; then exit 6; fi
+if [ "$account_was_present" -eq 1 ]; then echo ACCOUNT_REMOVED; else echo NOT_FOUND; fi
+echo POSTCHECK_OK
 """
     rc, out, err = _ssh(_sudo_shell(script), timeout=DEFAULT_CMD_TIMEOUT)
     if rc != 0:
         return False, (err or out or "bootstrap cleanup failed").strip()
+    if "POSTCHECK_OK" not in (out or ""):
+        return False, (out or "bootstrap cleanup missing post-check evidence").strip()
     if "NOT_FOUND" in (out or ""):
         return True, "not_found"
     if "ACCOUNT_REMOVED" in (out or ""):
@@ -7805,7 +7827,10 @@ def _remove_linux(ip, svc_name, key_path):
         timeout=PING_TIMEOUT,
     )
 
-    return True, ""
+    return False, (
+        "service-account self-deletion was scheduled but cannot be verified; "
+        "rerun with --bootstrap-key/--bootstrap-password-file using an independent keeper account"
+    )
 
 
 def _remove_pve(ip, svc_name, key_path):
@@ -8211,6 +8236,8 @@ def _remove_from_host_dispatch(
         return (ok, reason) if ok else _fallback(reason)
 
     category, vendor = resolve_htype(htype)
+    if htype in {"linux", "docker"} and _has_usable_uninstall_auth(bootstrap_auth):
+        return _remove_unix_with_auth(ip, svc_name, bootstrap_auth, htype=htype)
     if category == "firewall" and vendor == "pfsense":
         pf_creds = (device_creds or {}).get("pfsense", {})
         if not _has_usable_uninstall_auth(pf_creds) and _has_uninstall_auth(bootstrap_auth):
