@@ -25,6 +25,7 @@ import getpass
 import hashlib
 import os
 import subprocess
+import threading
 
 from freq.core import fmt
 from freq.core import log as logger
@@ -32,6 +33,7 @@ from freq.core.config import FreqConfig
 
 # Vault timeouts
 VAULT_CRYPTO_TIMEOUT = 10
+_VAULT_LOCK = threading.RLock()
 
 
 def _vault_key() -> str:
@@ -181,33 +183,43 @@ def _serialize_entries(entries: list) -> str:
 
 def vault_init(cfg: FreqConfig) -> bool:
     """Initialize an empty vault."""
-    key = _vault_key()
-    if not key:
-        return False
+    with _VAULT_LOCK:
+        key = _vault_key()
+        if not key:
+            return False
 
-    vault_dir = cfg.vault_dir
-    vault_path = cfg.vault_file
+        vault_dir = cfg.vault_dir
+        vault_path = cfg.vault_file
 
-    os.makedirs(vault_dir, mode=0o700, exist_ok=True)
-    if os.path.exists(vault_path):
+        os.makedirs(vault_dir, mode=0o700, exist_ok=True)
+        if os.path.exists(vault_path):
+            return True
+        return _encrypt("# FREQ Vault — initialized\n", key, vault_path)
+
+
+def vault_update(cfg: FreqConfig, host: str, updates: dict[str, str | None]) -> bool:
+    """Atomically set or delete several exact-namespace credentials."""
+    if not isinstance(updates, dict) or not updates:
         return True
-    return _encrypt("# FREQ Vault — initialized\n", key, vault_path)
+    with _VAULT_LOCK:
+        key = _vault_key()
+        if not key:
+            return False
+        plaintext = _decrypt(key, cfg.vault_file)
+        entries = _parse_entries(plaintext)
+        changed_keys = set(updates)
+        entries = [(h, k, v) for h, k, v in entries if not (h == host and k in changed_keys)]
+        entries.extend(
+            (host, cred_key, value)
+            for cred_key, value in updates.items()
+            if value is not None
+        )
+        return _encrypt(_serialize_entries(entries), key, cfg.vault_file)
 
 
 def vault_set(cfg: FreqConfig, host: str, cred_key: str, value: str) -> bool:
     """Store a credential in the vault."""
-    key = _vault_key()
-    if not key:
-        return False
-
-    plaintext = _decrypt(key, cfg.vault_file)
-    entries = _parse_entries(plaintext)
-
-    # Remove existing entry with same host+key
-    entries = [(h, k, v) for h, k, v in entries if not (h == host and k == cred_key)]
-    entries.append((host, cred_key, value))
-
-    return _encrypt(_serialize_entries(entries), key, cfg.vault_file)
+    return vault_update(cfg, host, {cred_key: value})
 
 
 def vault_get(cfg: FreqConfig, host: str, cred_key: str) -> str:
@@ -215,50 +227,53 @@ def vault_get(cfg: FreqConfig, host: str, cred_key: str) -> str:
 
     Tries exact host match first, falls back to DEFAULT.
     """
-    key = _vault_key()
-    if not key:
+    with _VAULT_LOCK:
+        key = _vault_key()
+        if not key:
+            return ""
+
+        plaintext = _decrypt(key, cfg.vault_file)
+        entries = _parse_entries(plaintext)
+
+        # Exact match
+        for h, k, v in entries:
+            if h == host and k == cred_key:
+                return v
+
+        # Fallback to DEFAULT
+        for h, k, v in entries:
+            if h == "DEFAULT" and k == cred_key:
+                return v
+
         return ""
-
-    plaintext = _decrypt(key, cfg.vault_file)
-    entries = _parse_entries(plaintext)
-
-    # Exact match
-    for h, k, v in entries:
-        if h == host and k == cred_key:
-            return v
-
-    # Fallback to DEFAULT
-    for h, k, v in entries:
-        if h == "DEFAULT" and k == cred_key:
-            return v
-
-    return ""
 
 
 def vault_delete(cfg: FreqConfig, host: str, cred_key: str) -> bool:
     """Delete a credential from the vault."""
-    key = _vault_key()
-    if not key:
-        return False
+    with _VAULT_LOCK:
+        key = _vault_key()
+        if not key:
+            return False
 
-    plaintext = _decrypt(key, cfg.vault_file)
-    entries = _parse_entries(plaintext)
-    new_entries = [(h, k, v) for h, k, v in entries if not (h == host and k == cred_key)]
+        plaintext = _decrypt(key, cfg.vault_file)
+        entries = _parse_entries(plaintext)
+        new_entries = [(h, k, v) for h, k, v in entries if not (h == host and k == cred_key)]
 
-    if len(new_entries) == len(entries):
-        return False  # Nothing was deleted
+        if len(new_entries) == len(entries):
+            return False  # Nothing was deleted
 
-    return _encrypt(_serialize_entries(new_entries), key, cfg.vault_file)
+        return _encrypt(_serialize_entries(new_entries), key, cfg.vault_file)
 
 
 def vault_list(cfg: FreqConfig) -> list:
     """List all vault entries (values masked for passwords)."""
-    key = _vault_key()
-    if not key:
-        return []
+    with _VAULT_LOCK:
+        key = _vault_key()
+        if not key:
+            return []
 
-    plaintext = _decrypt(key, cfg.vault_file)
-    return _parse_entries(plaintext)
+        plaintext = _decrypt(key, cfg.vault_file)
+        return _parse_entries(plaintext)
 
 
 def cmd_vault(cfg: FreqConfig, pack, args) -> int:

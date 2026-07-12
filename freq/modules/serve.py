@@ -67,6 +67,20 @@ from freq.core.health_state import (
     mark_stale,
 )
 from freq.core.host_scope import managed_probe_hosts
+from freq.core.setup_contract import (
+    SetupContractError,
+    build_setup_contract,
+    clear_setup_contract,
+    contract_credential_keys,
+    contract_payload,
+    credential_presence,
+    credential_storage_value,
+    credential_vault_key,
+    load_setup_contract,
+    record_credential_request,
+    save_setup_contract,
+    validate_credential_request,
+)
 from freq.core.setup_discovery import (
     DiscoveryInputError,
     run_setup_discovery,
@@ -91,7 +105,7 @@ from freq.jarvis.notify import notify as jarvis_notify
 from freq.jarvis.risk import _load_kill_chain
 from freq.modules.pve import _find_reachable_node, _pve_cmd
 from freq.modules.users import _load_users, _save_users_error
-from freq.modules.vault import vault_delete, vault_get, vault_init, vault_set
+from freq.modules.vault import vault_delete, vault_get, vault_init, vault_list, vault_set, vault_update
 
 IDRAC_READ_CONNECT_TIMEOUT = 10
 IDRAC_READ_COMMAND_TIMEOUT = 30
@@ -3093,6 +3107,13 @@ def _setup_marker_exists(cfg):
     )
 
 
+def _zero_state_setup_complete(cfg):
+    """True only after both CLI init and browser handoff completed."""
+    return os.path.isfile(os.path.join(cfg.conf_dir, ".initialized")) and os.path.isfile(
+        os.path.join(cfg.conf_dir, ".web-setup-complete")
+    )
+
+
 def _write_web_setup_markers(cfg):
     """Record that the browser setup path completed.
 
@@ -3278,6 +3299,30 @@ def _setup_discovery_progress(job_id, phase, current, total, message):
         }
 
 
+def _setup_vault_host(setup_id):
+    return f"setup:{setup_id}"
+
+
+def _setup_contract_getter(cfg, setup_id):
+    host = _setup_vault_host(setup_id)
+    values = {key: value for entry_host, key, value in vault_list(cfg) if entry_host == host}
+    return lambda key: values.get(key, "")
+
+
+def _clear_setup_contract_credentials(cfg, contract):
+    """Remove every setup-device value named by a durable contract."""
+    if not contract:
+        return
+    host = _setup_vault_host(contract.get("setup_id", ""))
+    existing = {key for entry_host, key, _value in vault_list(cfg) if entry_host == host}
+    updates = {key: None for key in contract_credential_keys(contract) if key in existing}
+    if updates and not vault_update(cfg, host, updates):
+        raise OSError("setup credential cleanup failed")
+    remaining = {key for entry_host, key, _value in vault_list(cfg) if entry_host == host}
+    if remaining.intersection(updates):
+        raise OSError("setup credential cleanup failed")
+
+
 def _run_setup_discovery_job(cfg, job_id):
     password_file = ""
     known_hosts_file = ""
@@ -3330,7 +3375,11 @@ def _run_setup_discovery_job(cfg, job_id):
                         "results": results,
                     }
                 )
-        update_setup_state(cfg, phase="selecting", active_discovery_id=job_id, active_contract_id=None)
+        with _setup_lock:
+            previous_contract = load_setup_contract(cfg)
+            _clear_setup_contract_credentials(cfg, previous_contract)
+            clear_setup_contract(cfg)
+            update_setup_state(cfg, phase="selecting", active_discovery_id=job_id, active_contract_id=None)
     except Exception as exc:
         code = str(exc) if str(exc) in {"pve_bootstrap_failed", "bootstrap_secret_missing"} else "discovery_failed"
         finished = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -4108,6 +4157,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/test-ssh": "_serve_setup_test_ssh",
         "/api/setup/discovery/start": "_serve_setup_discovery_start",
         "/api/setup/discovery/status": "_serve_setup_discovery_status",
+        "/api/setup/contract": "_serve_setup_contract",
+        "/api/setup/device-credentials": "_serve_setup_device_credentials",
         "/api/setup/init/start": "_serve_setup_init_start",
         "/api/setup/init/status": "_serve_setup_init_status",
         "/api/setup/init/logs": "_serve_setup_init_logs",
@@ -5038,6 +5089,9 @@ a:hover{{text-decoration:underline}}
             return
 
         cfg = load_config()
+        if _zero_state_setup_complete(cfg):
+            _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
+            return
         try:
             existing_users = _load_users(cfg)
         except Exception as exc:
@@ -5431,6 +5485,7 @@ a:hover{{text-decoration:underline}}
 
     def _serve_setup_reset(self):
         """POST /api/setup/reset — reset setup wizard. Admin only. Deletes setup-complete marker."""
+        global _setup_discovery_job
         if self.command != "POST":
             self._json_response({"error": "Setup reset requires POST"}, 405)
             return
@@ -5441,15 +5496,35 @@ a:hover{{text-decoration:underline}}
         if err:
             self._json_response({"error": err}, 403)
             return
+        if _setup_init_snapshot().get("running"):
+            _setup_error(self, 409, "init_running", "Setup cannot reset while init is running.")
+            return
 
         data_dir = cfg.data_dir
         marker = os.path.join(data_dir, "setup-complete")
         web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
 
         try:
-            for m in (marker, web_marker):
-                if os.path.isfile(m):
-                    os.remove(m)
+            with _setup_lock:
+                state = load_setup_state(cfg)
+                contract = load_setup_contract(cfg)
+                _clear_setup_contract_credentials(cfg, contract)
+                if state:
+                    host = _setup_vault_host(state.get("setup_id", ""))
+                    exact_keys = {key for entry_host, key, _value in vault_list(cfg) if entry_host == host}
+                    if "bootstrap_password" in exact_keys:
+                        if not vault_update(cfg, host, {"bootstrap_password": None}):
+                            raise OSError("setup bootstrap cleanup failed")
+                        remaining = {key for entry_host, key, _value in vault_list(cfg) if entry_host == host}
+                        if "bootstrap_password" in remaining:
+                            raise OSError("setup bootstrap cleanup failed")
+                clear_setup_contract(cfg)
+                clear_setup_state(cfg)
+                with _setup_discovery_lock:
+                    _setup_discovery_job = None
+                for m in (marker, web_marker):
+                    if os.path.isfile(m):
+                        os.remove(m)
             self._json_response({"ok": True, "message": "Setup wizard re-enabled (note: freq init state is unchanged — re-run freq init if needed)"})
         except OSError as e:
             self._json_response({"error": f"Failed to reset setup: {e}"}, 500)
@@ -5465,6 +5540,9 @@ a:hover{{text-decoration:underline}}
             _setup_error(self, 403, "admin_required", err)
             return
         cfg = load_config()
+        if _zero_state_setup_complete(cfg):
+            _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
+            return
         try:
             body = self._request_body()
             field, code = _setup_forbidden_browser_input(body)
@@ -5626,6 +5704,9 @@ a:hover{{text-decoration:underline}}
             _setup_error(self, 403, "admin_required", err)
             return
         cfg = load_config()
+        if _zero_state_setup_complete(cfg):
+            _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
+            return
         state = load_setup_state(cfg)
         if not state:
             _setup_error(self, 410, "setup_expired", "The setup window expired.")
@@ -5653,6 +5734,308 @@ a:hover{{text-decoration:underline}}
                 "ok": True,
                 "schema": ZERO_STATE_WEB_SCHEMA,
                 "discovery": _setup_discovery_payload(job),
+            }
+        )
+
+    def _serve_setup_contract(self):
+        """Create or return the durable normalized discovery contract."""
+        if self.command not in {"GET", "POST"}:
+            _setup_error(self, 405, "method_not_allowed", "Contract supports GET or POST.")
+            return
+        role, err = _check_session_role(self, "admin")
+        if err:
+            _setup_error(self, 403, "admin_required", err)
+            return
+        cfg = load_config()
+        if _zero_state_setup_complete(cfg):
+            _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
+            return
+        state = load_setup_state(cfg)
+        if not state:
+            _setup_error(self, 410, "setup_expired", "The setup window expired.")
+            return
+        if state.get("username") != getattr(self, "_session_user", ""):
+            _setup_error(self, 403, "setup_owner_mismatch", "Setup belongs to another operator.")
+            return
+
+        if self.command == "GET":
+            contract = load_setup_contract(cfg)
+            if (
+                not contract
+                or contract.get("setup_id") != state.get("setup_id")
+                or contract.get("contract_id") != state.get("active_contract_id")
+            ):
+                _setup_error(self, 404, "contract_not_found", "No current setup contract exists.")
+                return
+            getter = _setup_contract_getter(cfg, state["setup_id"])
+            self._json_response(
+                {
+                    "ok": True,
+                    "schema": ZERO_STATE_WEB_SCHEMA,
+                    "contract": contract_payload(contract, getter),
+                }
+            )
+            return
+
+        try:
+            body = self._request_body()
+            field, code = _setup_forbidden_browser_input(body)
+            if field:
+                _setup_error(
+                    self,
+                    400,
+                    code,
+                    "Server-side paths and manual contracts are not accepted.",
+                    field=field,
+                )
+                return
+            if not isinstance(body, dict):
+                raise SetupContractError("invalid_json", "JSON object required.")
+        except SetupContractError as exc:
+            _setup_error(self, exc.status, exc.code, str(exc), field=exc.field, details=exc.details)
+            return
+        except Exception:
+            _setup_error(self, 400, "invalid_json", "Invalid selection contract request.")
+            return
+
+        try:
+            with _setup_lock:
+                state = load_setup_state(cfg)
+                if not state:
+                    raise SetupContractError("setup_expired", "The setup window expired.", status=410)
+                if state.get("username") != getattr(self, "_session_user", ""):
+                    raise SetupContractError(
+                        "setup_owner_mismatch",
+                        "Setup belongs to another operator.",
+                        status=403,
+                    )
+                discovery = _setup_discovery_snapshot()
+                if (
+                    not discovery
+                    or discovery.get("state") != "succeeded"
+                    or discovery.get("id") != state.get("active_discovery_id")
+                ):
+                    raise SetupContractError(
+                        "stale_discovery",
+                        "A current successful discovery is required.",
+                        "discovery_id",
+                        409,
+                    )
+                previous = load_setup_contract(cfg)
+                if previous and (
+                    previous.get("setup_id") != state.get("setup_id")
+                    or previous.get("discovery_id") != discovery.get("id")
+                ):
+                    _clear_setup_contract_credentials(cfg, previous)
+                    clear_setup_contract(cfg)
+                    previous = {}
+                request_id = str(body.get("client_request_id") or "").strip()
+                replay = bool(
+                    previous
+                    and request_id
+                    and previous.get("client_request_id") == request_id
+                    and previous.get("setup_id") == state.get("setup_id")
+                    and previous.get("discovery_id") == discovery.get("id")
+                    and body.get("schema") == ZERO_STATE_WEB_SCHEMA
+                    and body.get("setup_id") == state.get("setup_id")
+                    and body.get("discovery_id") == discovery.get("id")
+                )
+                if replay:
+                    contract = previous
+                else:
+                    contract = build_setup_contract(
+                        body,
+                        discovery,
+                        setup_id=state["setup_id"],
+                        previous=previous,
+                    )
+                    keep_keys = set(contract_credential_keys(contract))
+                    stale_keys = [
+                        key for key in contract_credential_keys(previous) if key not in keep_keys
+                    ]
+                    host = _setup_vault_host(state["setup_id"])
+                    exact_values = {
+                        key: value for entry_host, key, value in vault_list(cfg) if entry_host == host
+                    }
+                    stale_values = {key: exact_values[key] for key in stale_keys if key in exact_values}
+                    if stale_values and not vault_update(
+                        cfg, host, {key: None for key in stale_values}
+                    ):
+                        raise SetupContractError(
+                            "credential_cleanup_failed",
+                            "Stale setup credentials could not be removed.",
+                            status=500,
+                        )
+                    try:
+                        save_setup_contract(cfg, contract)
+                        getter = _setup_contract_getter(cfg, state["setup_id"])
+                        payload = contract_payload(contract, getter)
+                        update_setup_state(
+                            cfg,
+                            phase="ready" if payload["ready"] else "credentials",
+                            active_contract_id=contract["contract_id"],
+                            last_error_code=None,
+                        )
+                    except Exception:
+                        if stale_values:
+                            vault_update(cfg, host, stale_values)
+                        if previous:
+                            save_setup_contract(cfg, previous)
+                        else:
+                            clear_setup_contract(cfg)
+                        raise
+                getter = _setup_contract_getter(cfg, state["setup_id"])
+                payload = contract_payload(contract, getter)
+        except SetupContractError as exc:
+            _setup_error(self, exc.status, exc.code, str(exc), field=exc.field, details=exc.details)
+            return
+        except Exception:
+            _setup_error(self, 500, "contract_write_failed", "The setup contract could not be persisted.")
+            return
+        self._json_response(
+            {
+                "ok": True,
+                "schema": ZERO_STATE_WEB_SCHEMA,
+                "contract": payload,
+            }
+        )
+
+    def _serve_setup_device_credentials(self):
+        """Store write-only owned-device values in the setup vault."""
+        if self.command != "POST":
+            _setup_error(self, 405, "method_not_allowed", "Device credentials require POST.")
+            return
+        role, err = _check_session_role(self, "admin")
+        if err:
+            _setup_error(self, 403, "admin_required", err)
+            return
+        cfg = load_config()
+        if _zero_state_setup_complete(cfg):
+            _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
+            return
+        state = load_setup_state(cfg)
+        if not state:
+            _setup_error(self, 410, "setup_expired", "The setup window expired.")
+            return
+        if state.get("username") != getattr(self, "_session_user", ""):
+            _setup_error(self, 403, "setup_owner_mismatch", "Setup belongs to another operator.")
+            return
+        try:
+            body = self._request_body()
+            field, code = _setup_forbidden_browser_input(body)
+            if field:
+                _setup_error(
+                    self,
+                    400,
+                    code,
+                    "Server-side paths and manual credential inputs are not accepted.",
+                    field=field,
+                )
+                return
+        except Exception:
+            _setup_error(self, 400, "invalid_json", "Invalid device credential request.")
+            return
+
+        try:
+            with _setup_lock:
+                state = load_setup_state(cfg)
+                contract = load_setup_contract(cfg)
+                if not state:
+                    raise SetupContractError("setup_expired", "The setup window expired.", status=410)
+                if state.get("username") != getattr(self, "_session_user", ""):
+                    raise SetupContractError(
+                        "setup_owner_mismatch",
+                        "Setup belongs to another operator.",
+                        status=403,
+                    )
+                if (
+                    not contract
+                    or contract.get("setup_id") != state.get("setup_id")
+                    or contract.get("contract_id") != state.get("active_contract_id")
+                ):
+                    raise SetupContractError(
+                        "stale_contract",
+                        "A current selection contract is required.",
+                        "contract_id",
+                        409,
+                    )
+                request = validate_credential_request(body, contract, state["setup_id"])
+                request_id = request["client_request_id"]
+                replay = bool(request_id and request_id in (contract.get("credential_request_ids") or []))
+                host = _setup_vault_host(state["setup_id"])
+                if not replay:
+                    if not os.path.exists(cfg.vault_file) and not vault_init(cfg):
+                        raise SetupContractError(
+                            "credential_store_failed",
+                            "The setup vault could not be initialized.",
+                            status=500,
+                        )
+                    updates = {}
+                    for row in request["credentials"]:
+                        for field, value in row["values"].items():
+                            key = credential_vault_key(row["resource_id"], field)
+                            updates[key] = credential_storage_value(field, value)
+                    before_values = {
+                        key: value for entry_host, key, value in vault_list(cfg) if entry_host == host
+                    }
+                    originals = {
+                        key: before_values[key] if key in before_values else None for key in updates
+                    }
+                    original_contract = json.loads(json.dumps(contract))
+                    try:
+                        if updates and not vault_update(cfg, host, updates):
+                            raise OSError("vault write failed")
+                        exact_values = {
+                            key: value for entry_host, key, value in vault_list(cfg) if entry_host == host
+                        }
+                        if any(exact_values.get(key) != value for key, value in updates.items()):
+                            raise OSError("vault verification failed")
+                        record_credential_request(contract, request_id)
+                        save_setup_contract(cfg, contract)
+                        getter = _setup_contract_getter(cfg, state["setup_id"])
+                        presence = credential_presence(contract, getter)
+                        ready = all(row["complete"] for row in presence)
+                        update_setup_state(
+                            cfg,
+                            phase="ready" if ready else "credentials",
+                            active_contract_id=contract["contract_id"],
+                            last_error_code=None,
+                        )
+                    except Exception:
+                        if updates:
+                            vault_update(cfg, host, originals)
+                        save_setup_contract(cfg, original_contract)
+                        raise
+                else:
+                    getter = _setup_contract_getter(cfg, state["setup_id"])
+                    presence = credential_presence(contract, getter)
+                    ready = all(row["complete"] for row in presence)
+                    update_setup_state(
+                        cfg,
+                        phase="ready" if ready else "credentials",
+                        active_contract_id=contract["contract_id"],
+                        last_error_code=None,
+                    )
+        except SetupContractError as exc:
+            _setup_error(self, exc.status, exc.code, str(exc), field=exc.field, details=exc.details)
+            return
+        except Exception:
+            _setup_error(self, 500, "credential_store_failed", "Device credentials could not be stored.")
+            return
+        self._json_response(
+            {
+                "ok": True,
+                "schema": ZERO_STATE_WEB_SCHEMA,
+                "contract_id": contract["contract_id"],
+                "credentials": [
+                    {
+                        "resource_id": row["resource_id"],
+                        "stored_fields": row["stored_fields"],
+                        "complete": row["complete"],
+                    }
+                    for row in presence
+                ],
+                "ready": ready,
             }
         )
 
