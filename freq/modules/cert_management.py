@@ -1275,8 +1275,8 @@ def _verify_tls_target(target):
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 der = ssock.getpeercert(binary_form=True)
                 cert = _decode_der_peer_cert(der) if der else {}
-                if verify_hostname:
-                    ssl.match_hostname(cert, host)
+                if verify_hostname and not _certificate_matches_hostname(cert, host):
+                    raise ssl.SSLCertVerificationError(f"certificate is not valid for {host}")
         duration = time.monotonic() - started
         subject = dict(x[0] for x in cert.get("subject", [])) if cert else {}
         issuer = dict(x[0] for x in cert.get("issuer", [])) if cert else {}
@@ -1304,6 +1304,67 @@ def _verify_tls_target(target):
             "ok": False,
             "error": str(e),
         }
+
+
+def _normalize_dns_name(value):
+    """Return a case-insensitive ASCII DNS name without a trailing dot."""
+    value = str(value or "").strip().rstrip(".")
+    if not value:
+        return ""
+    try:
+        return value.encode("idna").decode("ascii").lower()
+    except UnicodeError:
+        return ""
+
+
+def _dns_pattern_matches(pattern, hostname):
+    """Match an exact DNS name or a wildcard covering one leftmost label."""
+    pattern = str(pattern or "").strip().rstrip(".")
+    hostname = _normalize_dns_name(hostname)
+    if not pattern or not hostname:
+        return False
+    if "*" not in pattern:
+        return _normalize_dns_name(pattern) == hostname
+    if not pattern.startswith("*.") or pattern.count("*") != 1:
+        return False
+    suffix = _normalize_dns_name(pattern[2:])
+    host_labels = hostname.split(".")
+    suffix_labels = suffix.split(".")
+    return bool(suffix) and len(host_labels) == len(suffix_labels) + 1 and host_labels[1:] == suffix_labels
+
+
+def _certificate_matches_hostname(cert, hostname):
+    """Match a decoded peer certificate against DNS or IP SAN/CN identity."""
+    if not cert or not hostname:
+        return False
+
+    try:
+        target_ip = ipaddress.ip_address(str(hostname).strip())
+    except ValueError:
+        target_ip = None
+
+    sans = cert.get("subjectAltName", ()) or ()
+    if target_ip is not None:
+        for entry in sans:
+            if len(entry) < 2 or str(entry[0]).lower() not in {"ip address", "ip"}:
+                continue
+            try:
+                if ipaddress.ip_address(str(entry[1]).strip()) == target_ip:
+                    return True
+            except ValueError:
+                continue
+        return False
+
+    dns_sans = [entry[1] for entry in sans if len(entry) >= 2 and str(entry[0]).lower() == "dns"]
+    if dns_sans:
+        return any(_dns_pattern_matches(pattern, hostname) for pattern in dns_sans)
+
+    common_names = []
+    for rdn in cert.get("subject", ()) or ():
+        for attribute in rdn:
+            if len(attribute) >= 2 and str(attribute[0]).lower() == "commonname":
+                common_names.append(attribute[1])
+    return any(_dns_pattern_matches(pattern, hostname) for pattern in common_names)
 
 
 def _decode_der_peer_cert(der):

@@ -12,7 +12,7 @@ from argparse import Namespace
 from pathlib import Path
 from dataclasses import dataclass
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -978,6 +978,73 @@ class TestPhase2CLIRegistration(unittest.TestCase):
     def test_proxy_health(self):
         args = self._parse("proxy health")
         self.assertTrue(hasattr(args, "func"))
+
+
+class TestCertificateHostnameVerification(unittest.TestCase):
+    def test_dns_san_exact_and_wildcard_match(self):
+        from freq.modules.cert_management import _certificate_matches_hostname
+
+        exact = {"subjectAltName": (("DNS", "api.example.com"),)}
+        wildcard = {"subjectAltName": (("DNS", "*.example.com"),)}
+        self.assertTrue(_certificate_matches_hostname(exact, "API.EXAMPLE.COM."))
+        self.assertTrue(_certificate_matches_hostname(wildcard, "api.example.com"))
+        self.assertFalse(_certificate_matches_hostname(wildcard, "example.com"))
+        self.assertFalse(_certificate_matches_hostname(wildcard, "deep.api.example.com"))
+
+    def test_dns_san_takes_precedence_over_common_name(self):
+        from freq.modules.cert_management import _certificate_matches_hostname
+
+        cert = {
+            "subjectAltName": (("DNS", "other.example.com"),),
+            "subject": ((('commonName', "api.example.com"),),),
+        }
+        self.assertFalse(_certificate_matches_hostname(cert, "api.example.com"))
+
+    def test_common_name_fallback_without_dns_san(self):
+        from freq.modules.cert_management import _certificate_matches_hostname
+
+        cert = {"subject": ((('commonName', "api.example.com"),),)}
+        self.assertTrue(_certificate_matches_hostname(cert, "api.example.com"))
+        self.assertFalse(_certificate_matches_hostname(cert, "other.example.com"))
+
+    def test_ip_requires_matching_ip_san(self):
+        from freq.modules.cert_management import _certificate_matches_hostname
+
+        cert = {
+            "subjectAltName": (("IP Address", "192.0.2.10"),),
+            "subject": ((('commonName', "192.0.2.11"),),),
+        }
+        self.assertTrue(_certificate_matches_hostname(cert, "192.0.2.10"))
+        self.assertFalse(_certificate_matches_hostname(cert, "192.0.2.11"))
+
+    def test_connected_verify_path_uses_decoded_certificate(self):
+        from freq.modules.cert_management import _verify_tls_target
+
+        cert = {
+            "subjectAltName": (("DNS", "api.example.com"),),
+            "subject": ((('commonName', "api.example.com"),),),
+            "issuer": ((('commonName', "Test CA"),),),
+        }
+        context = MagicMock()
+        raw_socket = MagicMock()
+        raw_socket.__enter__.return_value = raw_socket
+        tls_socket = MagicMock()
+        tls_socket.__enter__.return_value = tls_socket
+        tls_socket.getpeercert.return_value = b"peer-certificate"
+        context.wrap_socket.return_value = tls_socket
+
+        with (
+            patch("freq.modules.cert_management.ssl.create_default_context", return_value=context),
+            patch("freq.modules.cert_management.socket.create_connection", return_value=raw_socket),
+            patch("freq.modules.cert_management._decode_der_peer_cert", return_value=cert),
+        ):
+            matched = _verify_tls_target({"hostname": "api.example.com", "ip": "192.0.2.10"})
+            mismatched = _verify_tls_target({"hostname": "wrong.example.com", "ip": "192.0.2.10"})
+
+        self.assertTrue(matched["ok"])
+        self.assertFalse(mismatched["ok"])
+        self.assertIn("certificate is not valid for wrong.example.com", mismatched["error"])
+        self.assertNotIn("AttributeError", mismatched["error"])
 
 
 if __name__ == "__main__":
