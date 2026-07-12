@@ -222,6 +222,32 @@ def test_credential_validation_is_kind_constrained_and_value_only():
     assert caught.value.code == "unsupported_credential_field"
 
 
+def test_credential_error_fields_match_actual_nested_request_paths():
+    contract = build_setup_contract(_contract_body(), _discovery(), setup_id="setup-1")
+    base = {
+        "schema": SCHEMA,
+        "setup_id": "setup-1",
+        "contract_id": contract["contract_id"],
+        "client_request_id": REQUEST_ID,
+        "credentials": [
+            {
+                "resource_id": "device:truenas:10.0.0.10",
+                "username": "root\n",
+                "secrets": {"password": "secret"},
+            }
+        ],
+    }
+    with pytest.raises(SetupContractError) as username_error:
+        validate_credential_request(base, contract, "setup-1")
+    assert username_error.value.field == "credentials[0].username"
+
+    base["credentials"][0]["username"] = "root"
+    base["credentials"][0]["secrets"]["password"] = "secret\n"
+    with pytest.raises(SetupContractError) as secret_error:
+        validate_credential_request(base, contract, "setup-1")
+    assert secret_error.value.field == "credentials[0].secrets.password"
+
+
 def test_multiline_private_key_round_trips_through_line_safe_storage():
     private_key = "-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----\n"
     stored = credential_storage_value("ssh_private_key", private_key)

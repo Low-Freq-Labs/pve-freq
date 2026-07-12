@@ -452,11 +452,14 @@ def validate_credential_request(body: dict, contract: dict, setup_id: str) -> di
             raise SetupContractError("required_field", "At least one credential value is required.", field)
         allowed_fields = set(requirements[resource_id].get("allowed_fields") or [])
         for name, value in values.items():
+            value_field = (
+                f"{field}.username" if name == "username" else f"{field}.secrets.{name}"
+            )
             if name not in allowed_fields:
                 raise SetupContractError(
                     "unsupported_credential_field",
                     "Credential field is not allowed for this device kind.",
-                    f"{field}.{name}",
+                    value_field,
                     422,
                 )
             if (
@@ -468,7 +471,7 @@ def validate_credential_request(body: dict, contract: dict, setup_id: str) -> di
                 raise SetupContractError(
                     "invalid_credential_value",
                     "Credential value has an invalid or unsafe format.",
-                    f"{field}.{name}",
+                    value_field,
                     422,
                 )
             limit = 65536 if name == "ssh_private_key" else 4096
@@ -476,7 +479,7 @@ def validate_credential_request(body: dict, contract: dict, setup_id: str) -> di
                 raise SetupContractError(
                     "credential_too_large",
                     "Credential value exceeds its size limit.",
-                    f"{field}.{name}",
+                    value_field,
                     422,
                 )
         normalized.append({"resource_id": resource_id, "values": values})
