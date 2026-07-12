@@ -78,6 +78,15 @@ class TestInstallerPreservesGeneratedTls(unittest.TestCase):
         self.assertIn('${SUDO_USER:-}', src)
         self.assertIn("Data ownership deferred until init creates runtime account", src)
 
+    def test_runtime_handoff_removes_bootstrap_tls_artifacts(self):
+        src = (FREQ_ROOT / "freq" / "modules" / "serve.py").read_text()
+        helper = src.split("def _schedule_setup_runtime_handoff", 1)[1].split(
+            "\ndef _run_setup_init_job", 1
+        )[0]
+        self.assertIn('os.path.join(cfg.install_dir, "tls", "bootstrap")', helper)
+        self.assertIn('"rm", "-rf", bootstrap_tls_dir', helper)
+        self.assertIn('"rm", "-f", setup_unit', helper)
+
 
 if __name__ == "__main__":
     unittest.main()

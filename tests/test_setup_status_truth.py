@@ -202,6 +202,9 @@ class TestWebInitRuntimeHandoff(unittest.TestCase):
         self.assertIn("systemd-run", helper)
         self.assertIn("pve-freq-setup.service", helper)
         self.assertIn('"disable", "--now"', helper)
+        self.assertIn('"rm", "-f", setup_unit', helper)
+        self.assertIn('"rm", "-rf", bootstrap_tls_dir', helper)
+        self.assertIn('"systemctl", "daemon-reload"', helper)
         self.assertIn("freq-serve.service", helper)
         self.assertIn("kill -TERM", helper)
 

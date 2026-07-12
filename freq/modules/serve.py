@@ -3983,11 +3983,19 @@ def _schedule_setup_runtime_handoff(cfg):
     prefix = []
     if os.geteuid() != 0:
         prefix = ["sudo", "-n"]
+    setup_unit = "/etc/systemd/system/pve-freq-setup.service"
+    bootstrap_tls_dir = os.path.join(cfg.install_dir, "tls", "bootstrap")
     script = (
         " ".join(
             shlex.quote(part)
             for part in prefix + ["systemctl", "disable", "--now", "pve-freq-setup.service"]
         )
+        + " >/dev/null 2>&1 || true; "
+        + " ".join(shlex.quote(part) for part in prefix + ["rm", "-f", setup_unit])
+        + "; "
+        + " ".join(shlex.quote(part) for part in prefix + ["rm", "-rf", bootstrap_tls_dir])
+        + "; "
+        + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "daemon-reload"])
         + " >/dev/null 2>&1 || true; "
         + f"kill -TERM {current_pid} >/dev/null 2>&1 || true; "
         + "sleep 2; "
