@@ -10,6 +10,6 @@ if err:
     print(err, file=sys.stderr)
     sys.exit(1)
 
-from freq.cli import main
+from freq.cli import main  # noqa: E402 -- keep the compatibility guard before package imports
 
 sys.exit(main())

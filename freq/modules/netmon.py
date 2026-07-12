@@ -26,7 +26,8 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 NETMON_DIR = "netmon"
 NETMON_DATA = "interface-data.json"

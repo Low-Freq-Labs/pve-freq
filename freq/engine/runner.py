@@ -22,8 +22,8 @@ import asyncio
 import logging
 import time
 
-from freq.core.types import Host, Phase, FleetResult
 from freq.core.ssh import async_run as ssh_run
+from freq.core.types import FleetResult, Host, Phase
 from freq.engine.policy import PolicyExecutor
 
 logger = logging.getLogger(__name__)

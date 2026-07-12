@@ -22,9 +22,9 @@ import time
 from freq.core import fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
+from freq.core.types import Phase
 from freq.engine.policies import ALL_POLICIES
 from freq.engine.runner import run_sync
-from freq.core.types import Phase
 
 
 def cmd_sweep(cfg: FreqConfig, pack, args) -> int:
@@ -61,8 +61,9 @@ def cmd_sweep(cfg: FreqConfig, pack, args) -> int:
     # Step 1: Run audit
     fmt.divider("Step 1: Security Audit")
     fmt.blank()
-    from freq.modules.audit import cmd_audit
     import argparse
+
+    from freq.modules.audit import cmd_audit
 
     audit_args = argparse.Namespace(fix=False)
     cmd_audit(cfg, pack, audit_args)

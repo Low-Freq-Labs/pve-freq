@@ -50,7 +50,7 @@ class TestPhase11WritesUsersConf(unittest.TestCase):
         self.assertNotEqual(idx, -1)
         block = src[idx:idx + 500]
         self.assertIn("users_active = [", block)
-        self.assertIn("not l.strip().startswith", block)
+        self.assertIn("not line.strip().startswith", block)
 
 
 class TestLoadUsersFallback(unittest.TestCase):

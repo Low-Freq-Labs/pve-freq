@@ -20,10 +20,11 @@ Design decisions:
       can audit without risk and harden with intent. Never silent fixes.
 """
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_run
+from freq.core.ssh import run_many as ssh_run_many
 
 # Harden timeouts
 HARDEN_CHECK_TIMEOUT = 10

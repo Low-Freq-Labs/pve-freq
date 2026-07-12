@@ -13,17 +13,17 @@ function that receives the HTTP handler as its first argument.
 
 import time
 
+from freq.api.helpers import get_params, json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import require_post, json_response, get_params
 from freq.core.config import load_config
-from freq.core.ssh import run as ssh_single, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_single
 from freq.modules.serve import (
+    _SERVER_START_TIME,
     _bg_cache,
     _bg_lock,
     _check_session_role,
-    _SERVER_START_TIME,
 )
-
 
 # ── Handlers ────────────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ def handle_alert_history(handler):
 
 def handle_alert_check(handler):
     """GET /api/alert/check — evaluate alert rules against current fleet state."""
-    from freq.modules.alert import _load_rules, _evaluate_fleet
+    from freq.modules.alert import _evaluate_fleet, _load_rules
 
     cfg = load_config()
     rules = [r for r in _load_rules(cfg) if r.get("enabled", True)]
@@ -106,7 +106,7 @@ def handle_trend_snapshot(handler):
     if err:
         json_response(handler, {"error": err}, 403)
         return
-    from freq.modules.trend import _take_snapshot, _load_trend_data, _save_trend_data
+    from freq.modules.trend import _load_trend_data, _save_trend_data, _take_snapshot
 
     cfg = load_config()
     snapshot = _take_snapshot(cfg)
@@ -119,12 +119,10 @@ def handle_trend_snapshot(handler):
 
 def handle_sla(handler):
     """GET /api/sla — get SLA data."""
-    from freq.modules.sla import _load_sla_data, _calculate_sla
+    from freq.modules.sla import _calculate_sla, _load_sla_data
 
     cfg = load_config()
     data = _load_sla_data(cfg)
-    params = get_params(handler)
-    days = _safe_int_param(params, "days", 30)
     all_hosts = set()
     for c in data.get("checks", []):
         all_hosts.update(c.get("results", {}).keys())
@@ -153,7 +151,7 @@ def handle_sla_check(handler):
 
 def handle_capacity(handler):
     """GET /api/capacity — return capacity projections and trend data."""
-    from freq.jarvis.capacity import load_snapshots, compute_projections
+    from freq.jarvis.capacity import compute_projections, load_snapshots
 
     cfg = load_config()
     snapshots = load_snapshots(cfg.data_dir)
@@ -201,7 +199,7 @@ def handle_capacity_snapshot(handler):
 
 def handle_capacity_recommend(handler):
     """GET /api/capacity/recommend — migration + optimization suggestions."""
-    from freq.jarvis.capacity import load_snapshots, compute_projections, recommend_migrations
+    from freq.jarvis.capacity import compute_projections, load_snapshots, recommend_migrations
 
     cfg = load_config()
     snapshots = load_snapshots(cfg.data_dir)
@@ -210,7 +208,7 @@ def handle_capacity_recommend(handler):
     # Get cost data if available
     costs = []
     try:
-        from freq.jarvis.cost import load_cost_config, compute_costs
+        from freq.jarvis.cost import compute_costs, load_cost_config
 
         cost_cfg = load_cost_config(cfg.conf_dir)
         with _bg_lock:
@@ -359,7 +357,7 @@ def handle_db_status(handler):
         'elif docker ps --format "{{.Names}}" 2>/dev/null | grep -qi -e mysql -e mariadb; then MY="docker"; fi; '
         'echo "${PG}|${MY}|${CONNS}|${SIZE}"'
     )
-    from freq.core.ssh import run_many as ssh_run_many, result_for
+    from freq.core.ssh import run_many as ssh_run_many
 
     results = ssh_run_many(
         hosts=hosts,
@@ -425,7 +423,7 @@ def handle_logs_stats(handler):
         f"journalctl --no-pager --since '-{since}' --priority err --output cat 2>/dev/null | "
         "sort | uniq -c | sort -rn | head -15"
     )
-    from freq.core.ssh import run_many as ssh_run_many, result_for
+    from freq.core.ssh import run_many as ssh_run_many
 
     results = ssh_run_many(
         hosts=hosts,

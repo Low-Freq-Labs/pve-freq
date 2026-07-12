@@ -7,14 +7,14 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-import json
 import copy
+import json
 import os
 import re
 import time
 
+from freq.api.helpers import json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import require_post, json_response
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules import serve as serve_module
@@ -22,11 +22,10 @@ from freq.modules.serve import (
     _bg_cache,
     _bg_cache_ts,
     _bg_lock,
-    _parse_query,
     _check_session_role,
+    _parse_query,
 )
 from freq.modules.vault import vault_get
-
 
 IDRAC_READ_CONNECT_TIMEOUT = 10
 IDRAC_READ_COMMAND_TIMEOUT = 30
@@ -447,7 +446,7 @@ def handle_idrac(handler):
 
 def handle_cost(handler):
     """GET /api/cost -- return fleet cost estimates per host."""
-    from freq.jarvis.cost import load_cost_config, compute_costs, costs_to_dicts, fleet_summary
+    from freq.jarvis.cost import compute_costs, costs_to_dicts, fleet_summary, load_cost_config
 
     cfg = load_config()
     cost_cfg = load_cost_config(cfg.conf_dir)
@@ -504,7 +503,7 @@ def handle_cost_waste(handler):
     """GET /api/cost-analysis/waste -- find overprovisioned VMs wasting resources."""
     cfg = load_config()
     try:
-        from freq.modules.cost_analysis import _gather_vm_resources, _estimate_vm_monthly_cost
+        from freq.modules.cost_analysis import _estimate_vm_monthly_cost, _gather_vm_resources
 
         vms = _gather_vm_resources(cfg)
         if not vms:
@@ -563,7 +562,7 @@ def handle_cost_compare(handler):
     """GET /api/cost-analysis/compare -- on-prem vs cloud cost comparison."""
     cfg = load_config()
     try:
-        from freq.modules.cost_analysis import _gather_vm_resources, _estimate_vm_monthly_cost, _estimate_aws_cost
+        from freq.modules.cost_analysis import _estimate_aws_cost, _estimate_vm_monthly_cost, _gather_vm_resources
 
         params = _parse_query(handler)
         rate = float(params.get("rate", ["0.12"])[0])
@@ -637,7 +636,8 @@ def handle_gwipe(handler):
         if not host or not key:
             json_response(handler, {"error": "GWIPE station not configured in vault"}, 400)
             return
-        import urllib.request, urllib.error
+        import urllib.error
+        import urllib.request
 
         url = f"http://{host}:7980/api/v1/{action}"
         req = urllib.request.Request(url)

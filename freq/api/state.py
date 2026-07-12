@@ -7,15 +7,14 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
+from freq.api.helpers import json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import require_post,  json_response
 from freq.core.config import load_config
 from freq.modules.serve import (
+    _check_session_role,
     _parse_query,
     _parse_query_flat,
-    _check_session_role,
 )
-
 
 # -- Handlers ----------------------------------------------------------------
 
@@ -42,7 +41,9 @@ def handle_policy_check(handler):
     policy = query.get("policy", [""])[0]
     hosts_param = query.get("hosts", [""])[0]
     try:
-        import io, contextlib
+        import contextlib
+        import io
+
         from freq.modules.engine_cmds import cmd_check
 
         class Args:
@@ -73,7 +74,9 @@ def handle_policy_fix(handler):
     policy = query.get("policy", [""])[0]
     hosts_param = query.get("hosts", [""])[0]
     try:
-        import io, contextlib
+        import contextlib
+        import io
+
         from freq.modules.engine_cmds import cmd_fix
 
         class Args:
@@ -98,7 +101,9 @@ def handle_policy_diff(handler):
     policy = query.get("policy", [""])[0]
     hosts_param = query.get("hosts", [""])[0]
     try:
-        import io, contextlib
+        import contextlib
+        import io
+
         from freq.modules.engine_cmds import cmd_diff
 
         class Args:
@@ -153,7 +158,7 @@ def handle_gitops_sync(handler):
     if err:
         json_response(handler, {"error": err}, 403)
         return
-    from freq.jarvis.gitops import load_gitops_config, sync, state_to_dict
+    from freq.jarvis.gitops import load_gitops_config, state_to_dict, sync
 
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
@@ -172,7 +177,7 @@ def handle_gitops_apply(handler):
     if err:
         json_response(handler, {"error": err}, 403)
         return
-    from freq.jarvis.gitops import load_gitops_config, apply_changes, load_state, state_to_dict
+    from freq.jarvis.gitops import apply_changes, load_gitops_config, load_state, state_to_dict
 
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
@@ -186,7 +191,7 @@ def handle_gitops_apply(handler):
 
 def handle_gitops_diff(handler):
     """GET /api/gitops/diff -- show diff between local and remote."""
-    from freq.jarvis.gitops import load_gitops_config, get_diff, get_diff_full
+    from freq.jarvis.gitops import get_diff, get_diff_full, load_gitops_config
 
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
@@ -241,7 +246,7 @@ def handle_gitops_init(handler):
     if err:
         json_response(handler, {"error": err}, 403)
         return
-    from freq.jarvis.gitops import load_gitops_config, init_repo
+    from freq.jarvis.gitops import init_repo, load_gitops_config
 
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)

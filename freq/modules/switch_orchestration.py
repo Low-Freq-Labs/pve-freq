@@ -20,9 +20,8 @@ Design decisions:
 """
 
 from freq.core import fmt
-from freq.core.config import FreqConfig
 from freq.core import log as logger
-
+from freq.core.config import FreqConfig
 
 # ─────────────────────────────────────────────────────────────
 # TARGET RESOLUTION — Resolve switch targets to IP/label/vendor
@@ -1021,7 +1020,7 @@ def cmd_profile_list(cfg: FreqConfig, pack, args) -> int:
 
     if not profiles:
         fmt.warn("No profiles defined")
-        fmt.info(f"Create one: freq net switch profile create <name>")
+        fmt.info("Create one: freq net switch profile create <name>")
         fmt.footer()
         return 0
 

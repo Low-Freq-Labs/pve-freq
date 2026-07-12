@@ -30,7 +30,6 @@ from freq.core import fmt
 from freq.core.health_state import ALL_STATES
 from freq.core.personality import splash
 
-
 # --- Terminal Helpers ---
 
 

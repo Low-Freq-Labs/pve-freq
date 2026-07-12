@@ -227,7 +227,7 @@ def set_port_vlan(ip, cfg, port, vlan, mode="access"):
     """Set port VLAN and mode. Returns True on success."""
     lines = [f"interface {port}"]
     if mode == "access":
-        lines += [f"switchport mode access", f"switchport access vlan {vlan}"]
+        lines += ["switchport mode access", f"switchport access vlan {vlan}"]
     elif mode == "trunk":
         lines += ["switchport mode trunk"]
         if vlan:

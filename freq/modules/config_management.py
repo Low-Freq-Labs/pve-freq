@@ -17,15 +17,14 @@ Design decisions:
     - Search is grep across all stored config files — fast, simple.
 """
 
+import difflib
 import os
 import re
-import difflib
 import time
 
 from freq.core import fmt
-from freq.core.config import FreqConfig
 from freq.core import log as logger
-
+from freq.core.config import FreqConfig
 
 # ---------------------------------------------------------------------------
 # Config Storage
@@ -73,7 +72,7 @@ def _latest_backup(cfg, label):
 
 def _resolve_switch_target(target, cfg):
     """Resolve target for config commands. Reuses switch_orchestration logic."""
-    from freq.modules.switch_orchestration import _resolve_target, _get_deployer
+    from freq.modules.switch_orchestration import _get_deployer, _resolve_target
 
     ip, label, vendor = _resolve_target(target, cfg)
     if not ip:
@@ -129,8 +128,8 @@ def cmd_config_backup(cfg: FreqConfig, pack, args) -> int:
         changes = list(
             difflib.unified_diff(old_lines, new_lines, lineterm="", fromfile="previous", tofile="current", n=0)
         )
-        added = sum(1 for l in changes if l.startswith("+") and not l.startswith("+++"))
-        removed = sum(1 for l in changes if l.startswith("-") and not l.startswith("---"))
+        added = sum(1 for line in changes if line.startswith("+") and not line.startswith("+++"))
+        removed = sum(1 for line in changes if line.startswith("-") and not line.startswith("---"))
         if added or removed:
             fmt.info(f"Changes since last backup: +{added} -{removed} lines")
         else:
@@ -144,7 +143,7 @@ def cmd_config_backup(cfg: FreqConfig, pack, args) -> int:
 
 def _backup_all(cfg):
     """Backup configs from all switches."""
-    from freq.modules.switch_orchestration import _get_switch_hosts, _get_deployer, _vendor_for_host
+    from freq.modules.switch_orchestration import _get_deployer, _get_switch_hosts, _vendor_for_host
 
     switches = _get_switch_hosts(cfg)
     if not switches:
@@ -358,8 +357,8 @@ def _show_diff(old_lines, new_lines, old_label, new_label):
         fmt.success("No differences")
         return
 
-    added = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
-    removed = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+    added = sum(1 for line in diff if line.startswith("+") and not line.startswith("+++"))
+    removed = sum(1 for line in diff if line.startswith("-") and not line.startswith("---"))
     fmt.info(f"+{added} -{removed} lines changed")
     fmt.blank()
 
@@ -386,7 +385,6 @@ def cmd_config_search(cfg: FreqConfig, pack, args) -> int:
     fmt.header(f"Config Search: {pattern}", breadcrumb="FREQ > Net > Config")
     fmt.blank()
 
-    config_path = _config_dir(cfg)
     try:
         regex = re.compile(pattern, re.IGNORECASE)
     except re.error as e:
@@ -471,7 +469,9 @@ def cmd_config_restore(cfg: FreqConfig, pack, args) -> int:
         restore_config = f.read()
 
     restore_lines = [
-        l for l in restore_config.splitlines() if l.strip() and not l.startswith("!") and not l.startswith("Building")
+        line
+        for line in restore_config.splitlines()
+        if line.strip() and not line.startswith("!") and not line.startswith("Building")
     ]
 
     fmt.header(f"Config Restore: {label}", breadcrumb="FREQ > Net > Config")

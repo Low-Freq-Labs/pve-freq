@@ -22,8 +22,8 @@ Design decisions:
 
 import ipaddress
 
-from freq.core.config import FreqConfig
 from freq.core import fmt
+from freq.core.config import FreqConfig
 
 
 def _parse_subnet(subnet_str: str):
@@ -235,7 +235,7 @@ def _cmd_ip_next(cfg: FreqConfig, vlan_name: str, json_mode: bool, args) -> int:
         fmt.error("Specify a VLAN: freq ip next --vlan <name>")
         fmt.blank()
         if cfg.vlans:
-            fmt.line(f"  Available VLANs:")
+            fmt.line("  Available VLANs:")
             for v in cfg.vlans:
                 fmt.line(f"    {fmt.C.CYAN}{v.name}{fmt.C.RESET} ({v.subnet})")
         fmt.blank()
@@ -247,7 +247,7 @@ def _cmd_ip_next(cfg: FreqConfig, vlan_name: str, json_mode: bool, args) -> int:
         fmt.error(f"VLAN '{vlan_name}' not found")
         fmt.blank()
         if cfg.vlans:
-            fmt.line(f"  Available VLANs:")
+            fmt.line("  Available VLANs:")
             for v in cfg.vlans:
                 fmt.line(f"    {fmt.C.CYAN}{v.name}{fmt.C.RESET} ({v.subnet})")
         fmt.footer()

@@ -17,14 +17,15 @@ import re
 import time
 import uuid
 
+from freq.api.auth import check_session_role as _check_session_role
+from freq.api.auth import current_user
+from freq.api.helpers import get_json_body, get_params, json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import require_post, json_response, get_params, get_json_body
-from freq.core.config import load_config
 from freq.core import resolve as res
-from freq.core.ssh import run_many as ssh_run_many, result_for
-from freq.modules.vault import vault_set, vault_get, vault_init, vault_list, vault_delete
-from freq.api.auth import check_session_role as _check_session_role, current_user
-
+from freq.core.config import load_config
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
+from freq.modules.vault import vault_delete, vault_get, vault_init, vault_list, vault_set
 
 _VAULT_GLOBAL_HOST = "freq:vault:credentials:global"
 _VAULT_USER_HOST_PREFIX = "freq:vault:credentials:user:"
@@ -379,8 +380,9 @@ def handle_sweep(handler):
     params = get_params(handler)
     do_fix = params.get("fix", ["false"])[0].lower() == "true"
     try:
-        import io
         import contextlib
+        import io
+
         from freq.jarvis.sweep import cmd_sweep
 
         class Args:
@@ -493,7 +495,7 @@ def handle_secrets_audit(handler):
     leases = _load_leases(cfg)
     scan = _load_scan_results(cfg)
     now = time.time()
-    expired = sum(1 for l in leases if 0 < l.get("expires_epoch", 0) < now)
+    expired = sum(1 for lease in leases if 0 < lease.get("expires_epoch", 0) < now)
     json_response(
         handler,
         {
@@ -583,7 +585,7 @@ def handle_proxy_status_api(handler):
 
 def handle_comply_status(handler):
     """GET /api/comply/status — compliance status."""
-    from freq.modules.comply import _load_results, CIS_CHECKS
+    from freq.modules.comply import CIS_CHECKS, _load_results
 
     cfg = load_config()
     results = _load_results(cfg)

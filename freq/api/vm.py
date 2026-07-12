@@ -10,8 +10,8 @@ Maps 1:1 to `freq vm` CLI domain. Each handler is a standalone function
 that receives the HTTP handler as its first argument.
 """
 
-import json
 import ipaddress
+import json
 import os
 import re
 import shlex
@@ -20,26 +20,31 @@ import threading
 import time
 import uuid
 
+from freq.api.helpers import get_json_body, get_params, json_response
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_params, get_json_body
 from freq.core.config import load_config, save_network_profiles_toml
 from freq.core.ssh import run as ssh_single
 from freq.core.types import VLAN
 from freq.core.validate import (
     ip as valid_ip,
-    label as valid_label,
+)
+from freq.core.validate import (
     is_protected_vmid,
+)
+from freq.core.validate import (
+    label as valid_label,
+)
+from freq.core.validate import (
     vlan_id as valid_vlan,
 )
 from freq.modules.pve import _find_reachable_node, _find_vm_node, _pve_cmd
 from freq.modules.serve import (
-    _get_fleet_vms,
-    _check_vm_permission,
-    get_vm_tags,
     _check_session_role,
+    _check_vm_permission,
     _get_discovered_node_ips,
+    _get_fleet_vms,
+    get_vm_tags,
 )
-
 
 _vm_create_jobs = {}
 _vm_create_jobs_lock = threading.Lock()
@@ -3084,7 +3089,7 @@ def handle_vm_migrate(handler):
         return
 
     try:
-        from freq.modules.vm import _find_vm_node, _find_best_local_storage, _check_snapshots, _delete_snapshots
+        from freq.modules.vm import _check_snapshots, _delete_snapshots, _find_best_local_storage, _find_vm_node
 
         # Find source node
         source_ip = _find_vm_node(cfg, vmid)
@@ -3302,9 +3307,9 @@ def handle_rollback(handler):
 def handle_snapshots_stale(handler):
     """GET /api/snapshots/stale — find VM snapshots older than threshold."""
     cfg = load_config()
-    from freq.core.ssh import run as ssh_fn
+    from urllib.parse import parse_qs, urlparse
 
-    from urllib.parse import urlparse, parse_qs
+    from freq.core.ssh import run as ssh_fn
 
     raw = parse_qs(urlparse(handler.path).query)
     params = {k: v[0] if v else "" for k, v in raw.items()}

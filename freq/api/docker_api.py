@@ -9,17 +9,17 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import os
 
+from freq.api.helpers import json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import require_post,  json_response
 from freq.core.config import load_config
-from freq.core.ssh import run as ssh_single, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_single
 from freq.modules.serve import (
-    _parse_query_flat,
     _check_session_role,
+    _parse_query_flat,
     _resolve_container_vm_ip,
     _write_containers_toml,
 )
-
 
 # -- Helpers -----------------------------------------------------------------
 
@@ -285,7 +285,7 @@ def handle_containers_compose_up(handler):
         handler,
         {
             "ok": r.returncode == 0,
-            "vm_id": vm_id,
+            "vm_id": vm.vm_id,
             "vm": vm.label,
             "output": (r.stdout or "")[:1000],
             "error": (r.stderr or "")[:500] if r.returncode != 0 else "",
@@ -326,7 +326,7 @@ def handle_containers_compose_down(handler):
         handler,
         {
             "ok": r.returncode == 0,
-            "vm_id": vm_id,
+            "vm_id": vm.vm_id,
             "vm": vm.label,
             "output": (r.stdout or "")[:1000],
             "error": (r.stderr or "")[:500] if r.returncode != 0 else "",
@@ -366,7 +366,7 @@ def handle_containers_compose_view(handler):
             handler,
             {
                 "ok": True,
-                "vm_id": vm_id,
+                "vm_id": vm.vm_id,
                 "vm": vm.label,
                 "content": r.stdout[:10000],
             },
@@ -376,7 +376,7 @@ def handle_containers_compose_view(handler):
             handler,
             {
                 "ok": False,
-                "vm_id": vm_id,
+                "vm_id": vm.vm_id,
                 "error": "Compose file not found or not readable",
             },
         )
@@ -393,7 +393,7 @@ def handle_stack_status(handler):
         return
 
     command = "docker compose ls --format json 2>/dev/null || docker-compose ls --format json 2>/dev/null || echo '[]'"
-    from freq.core.ssh import run_many as ssh_run_many, result_for
+    from freq.core.ssh import run_many as ssh_run_many
 
     results = ssh_run_many(
         hosts=hosts,
@@ -444,7 +444,7 @@ def handle_stack_health(handler):
         return
 
     command = "docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null || echo ''"
-    from freq.core.ssh import run_many as ssh_run_many, result_for
+    from freq.core.ssh import run_many as ssh_run_many
 
     results = ssh_run_many(
         hosts=hosts,

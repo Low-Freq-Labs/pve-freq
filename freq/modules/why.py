@@ -22,7 +22,6 @@ Design decisions:
 from freq.core import fmt
 from freq.core.config import FreqConfig
 
-
 # All possible VM actions
 ALL_ACTIONS = ["view", "start", "stop", "restart", "destroy", "clone", "migrate", "snapshot"]
 

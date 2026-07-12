@@ -22,9 +22,8 @@ import socket
 import time
 
 from freq.core import fmt
-from freq.core.config import FreqConfig
 from freq.core import log as logger
-
+from freq.core.config import FreqConfig
 
 # ---------------------------------------------------------------------------
 # Data Storage

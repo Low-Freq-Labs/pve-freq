@@ -8,19 +8,16 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-import json
 import re
 import subprocess
 
-from freq.core import log as logger
-from freq.api.helpers import require_post, json_response, get_json_body
+from freq.api.helpers import get_json_body, json_response, require_post
+from freq.core import truenas_api
 from freq.core.config import load_config
 from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.health_state import STATE_AUTH_FAILED, classify_probe_failure
 from freq.core.ssh import run as ssh_run_fn
-from freq.core import truenas_api
 from freq.modules.serve import _check_session_role, _parse_query
-
 
 # -- Handlers ----------------------------------------------------------------
 

@@ -262,7 +262,7 @@ def _cmd_alert(cfg: FreqConfig, args) -> int:
 
     # Try to notify
     try:
-        from freq.jarvis.notify import notify, configured_providers
+        from freq.jarvis.notify import configured_providers, notify
 
         providers = configured_providers(cfg)
         if providers:

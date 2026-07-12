@@ -34,7 +34,7 @@ class TestCommentedLineNotFoolsCheck(unittest.TestCase):
         import re
         # Find the headless RBAC block
         headless_rbac = re.search(
-            r'roles_file = os\.path\.join\(cfg\.conf_dir, "roles\.conf"\).*?active_roles = \[l\.strip\(\) for l in existing_lines',
+            r'roles_file = os\.path\.join\(cfg\.conf_dir, "roles\.conf"\).*?active_roles = \[line\.strip\(\) for line in existing_lines',
             src,
             re.DOTALL,
         )
@@ -49,9 +49,9 @@ class TestCommentedLineNotFoolsCheck(unittest.TestCase):
     def test_startswith_used_not_in(self):
         """Role checks must use startswith() on active lines."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        self.assertIn('l.startswith(f"{current_user}:")', src)
-        self.assertIn('l.startswith(f"{dashboard_user}:")', src)
-        self.assertNotIn('l.startswith(f"{svc_name}:")', src)
+        self.assertIn('line.startswith(f"{current_user}:")', src)
+        self.assertIn('line.startswith(f"{dashboard_user}:")', src)
+        self.assertNotIn('line.startswith(f"{svc_name}:")', src)
         self.assertIn("runtime-only, not a web login", src)
 
 

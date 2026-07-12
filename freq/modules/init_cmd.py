@@ -51,15 +51,15 @@ from freq.core import audit, fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.host_scope import managed_probe_hosts
-from freq.core.ssh import PLATFORM_SSH
 from freq.core.service_units import dashboard_service_unit
+from freq.core.ssh import PLATFORM_SSH
 from freq.modules.agent_deployment import (
     AGENT_REMOTE_DIR,
-    AGENT_REMOTE_PATH,
-    deploy_to_host as deploy_metrics_agent,
     load_agent_source,
 )
-
+from freq.modules.agent_deployment import (
+    deploy_to_host as deploy_metrics_agent,
+)
 
 # Device types that support per-device credentials
 # Legacy list — will be replaced by deployer registry categories
@@ -1632,7 +1632,7 @@ def _validate_service_account_choice(svc_name):
     # freq-ops is the bootstrap/sudo ingress identity per
     # docs/IDENTITY-CONTRACT.md. init must not useradd, chpasswd,
     # sudoers-write, or otherwise manage it.
-    from freq.core.config import is_managed_service_account_name, RESERVED_SERVICE_ACCOUNT_NAMES
+    from freq.core.config import RESERVED_SERVICE_ACCOUNT_NAMES, is_managed_service_account_name
 
     if not is_managed_service_account_name(svc_name):
         fmt.step_fail(
@@ -2387,7 +2387,6 @@ def _phase_configure(cfg, args=None):
     cli_pve_names = getattr(args, "pve_node_names", None) if args else None
     cli_gateway = getattr(args, "gateway", None) if args else None
     cli_nameserver = getattr(args, "nameserver", None) if args else None
-    cli_hosts_file = getattr(args, "hosts_file", None) if args else None
     cli_cluster_name = getattr(args, "cluster_name", None) if args else None
     cli_ssh_mode = getattr(args, "ssh_mode", None) if args else None
 
@@ -3767,7 +3766,7 @@ def _register_host_interactive(cfg):
 
 def _discover_and_register(cfg, ctx):
     """Run network discovery and offer to register found hosts."""
-    from freq.modules.discover import scan_and_identify, _display_discovery_results, _parse_subnet_input
+    from freq.modules.discover import _display_discovery_results, _parse_subnet_input, scan_and_identify
 
     subnet = _input("Subnet to scan (e.g. 192.168.1 or 192.168.1.0/24)")
     if not subnet:
@@ -3827,12 +3826,12 @@ def _discover_and_register(cfg, ctx):
                 f"  {fmt.C.YELLOW}{h['ip']}{fmt.C.RESET} — ping only "
                 f"(could not SSH — pfSense/TrueNAS/BMC?)"
             )
-            if not _confirm(f"  Register this host manually?", default=False):
+            if not _confirm("  Register this host manually?", default=False):
                 continue
-            hostname = _input(f"    Hostname/label")
+            hostname = _input("    Hostname/label")
             if not hostname:
                 continue
-            detected_type = _input(f"    Type (pfsense/truenas/idrac/switch/linux)", "linux")
+            detected_type = _input("    Type (pfsense/truenas/idrac/switch/linux)", "linux")
 
         # Check if same host already registered under different VLAN IP
         if hostname and hostname.lower() in known_labels:
@@ -3843,15 +3842,15 @@ def _discover_and_register(cfg, ctx):
             continue
 
         fmt.line(f"  {fmt.C.CYAN}{h['ip']}{fmt.C.RESET} — {hostname} [{detected_type}]")
-        if not _confirm(f"  Register this host?", default=True):
+        if not _confirm("  Register this host?", default=True):
             continue
 
-        label = _input(f"    Label", hostname)
+        label = _input("    Label", hostname)
         if label.lower() in known_labels:
             fmt.step_warn(f"Label '{label}' already in use — skipping")
             continue
-        htype = _input(f"    Type", detected_type)
-        groups = _input(f"    Groups (optional)", "")
+        htype = _input("    Type", detected_type)
+        groups = _input("    Groups (optional)", "")
 
         from freq.core.config import append_host_toml
 
@@ -3991,9 +3990,9 @@ def _pdm_api_request(method, path, data=None, cookies=None, csrf_token=None):
     Returns (success, response_dict_or_error_string).
     """
     import json
-    import urllib.request
-    import urllib.error
     import ssl
+    import urllib.error
+    import urllib.request
 
     url = f"https://localhost:8443{path}"
 
@@ -4235,7 +4234,7 @@ def _phase_pdm(cfg, ctx, args=None):
         else:
             # Interactive — ask
             fmt.line(f"  {fmt.C.BOLD}PDM provides:{fmt.C.RESET} unified dashboard, cross-node migration,")
-            fmt.line(f"  capacity planning, aggregated tasks across your PVE cluster.")
+            fmt.line("  capacity planning, aggregated tasks across your PVE cluster.")
             fmt.blank()
             if _confirm("Install PDM? (recommended for multi-node clusters)"):
                 if not _pdm_install():
@@ -4513,7 +4512,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     logger.info("init_phase_start: Phase 7 - fleet_discover", phase=7)
     import json as _json
 
-    from freq.core.config import Host, append_host_toml
+    from freq.core.config import Host
 
     key_path = ctx.get("key_path", "") or cfg.ssh_key_path
     svc_name = ctx.get("svc_name", cfg.ssh_service_account)
@@ -4791,7 +4790,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                         "htype": h.get("type", "linux"),
                         "groups": vlan_name.lower().replace("/", "-"),
                         "vmid": 0,
-                        "source": f"vlan-scan",
+                        "source": "vlan-scan",
                         "managed": _is_managed_auto_host(
                             hostname,
                             h.get("type", "linux"),
@@ -5269,8 +5268,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 registered = 0
                 for ip, d in discovered.items():
                     if _confirm(f"  Register {d['label']} ({ip}) [{d['htype']}]?", default=True):
-                        label = _input(f"    Label", d["label"])
-                        htype = _input(f"    Type", d["htype"])
+                        label = _input("    Label", d["label"])
+                        htype = _input("    Type", d["htype"])
                         if htype in DEVICE_HTYPES or htype in {"opnsense", "ilo", "ipmi"}:
                             scope = _normalize_device_scope(_input("    Physical scope (core/lab)", d.get("scope", "core")), default="")
                             if not scope:
@@ -6281,7 +6280,6 @@ def _phase_fleet_configure(cfg, ctx):
         content = _update_toml_value(content, "protected_ranges", protected_ranges)
         with open(toml_path, "w") as f:
             f.write(content)
-        total_protected = len(protected_vmids) + sum(hi - lo + 1 for lo, hi in protected_ranges)
         fmt.step_ok(f"Protected: {len(protected_vmids)} templates + VMID range 900-999")
     except OSError:
         pass
@@ -6675,7 +6673,6 @@ def _categorize_vms(cfg):
 
     for vm in pve_vms:
         vmid = int(vm.get("vmid", 0) or 0)
-        name = (vm.get("name", "") or "").lower()
         tags = vm.get("tags", "") or ""
 
         # Templates (PVE template flag or naming convention)
@@ -6764,7 +6761,7 @@ def _get_auth_creds(choice, label):
     if choice == "B":
         auth_key = _input("SSH key path", os.path.expanduser("~/.ssh/id_ed25519"))
         if not os.path.isfile(auth_key):
-            fmt.step_warn(f"Key not found — falling back to password")
+            fmt.step_warn("Key not found — falling back to password")
             auth_key = ""
     if not auth_key:
         rc, _, _ = _run(["which", "sshpass"])
@@ -7569,7 +7566,7 @@ def _deploy_to_host_dispatch(ip, htype, ctx, auth_pass, auth_key, auth_user):
     Supports both legacy htypes ('pfsense') and category:vendor ('firewall:pfsense').
     Returns True on success.
     """
-    from freq.deployers import resolve_htype, get_deployer
+    from freq.deployers import get_deployer, resolve_htype
 
     category, vendor = resolve_htype(htype)
     deployer = get_deployer(category, vendor)
@@ -8191,7 +8188,7 @@ def _remove_from_host_dispatch(
     bootstrap_auth=None,
 ):
     """Route to platform-specific remover. Returns (success, error_info)."""
-    from freq.deployers import resolve_htype, get_deployer, RSA_REQUIRED_CATEGORIES
+    from freq.deployers import RSA_REQUIRED_CATEGORIES, get_deployer, resolve_htype
 
     def _credential_auth(*keys):
         for key in keys:
@@ -8263,11 +8260,11 @@ def _phase_admin_setup(cfg, ctx):
         if not os.path.isfile(path):
             return []
         with open(path) as f:
-            return [l.strip() for l in f if l.strip() and not l.strip().startswith("#")]
+            return [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
 
     # Add current user as admin
     active = _active_roles(roles_file)
-    if any(l.startswith(f"{current_user}:") for l in active):
+    if any(line.startswith(f"{current_user}:") for line in active):
         fmt.step_ok(f"{current_user} already in roles.conf")
     else:
         with open(roles_file, "a") as f:
@@ -8296,7 +8293,7 @@ def _phase_admin_setup(cfg, ctx):
             role = "admin" if role_choice == "A" else "operator"
 
             active = _active_roles(roles_file)
-            if any(l.startswith(f"{username}:") for l in active):
+            if any(line.startswith(f"{username}:") for line in active):
                 fmt.line(f"  {fmt.C.DIM}{username} already in roles.conf{fmt.C.RESET}")
             else:
                 with open(roles_file, "a") as f:
@@ -8721,7 +8718,6 @@ def _phase_verify(cfg, ctx):
                     fb_data = tomllib.load(f)
                 phys = fb_data.get("physical", {})
                 pve = fb_data.get("pve_nodes", {})
-                cats = {k: v for k, v in fb_data.items() if k.startswith("categories") or (k == "categories" and isinstance(v, dict))}
                 cat_count = len(fb_data.get("categories", {})) if isinstance(fb_data.get("categories"), dict) else 0
                 entry_count = len(phys) + len(pve) + cat_count
                 if entry_count > 0:
@@ -9064,10 +9060,10 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     fmt.line(f"  {fmt.C.BOLD}Next steps:{fmt.C.RESET}")
     if deploy_failures:
         fmt.line(f"    freq init --fix      — {fmt.C.YELLOW}retry {deploy_failures} failed host(s){fmt.C.RESET}")
-    fmt.line(f"    freq serve           — start the dashboard")
-    fmt.line(f"    freq fleet status    — check fleet connectivity")
-    fmt.line(f"    freq vm list         — see all VMs across cluster")
-    fmt.line(f"    freq doctor          — verify FREQ is healthy")
+    fmt.line("    freq serve           — start the dashboard")
+    fmt.line("    freq fleet status    — check fleet connectivity")
+    fmt.line("    freq vm list         — see all VMs across cluster")
+    fmt.line("    freq doctor          — verify FREQ is healthy")
 
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Dashboard login: first login sets your password (any password accepted).{fmt.C.RESET}")
@@ -9424,7 +9420,7 @@ def _init_fix(cfg, args):
         return 1
 
     # Persist the generated password in vault so it's recoverable
-    from freq.modules.vault import vault_set, vault_init
+    from freq.modules.vault import vault_init, vault_set
 
     if not os.path.exists(cfg.vault_file):
         vault_init(cfg)
@@ -9602,7 +9598,6 @@ def _init_fix(cfg, args):
                 dev_pass = ""
                 dev_user = bootstrap_user
                 # Try device credentials
-                dev_creds = getattr(args, "device_credentials", None)
                 pw_file = getattr(args, "device_password_file", None) or getattr(args, "password_file", None)
                 if pw_file and os.path.isfile(pw_file):
                     with open(pw_file) as f:
@@ -9820,13 +9815,13 @@ def _uninstall_interactive(cfg, args):
 
     fmt.line(f"  {fmt.C.RED}This will:{fmt.C.RESET}")
     fmt.line(f"    - Delete account '{svc_name}' + home dir on {len(targets)} remote hosts")
-    fmt.line(f"    - Remove sudoers, SSH keys, group membership on remote hosts")
+    fmt.line("    - Remove sudoers, SSH keys, group membership on remote hosts")
     fmt.line(f"    - Delete local SSH keypairs ({cfg.key_dir}/)")
-    fmt.line(f"    - Remove vault, roles, init marker")
+    fmt.line("    - Remove vault, roles, init marker")
     fmt.line(f"    - Remove local sudoers for '{svc_name}'")
     fmt.line(f"    - Delete local account '{svc_name}'")
     if getattr(args, "purge_docker_volumes", False):
-        fmt.line(f"    - Stop local Docker Compose app and remove named state volumes")
+        fmt.line("    - Stop local Docker Compose app and remove named state volumes")
     fmt.blank()
 
     if not _confirm("Proceed with uninstall?"):
@@ -9944,7 +9939,7 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
 
                 if success:
                     if err_info == "not_found":
-                        fmt.step_ok(f"Account not present (already clean)")
+                        fmt.step_ok("Account not present (already clean)")
                     elif err_info == "key_only":
                         fmt.step_warn(
                             "SSH key removed, but account still needs pfSense admin cleanup "
@@ -10266,7 +10261,7 @@ def _update_toml(cfg, section, key, value):
 
     if not updated:
         # Append to section or create it
-        section_exists = any(l.strip() == f"[{section}]" for l in lines)
+        section_exists = any(line.strip() == f"[{section}]" for line in lines)
         if section_exists:
             # Find end of section
             in_sect = False
@@ -10746,9 +10741,9 @@ def _seed_headless_dashboard_auth(cfg, dashboard_user, dashboard_pass, svc_name,
     if os.path.isfile(roles_file):
         with open(roles_file) as f:
             existing_lines = f.readlines()
-    active_roles = [l.strip() for l in existing_lines if l.strip() and not l.strip().startswith("#")]
+    active_roles = [line.strip() for line in existing_lines if line.strip() and not line.strip().startswith("#")]
     with open(roles_file, "a") as f:
-        if not any(l.startswith(f"{dashboard_user}:") for l in active_roles):
+        if not any(line.startswith(f"{dashboard_user}:") for line in active_roles):
             f.write(f"{dashboard_user}:admin\n")
             if verbose:
                 fmt.step_ok(f"Added {dashboard_user} as admin")
@@ -10761,9 +10756,9 @@ def _seed_headless_dashboard_auth(cfg, dashboard_user, dashboard_pass, svc_name,
     if os.path.isfile(users_file):
         with open(users_file) as f:
             users_existing = f.readlines()
-    users_active = [l.strip() for l in users_existing if l.strip() and not l.strip().startswith("#")]
+    users_active = [line.strip() for line in users_existing if line.strip() and not line.strip().startswith("#")]
     with open(users_file, "a") as f:
-        if not any(l.split()[0] == dashboard_user for l in users_active if l.split()):
+        if not any(line.split()[0] == dashboard_user for line in users_active if line.split()):
             f.write(f"{dashboard_user} admin\n")
     if verbose:
         fmt.step_ok("users.conf seeded with dashboard admin")
@@ -10782,8 +10777,8 @@ def _seed_headless_dashboard_auth(cfg, dashboard_user, dashboard_pass, svc_name,
     # landing on disk in readable form trips the guard and init emits a
     # loud step_fail instead of a silent step_ok.
     try:
-        from freq.modules.vault import vault_init, vault_set, vault_get
         from freq.api.auth import hash_password, verify_password
+        from freq.modules.vault import vault_get, vault_init, vault_set
 
         if not os.path.exists(cfg.vault_file):
             vault_init(cfg)

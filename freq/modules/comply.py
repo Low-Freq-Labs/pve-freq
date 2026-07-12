@@ -26,7 +26,8 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 COMPLY_DIR = "compliance"
 COMPLY_RESULTS = "scan-results.json"
@@ -325,7 +326,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
 
     fmt.line(f"  Last scan: {last_scan}")
     fmt.line(f"  Checks:    {len(CIS_CHECKS)} CIS Level 1")
-    fmt.line(f"  Benchmark: Debian/Ubuntu CIS Level 1")
+    fmt.line("  Benchmark: Debian/Ubuntu CIS Level 1")
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Run scan: freq secure comply scan{fmt.C.RESET}")
     fmt.blank()

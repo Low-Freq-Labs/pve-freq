@@ -26,9 +26,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from freq.core import fmt
+from freq.core import fmt, validate
 from freq.core import log as logger
-from freq.core import validate
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
@@ -620,7 +619,7 @@ def cmd_power(cfg: FreqConfig, pack, args) -> int:
     if _has_pve_api_token(cfg):
         api_action, api_method = api_actions[action]
         # Find the VM's node via cluster resources
-        res_data, res_ok = _pve_api_call(cfg, node_ip, f"/cluster/resources?type=vm", timeout=PVE_QUICK_TIMEOUT)
+        res_data, res_ok = _pve_api_call(cfg, node_ip, "/cluster/resources?type=vm", timeout=PVE_QUICK_TIMEOUT)
         if res_ok and isinstance(res_data, list):
             vm_entry = next((v for v in res_data if v.get("vmid") == vmid), None)
             if vm_entry:

@@ -360,8 +360,8 @@ def cmd_plugin_install(cfg, pack, args):
 
 def _install_from_url(cfg, url, plugin_dir):
     """Download and install plugin from URL."""
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     filename = url.rsplit("/", 1)[-1]
     if not filename.endswith((".py", ".tar.gz")):
@@ -587,7 +587,7 @@ def cmd_plugin_create(cfg, pack, args):
     fmt.blank()
     fmt.info("Next steps:")
     fmt.info(f"  1. Edit {dest}")
-    fmt.info(f"  2. Test: freq {name}" if ptype == "command" else f"  2. Test with freq init")
+    fmt.info(f"  2. Test: freq {name}" if ptype == "command" else "  2. Test with freq init")
     fmt.blank()
     fmt.footer()
     return 0
@@ -595,8 +595,6 @@ def cmd_plugin_create(cfg, pack, args):
 
 def cmd_plugin_search(cfg, pack, args):
     """Search for available plugins (community index)."""
-    query = getattr(args, "query", None) or ""
-
     fmt.header("Plugin Search")
     fmt.blank()
 

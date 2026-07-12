@@ -27,22 +27,22 @@ import pty
 import re
 import secrets
 import select
-import signal
 import shlex
+import signal
 import struct
 import subprocess
 import threading
 import time
 
-from freq.core import log as logger
-from freq.api.helpers import require_post, json_response, get_params
 from freq.api.auth import current_user, same_origin_or_absent
+from freq.api.helpers import get_params, json_response, require_post
+from freq.core import log as logger
 from freq.core.config import load_config
 from freq.core.device_credentials import resolve_staged_device_ssh_auth
-from freq.core.ssh import _build_ssh_cmd, run as ssh_single
+from freq.core.ssh import _build_ssh_cmd
+from freq.core.ssh import run as ssh_single
 from freq.modules import serve as serve_module
 from freq.modules.serve import _check_session_role
-
 
 # ── Session Store ──────────────────────────────────────────────────────
 
@@ -566,7 +566,7 @@ def handle_terminal_ws(handler):
     operator's session id (URL history, proxy logs, dev-tools
     network panel) could hijack the PTY.
     """
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import parse_qs, urlparse
 
     role, err = _check_session_role(handler, "operator")
     if err:

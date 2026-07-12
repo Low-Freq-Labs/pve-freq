@@ -7,11 +7,9 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-from freq.core import log as logger
 from freq.api.helpers import json_response
 from freq.core.config import load_config
-from freq.jarvis.risk import _load_risk_map, _load_kill_chain
-
+from freq.jarvis.risk import _load_kill_chain, _load_risk_map
 
 # -- Handlers ----------------------------------------------------------------
 
@@ -39,7 +37,7 @@ def handle_risk(handler):
 
 def handle_oncall_whoami(handler):
     """GET /api/oncall/whoami -- who is on call."""
-    from freq.modules.oncall import _load_schedule, _get_current_oncall
+    from freq.modules.oncall import _get_current_oncall, _load_schedule
 
     cfg = load_config()
     schedule = _load_schedule(cfg)

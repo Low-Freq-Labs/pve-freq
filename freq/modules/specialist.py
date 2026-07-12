@@ -23,8 +23,7 @@ Design decisions:
 import json
 import time
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
@@ -236,7 +235,7 @@ def _cmd_create(cfg, args) -> int:
     r = _ssh_cmd(
         cfg,
         ip,
-        f"sudo mkdir -p /opt/jarvis-mailbox/{{inbox,outbox,archive}} && sudo chmod -R 777 /opt/jarvis-mailbox",
+        "sudo mkdir -p /opt/jarvis-mailbox/{inbox,outbox,archive} && sudo chmod -R 777 /opt/jarvis-mailbox",
         timeout=SPECIALIST_DEPLOY_TIMEOUT,
     )
     fmt.step_ok("Mailbox created") if r.returncode == 0 else fmt.step_fail("Failed")
@@ -248,7 +247,7 @@ def _cmd_create(cfg, args) -> int:
 
     fmt.blank()
     fmt.line(f"  {fmt.C.GREEN}Specialist '{specialist_name}' deployed to {ip}{fmt.C.RESET}")
-    fmt.info(f"SSH in and run: bash ~/dev-start")
+    fmt.info("SSH in and run: bash ~/dev-start")
     fmt.blank()
     fmt.footer()
 

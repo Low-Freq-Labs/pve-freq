@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-
 _SERVICE_USER_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 _SAFE_PATH_BYTES = frozenset(b"/ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
 

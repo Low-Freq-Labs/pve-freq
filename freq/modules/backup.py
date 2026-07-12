@@ -18,9 +18,9 @@ Design decisions:
       Single-node backup views are what the PVE GUI already does.
 """
 
+import json
 import os
 import time
-import json
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
@@ -77,7 +77,9 @@ def _backup_list(cfg: FreqConfig) -> int:
                     snap_out, snap_ok = _pve_cmd(cfg, node_ip, f"qm listsnapshot {vmid} 2>/dev/null")
                     if snap_ok and snap_out.strip():
                         snap_lines = [
-                            l.strip() for l in snap_out.split("\n") if l.strip() and "current" not in l.lower()
+                            line.strip()
+                            for line in snap_out.split("\n")
+                            if line.strip() and "current" not in line.lower()
                         ]
                         if snap_lines:
                             fmt.line(f"  {fmt.C.CYAN}VM {vmid}{fmt.C.RESET} ({name}): {len(snap_lines)} snapshot(s)")

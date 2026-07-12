@@ -9,24 +9,26 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import os
 
-from freq.core import log as logger
-from freq.api.helpers import require_post, json_response, get_json_body
 from freq.api.auth import (
     _auth_lock,
     _auth_tokens,
-    check_session_role as _check_session_role,
     current_user,
     hash_password,
 )
-from freq.core.config import load_config
-from freq.modules.users import (
-    _load_users,
-    _save_users,
-    _role_level,
-    _valid_username,
-    ROLE_HIERARCHY,
+from freq.api.auth import (
+    check_session_role as _check_session_role,
 )
+from freq.api.helpers import get_json_body, json_response, require_post
+from freq.core import log as logger
+from freq.core.config import load_config
 from freq.modules.serve import _parse_query
+from freq.modules.users import (
+    ROLE_HIERARCHY,
+    _load_users,
+    _role_level,
+    _save_users,
+    _valid_username,
+)
 from freq.modules.vault import vault_delete, vault_init, vault_set
 
 

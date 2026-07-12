@@ -22,10 +22,9 @@ import re
 import time
 
 from freq.core import fmt
+from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
-from freq.core import log as logger
-
 
 # ---------------------------------------------------------------------------
 # SSH Helper
@@ -350,8 +349,6 @@ def cmd_fw_dhcp(cfg: FreqConfig, pack, args) -> int:
     if not ip:
         fmt.error("No firewall configured")
         return 1
-
-    action = getattr(args, "action", "leases")
 
     fmt.header("DHCP Leases", breadcrumb="FREQ > Firewall")
     fmt.blank()

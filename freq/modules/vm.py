@@ -28,8 +28,7 @@ import subprocess
 import threading
 import time
 
-from freq.core import fmt
-from freq.core import validate
+from freq.core import fmt, validate
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
@@ -199,7 +198,7 @@ def _find_vm_node(cfg: FreqConfig, vmid: int) -> str:
     if not node_ip:
         return ""
 
-    stdout, ok = _pve_cmd(cfg, node_ip, f"pvesh get /cluster/resources --type vm --output-format json")
+    stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/resources --type vm --output-format json")
     if not ok:
         return ""
 
@@ -281,7 +280,6 @@ def cmd_create(cfg: FreqConfig, pack, args) -> int:
 
     # Get parameters
     name = getattr(args, "name", None)
-    image = getattr(args, "image", None)
     node = getattr(args, "node", None)
 
     # Resolve --node name to IP, or find first reachable
@@ -758,9 +756,7 @@ def cmd_template(cfg: FreqConfig, pack, args) -> int:
     if not _safety_check(cfg, vmid, "templatize"):
         return 1
 
-    node_ip = _find_vm_node(cfg, src_vmid)
-    if not node_ip:
-        node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
     if not node_ip:
         node_ip = _find_node(cfg)
     if not node_ip:
@@ -1033,7 +1029,7 @@ def cmd_pool(cfg: FreqConfig, pack, args) -> int:
     """PVE pool management."""
     action = getattr(args, "pool_action", None) or getattr(args, "action", None)
 
-    node_ip = _find_vm_node(cfg, vmid)
+    node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
@@ -1114,7 +1110,7 @@ def cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Invalid VMID: {source}")
         return 1
 
-    node_ip = _find_vm_node(cfg, vmid)
+    node_ip = _find_vm_node(cfg, src_vmid)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
@@ -1485,7 +1481,6 @@ def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
 def cmd_nic(cfg: FreqConfig, pack, args) -> int:
     """NIC management: add, clear, change-ip, change-id, check-ip."""
     action = getattr(args, "action", None)
-    target = getattr(args, "target", None)
 
     if not action:
         fmt.error("Usage: freq nic <add|clear|change-ip|change-id|check-ip> <vmid> [options]")

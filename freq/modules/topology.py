@@ -22,9 +22,8 @@ import os
 import time
 
 from freq.core import fmt
-from freq.core.config import FreqConfig
 from freq.core import log as logger
-
+from freq.core.config import FreqConfig
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -90,7 +89,7 @@ def discover_topology(cfg):
         edges: list of {from_device, from_port, to_device, to_port}
         discovered_at: timestamp
     """
-    from freq.modules.switch_orchestration import _get_switch_hosts, _get_deployer, _vendor_for_host
+    from freq.modules.switch_orchestration import _get_deployer, _get_switch_hosts, _vendor_for_host
 
     switches = _get_switch_hosts(cfg)
     nodes = []
@@ -316,10 +315,6 @@ def _display_topology(topo):
     """Display topology summary."""
     nodes = topo.get("nodes", [])
     edges = topo.get("edges", [])
-
-    # Nodes by type
-    switch_nodes = [n for n in nodes if n.get("type") == "switch"]
-    discovered_nodes = [n for n in nodes if n.get("type") == "discovered"]
 
     fmt.line(f"{fmt.C.BOLD}Nodes ({len(nodes)}){fmt.C.RESET}")
     fmt.table_header(("Device", 24), ("IP", 16), ("Model", 24), ("Type", 12))

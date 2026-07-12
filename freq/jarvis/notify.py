@@ -19,9 +19,9 @@ Design decisions:
 """
 
 import json
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
 
 from freq.core import fmt
 from freq.core import log as logger

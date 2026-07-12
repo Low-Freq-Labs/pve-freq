@@ -15,7 +15,6 @@ from typing import Optional
 
 from freq.core.types import Host
 
-
 # Single SSH command that gathers everything we need
 _DETECT_SCRIPT = (
     "cat /etc/os-release 2>/dev/null || echo 'ID=unknown';"

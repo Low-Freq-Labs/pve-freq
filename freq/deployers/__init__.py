@@ -15,7 +15,6 @@ Usage:
 
 import importlib
 
-
 # Backward-compat mapping: old htype string -> (category, vendor)
 HTYPE_COMPAT = {
     "linux": ("server", "linux"),

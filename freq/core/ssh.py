@@ -31,9 +31,8 @@ import subprocess
 import time
 from typing import Optional
 
-from freq.core.types import CmdResult, Host
 from freq.core import log as logger
-
+from freq.core.types import CmdResult, Host
 
 # Legacy host types that require RSA keys (no ed25519 support)
 LEGACY_HTYPES = {"idrac", "switch"}

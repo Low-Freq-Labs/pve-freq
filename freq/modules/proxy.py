@@ -25,7 +25,8 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 PROXY_CMD_TIMEOUT = 15
 PROXY_DIR = "proxy"
@@ -249,8 +250,8 @@ def _cmd_certs(cfg: FreqConfig, args) -> int:
         return 0
 
     # Check certs for each route domain
-    import ssl
     import socket
+    import ssl
 
     for route in routes:
         domain = route["domain"]

@@ -432,16 +432,16 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
         fmt.line(f"  {fmt.C.GRAY}Next steps:{fmt.C.RESET}")
         fmt.line(f"    1. Wait ~60s for VM {vmid} to boot via cloud-init")
         fmt.line(f"    2. SSH in: ssh {cfg.ssh_service_account}@<vm-ip>")
-        fmt.line(f"    3. Install FREQ: curl install.sh | sudo bash")
+        fmt.line("    3. Install FREQ: curl install.sh | sudo bash")
         fmt.line(f"    4. Copy CLAUDE.md: {claude_md_path}")
-        fmt.line(f"    5. Set up Claude Code or your preferred LLM")
+        fmt.line("    5. Set up Claude Code or your preferred LLM")
         fmt.line(f"    6. freq agent start {agent_name}")
     else:
         fmt.line(f"  {fmt.C.GRAY}Next steps:{fmt.C.RESET}")
         fmt.line(f"    1. Install an OS on VM {vmid} (attach ISO or cloud-init)")
-        fmt.line(f"    2. Deploy FREQ: scp install.sh to VM, sudo bash install.sh")
+        fmt.line("    2. Deploy FREQ: scp install.sh to VM, sudo bash install.sh")
         fmt.line(f"    3. Copy CLAUDE.md: {claude_md_path}")
-        fmt.line(f"    4. Set up Claude Code or your preferred LLM")
+        fmt.line("    4. Set up Claude Code or your preferred LLM")
         fmt.line(f"    5. freq agent start {agent_name}")
     fmt.blank()
     fmt.footer()
@@ -502,7 +502,6 @@ def _cmd_start(cfg: FreqConfig, args) -> int:
         fmt.error(f"Agent not found: {name}")
         return 1
 
-    agent = agents[name]
     fmt.header(f"Start Agent: {name}")
     fmt.blank()
 
@@ -517,7 +516,6 @@ def _cmd_start(cfg: FreqConfig, args) -> int:
         fmt.line(f"{fmt.C.GRAY}Attach: tmux attach -t {session_name}{fmt.C.RESET}")
     else:
         fmt.step_start(f"Creating tmux session '{session_name}'")
-        claude_md_dir = os.path.join(cfg.data_dir, "jarvis", "agents", name)
         subprocess.run(
             [
                 "tmux",
@@ -651,8 +649,9 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
         fmt.footer()
         return 0
 
-    from freq.modules.pve import _find_reachable_node, _pve_cmd
     import json as json_mod
+
+    from freq.modules.pve import _find_reachable_node, _pve_cmd
 
     node_ip = _find_reachable_node(cfg)
 

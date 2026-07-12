@@ -20,10 +20,9 @@ import os
 import time
 
 from freq.core import fmt
+from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run_many
-from freq.core import log as logger
-
 
 VULN_DIR = "vuln"
 

@@ -27,8 +27,7 @@ import shlex
 import subprocess
 import time
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
@@ -183,7 +182,6 @@ def _get_containers_status(cfg, vm):
 def cmd_media(cfg: FreqConfig, pack, args) -> int:
     """Media stack management — routes to subcommands."""
     action = getattr(args, "action", None)
-    service = getattr(args, "service", None)
 
     if not cfg.container_vms:
         # Fallback: try docker host from fleet
@@ -1779,7 +1777,7 @@ def _cmd_requests(cfg, args) -> int:
                     (rid, 6),
                     (rtype, 8),
                     (title, 30),
-                    (badge, 10),
+                    (f"{badge} {status_str}", 10),
                     (f"{fmt.C.BOLD}{user}{fmt.C.RESET}", 14),
                 )
     else:
@@ -1919,7 +1917,7 @@ def _cmd_export(cfg, args) -> int:
             except OSError as e:
                 fmt.step_fail(f"Write failed: {e}")
         else:
-            fmt.step_fail(f"Cannot read compose file")
+            fmt.step_fail("Cannot read compose file")
 
     fmt.blank()
     fmt.footer()
@@ -2391,7 +2389,7 @@ def _cmd_import(cfg, args) -> int:
         fmt.footer()
         return 1
 
-    fmt.line(f"  Available exports:")
+    fmt.line("  Available exports:")
     fmt.blank()
     for i, f in enumerate(files[:10], 1):
         fmt.line(f"  {fmt.C.CYAN}[{i}]{fmt.C.RESET}  {f}")
@@ -2441,7 +2439,7 @@ def _cmd_import(cfg, args) -> int:
     # Read local file and write to remote
     try:
         with open(filepath) as f:
-            content = f.read()
+            f.read(1)
     except OSError as e:
         fmt.error(f"Cannot read {filepath}: {e}")
         return 1

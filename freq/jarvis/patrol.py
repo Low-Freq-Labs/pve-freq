@@ -19,15 +19,16 @@ Design decisions:
 """
 
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
+from freq.core.types import Phase
 from freq.engine.policies import ALL_POLICIES
 from freq.engine.runner import run_sync
-from freq.core.types import Phase
 
 # Patrol timeouts
 PATROL_CHECK_TIMEOUT = 10

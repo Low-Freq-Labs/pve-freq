@@ -27,7 +27,6 @@ from typing import Optional
 
 from freq.core import log as logger
 
-
 # ── Data Types ──────────────────────────────────────────────────────────
 
 

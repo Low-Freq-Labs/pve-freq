@@ -11,12 +11,11 @@ import os
 import secrets
 import threading
 import time
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
 from freq.core import log as logger
 from freq.core.config import load_config
-from freq.modules.vault import vault_get, vault_set, vault_init
-
+from freq.modules.vault import vault_get, vault_init, vault_set
 
 # ── Constants ──────────────────────────────────────────────────────────────
 

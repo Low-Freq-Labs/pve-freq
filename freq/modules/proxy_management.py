@@ -17,12 +17,11 @@ Design decisions:
 """
 
 import json
-import urllib.request
 import urllib.error
+import urllib.request
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-
 
 # ---------------------------------------------------------------------------
 # Backend Detection

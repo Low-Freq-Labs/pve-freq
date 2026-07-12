@@ -25,12 +25,10 @@ import json
 import os
 import time
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
-
 
 # Comms timeouts
 COMMS_CMD_TIMEOUT = 10

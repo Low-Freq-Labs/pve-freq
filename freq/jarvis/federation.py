@@ -29,7 +29,6 @@ from dataclasses import dataclass
 
 from freq.core import log as logger
 
-
 FEDERATION_FILE = "federation.json"
 POLL_INTERVAL = 120  # seconds between polling remote sites
 REQUEST_TIMEOUT = 10  # seconds

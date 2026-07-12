@@ -22,9 +22,9 @@ Design decisions:
 import os
 import subprocess
 
+import freq
 from freq.core import fmt
 from freq.core.config import FreqConfig
-import freq
 
 # Update timeouts
 UPDATE_FETCH_TIMEOUT = 30

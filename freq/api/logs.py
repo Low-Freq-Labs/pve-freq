@@ -7,13 +7,13 @@ Where: Routes registered at /api/logs/*.
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-import re
 import json
+import re
 
-from freq.core import log as logger
-from freq.api.helpers import json_response, get_param, get_param_int
+from freq.api.helpers import get_param, get_param_int, json_response
 from freq.core.config import load_config
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 # Shell-safe pattern: only allow alphanumeric, spaces, hyphens, dots, colons
 _SAFE_SHELL_RE = re.compile(r"^[a-zA-Z0-9 _\-.:,/]+$")

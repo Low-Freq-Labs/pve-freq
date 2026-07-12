@@ -24,7 +24,9 @@ import json
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_run
+from freq.core.ssh import run_many as ssh_run_many
 
 COST_CMD_TIMEOUT = 15
 PVE_CMD_TIMEOUT = 30
@@ -193,7 +195,7 @@ def _cmd_waste(cfg: FreqConfig, args) -> int:
             cost = _estimate_vm_monthly_cost(v["vcpu"], v["ram_mb"] / 1024)
             fmt.line(
                 f"  {fmt.C.DIM}VM {v['vmid']} ({v['name']}) — {v['vcpu']} CPU, "
-                f"{v['ram_mb']}MB RAM — allocated but idle{fmt.C.RESET}"
+                f"{v['ram_mb']}MB RAM — allocated but idle (${cost:.2f}/mo){fmt.C.RESET}"
             )
 
     fmt.blank()

@@ -134,8 +134,9 @@ class TestPhase3RejectsReservedSvcName(unittest.TestCase):
 
     def test_phase3_imports_validator(self):
         src = self._validator_source()
+        self.assertIn("from freq.core.config import", src)
         self.assertIn(
-            "from freq.core.config import is_managed_service_account_name",
+            "is_managed_service_account_name",
             src,
             "The shared service-account validator must import the canonical validator from config.py",
         )

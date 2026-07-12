@@ -21,8 +21,8 @@ Design decisions:
     - Non-fatal warnings (missing personality pack) don't return exit code 1.
 """
 
-import os
 import contextlib
+import os
 import shutil
 import ssl
 import subprocess
@@ -30,9 +30,9 @@ import time
 import urllib.error
 import urllib.request
 
-from freq.core.config import FreqConfig
 from freq.core import fmt
 from freq.core import log as logger
+from freq.core.config import FreqConfig
 from freq.core.host_scope import managed_probe_hosts
 from freq.core.ssh import run as ssh_run
 
@@ -159,7 +159,8 @@ def run(cfg: FreqConfig, json_output: bool = False, local_only: bool = False) ->
         ),
     ]
 
-    import io, sys
+    import io
+    import sys
     for section_name, checks in sections:
         if not json_output:
             fmt.line(f"  {fmt.C.PURPLE_BOLD}{section_name}{fmt.C.RESET}")
@@ -320,7 +321,7 @@ def _check_platform(cfg: FreqConfig) -> int:
 
 def _check_prerequisites(cfg: FreqConfig) -> int:
     """Check required and optional system tools."""
-    from freq.core.preflight import check_required_binaries, check_optional_binaries
+    from freq.core.preflight import check_optional_binaries, check_required_binaries
 
     ok_req, msg_req, _ = check_required_binaries()
     if not ok_req:
@@ -701,10 +702,10 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     # strings as /api/health and `freq fleet status`. Three surfaces,
     # one truth — no surface gets to be vaguer than the others.
     from freq.core.health_state import (
-        STATE_LIVE,
         STATE_AUTH_FAILED,
-        STATE_UNREACHABLE,
         STATE_DEGRADED,
+        STATE_LIVE,
+        STATE_UNREACHABLE,
         classify_probe_failure,
     )
 
@@ -827,8 +828,6 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         return 2
 
     total_checkable = total - na
-    total_bad = len(auth_failed_hosts) + len(unreachable) + len(degraded_hosts)
-
     if reachable == total_checkable and total_checkable > 0:
         unmanaged_suffix = f"; {unmanaged_count} unmanaged inventory-only" if unmanaged_count else ""
         if na:

@@ -14,12 +14,11 @@ import json
 import os
 import time
 
+from freq.api.helpers import get_json_body, get_param, json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_json_body, get_param, require_post
-from freq.modules.serve import _check_session_role
-from freq.core.config import load_config
 from freq.core import resolve as res
-
+from freq.core.config import load_config
+from freq.modules.serve import _check_session_role
 
 # -- Helpers ----------------------------------------------------------------
 
@@ -154,7 +153,7 @@ def handle_wol(handler):
         json_response(handler, {"error": "MAC address required"}, 400)
         return
 
-    from freq.modules.wol import send_wol, parse_mac
+    from freq.modules.wol import parse_mac, send_wol
 
     # Validate MAC before sending
     try:
@@ -230,10 +229,10 @@ def handle_bench_run(handler):
         return
 
     from freq.modules.benchmark import (
-        bench_cpu,
-        bench_memory,
-        bench_disk,
         bench_all,
+        bench_cpu,
+        bench_disk,
+        bench_memory,
     )
 
     try:

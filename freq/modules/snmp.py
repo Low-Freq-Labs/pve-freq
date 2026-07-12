@@ -22,14 +22,13 @@ import os
 import re
 import shlex
 import subprocess
-import time
 import tempfile
+import time
 
 from freq.core import fmt
-from freq.core.config import FreqConfig
 from freq.core import log as logger
+from freq.core.config import FreqConfig
 from freq.core.packages import install_cmd
-
 
 # ---------------------------------------------------------------------------
 # Standard OIDs (IF-MIB, HOST-RESOURCES-MIB, SNMPv2-MIB)
@@ -913,8 +912,8 @@ def _snmp_conf_value(value):
 
 def _remote_script_runner(host, cfg, remote_command, script, timeout=90):
     """Run a remote stdin script with bounded SSH and no secrets in argv."""
-    from freq.core.ssh import _build_ssh_cmd
     from freq.core.device_credentials import resolve_staged_device_ssh_auth
+    from freq.core.ssh import _build_ssh_cmd
 
     auth = resolve_staged_device_ssh_auth(cfg, getattr(host, "htype", "linux"))
     ssh_cmd = _build_ssh_cmd(

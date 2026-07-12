@@ -260,8 +260,8 @@ def cmd_learn(cfg: FreqConfig, pack, args) -> int:
     if lessons:
         fmt.line(f"{fmt.C.BOLD}Lessons ({len(lessons)}){fmt.C.RESET}")
         fmt.blank()
-        for l in lessons:
-            number, session, platform, severity, title, desc, cmds = l
+        for lesson in lessons:
+            number, session, platform, severity, title, desc, cmds = lesson
             color = severity_colors.get(severity, fmt.C.GRAY)
             badge = f"{color}[{severity.upper()}]{fmt.C.RESET}"
             plat_badge = f"{fmt.C.CYAN}[{platform}]{fmt.C.RESET}"

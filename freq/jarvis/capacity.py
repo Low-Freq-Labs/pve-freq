@@ -26,7 +26,6 @@ from datetime import datetime
 
 from freq.core import log as logger
 
-
 CAPACITY_DIR_NAME = "capacity"
 SNAPSHOT_PREFIX = "snapshot_"
 MIN_WEEKS_FOR_PROJECTION = 2
@@ -187,8 +186,6 @@ def compute_projections(snapshots: list) -> dict:
 
             current = points[-1][1]
             days_now = (now - t0) / 86400
-            trend_value = slope * days_now + intercept
-
             # Days to threshold (80% for RAM/disk)
             threshold = 80 if metric in ("ram", "disk") else 0
             days_to_threshold = -1

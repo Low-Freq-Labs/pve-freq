@@ -11,13 +11,11 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import re
 import shlex
 
-from freq.core import log as logger
-from freq.api.helpers import require_post,  json_response, get_json_body
+from freq.api.helpers import get_json_body, json_response, require_post
 from freq.core.config import load_config
 from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import _check_session_role
-
 
 # -- Helper ------------------------------------------------------------------
 

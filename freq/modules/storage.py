@@ -20,11 +20,10 @@ import json
 import os
 
 from freq.core import fmt
+from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.ssh import run as ssh_run
-from freq.core import log as logger
-
 
 # ---------------------------------------------------------------------------
 # SSH Helpers

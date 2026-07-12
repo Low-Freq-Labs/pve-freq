@@ -30,7 +30,6 @@ from __future__ import annotations
 
 from typing import Optional
 
-
 STATE_LIVE = "live"
 STATE_STALE = "stale"
 STATE_DEGRADED = "degraded"

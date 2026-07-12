@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 
 from freq.core.log import _redact
 
-
 _AUDIT_FILE: str = ""
 
 

@@ -26,9 +26,8 @@ import os
 import time
 
 from freq.core import fmt
-from freq.core.config import FreqConfig
 from freq.core import log as logger
-
+from freq.core.config import FreqConfig
 
 # ─────────────────────────────────────────────────────────────
 # CONSTANTS — Directory names for templates and archives
@@ -190,7 +189,7 @@ def cmd_event_create(cfg: FreqConfig, pack, args) -> int:
     fmt.line(f"{fmt.C.BOLD}Switches:{fmt.C.RESET} {len(template['switches'])}")
     fmt.line(f"{fmt.C.BOLD}VLANs:{fmt.C.RESET}    {len(template['vlans'])}")
     fmt.blank()
-    fmt.info(f"Edit the template to define port profiles per switch, then deploy.")
+    fmt.info("Edit the template to define port profiles per switch, then deploy.")
     logger.info("event_create", name=name)
     fmt.footer()
     return 0
@@ -367,10 +366,10 @@ def cmd_event_deploy(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     from freq.modules.switch_orchestration import (
-        _resolve_target,
+        _expand_port_range,
         _get_deployer,
         _load_profiles,
-        _expand_port_range,
+        _resolve_target,
     )
 
     fmt.header(f"Deploy Event: {name}", breadcrumb="FREQ > Event")
@@ -454,9 +453,9 @@ def cmd_event_verify(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     from freq.modules.switch_orchestration import (
-        _resolve_target,
         _get_deployer,
         _load_profiles,
+        _resolve_target,
     )
 
     fmt.header(f"Verify Event: {name}", breadcrumb="FREQ > Event")
@@ -552,9 +551,9 @@ def cmd_event_wipe(cfg: FreqConfig, pack, args) -> int:
         return 0
 
     from freq.modules.switch_orchestration import (
-        _resolve_target,
-        _get_deployer,
         _expand_port_range,
+        _get_deployer,
+        _resolve_target,
     )
 
     fmt.header(f"Wipe Event: {name}", breadcrumb="FREQ > Event")
@@ -639,7 +638,7 @@ def cmd_event_archive(cfg: FreqConfig, pack, args) -> int:
     fmt.step_ok("Template archived")
 
     # Backup current configs from all switches in the event
-    from freq.modules.switch_orchestration import _resolve_target, _get_deployer
+    from freq.modules.switch_orchestration import _get_deployer, _resolve_target
 
     switches = tmpl.get("switches", [])
     config_count = 0
@@ -675,7 +674,7 @@ def cmd_event_archive(cfg: FreqConfig, pack, args) -> int:
 
     # Remove the active template
     os.remove(src_template)
-    fmt.step_ok(f"Template removed from active events")
+    fmt.step_ok("Template removed from active events")
 
     fmt.blank()
     fmt.success(f"Event '{name}' archived to {archive_path}")

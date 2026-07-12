@@ -10,17 +10,16 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import json
 import os
 
-from freq.api.helpers import require_post,  json_response
-from freq.core.config import load_config
+from freq.api.helpers import json_response, require_post
 from freq.core import log as logger
+from freq.core.config import load_config
+from freq.modules.pve import _find_reachable_node, _pve_cmd
 from freq.modules.serve import (
-    _parse_query,
-    _parse_query_flat,
     _check_session_role,
     _check_vm_permission,
+    _parse_query,
+    _parse_query_flat,
 )
-from freq.modules.pve import _find_reachable_node, _pve_cmd
-
 
 # -- Handlers ----------------------------------------------------------------
 
@@ -36,7 +35,9 @@ def handle_backup(handler):
     action = query.get("action", ["list"])[0]
     target = query.get("target", [""])[0]
     try:
-        import io, contextlib
+        import contextlib
+        import io
+
         from freq.modules.backup import cmd_backup
 
         class Args:
@@ -215,7 +216,7 @@ def handle_backup_policy_list(handler):
 
 def handle_backup_policy_status(handler):
     """GET /api/backup-policy/status -- get backup policy enforcement status."""
-    from freq.modules.backup_policy import _load_state, _load_policies
+    from freq.modules.backup_policy import _load_policies, _load_state
 
     cfg = load_config()
     state = _load_state(cfg)
@@ -323,7 +324,9 @@ def handle_zfs(handler):
     query = _parse_query(handler)
     action = query.get("action", ["status"])[0]
     try:
-        import io, contextlib
+        import contextlib
+        import io
+
         from freq.modules.infrastructure import cmd_truenas
 
         class Args:

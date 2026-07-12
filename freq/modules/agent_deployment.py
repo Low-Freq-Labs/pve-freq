@@ -9,7 +9,6 @@ from typing import Callable
 from freq.core.ssh import run as ssh_run
 from freq.modules.agent_health import remote_agent_health_command
 
-
 AGENT_REMOTE_DIR = "/opt/freq-agent"
 AGENT_REMOTE_PATH = f"{AGENT_REMOTE_DIR}/collector.py"
 AGENT_SERVICE_NAME = "freq-agent"

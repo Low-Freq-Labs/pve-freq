@@ -7,7 +7,7 @@ freq/api/<domain>.py module to avoid duplicating HTTP response logic.
 """
 
 import json
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from freq.core import log as logger
 from freq.core.config import load_config

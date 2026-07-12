@@ -23,7 +23,6 @@ import time
 from freq.core import fmt
 from freq.core.config import FreqConfig
 
-
 AUTO_DIR = "auto"
 
 

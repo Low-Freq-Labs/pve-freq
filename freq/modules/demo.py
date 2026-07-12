@@ -30,7 +30,6 @@ from freq.core.personality import (
     splash,
 )
 
-
 # Demo timing (seconds between visual steps)
 _STEP_DELAY = 0.08
 _SECTION_DELAY = 0.4
@@ -64,12 +63,7 @@ def _demo_doctor():
 
     plat = platform.system()
     if plat == "Linux":
-        try:
-            import distro_detect
-
-            plat_str = plat
-        except ImportError:
-            plat_str = plat
+        plat_str = plat
         # Try to get distro info
         try:
             with open("/etc/os-release") as f:

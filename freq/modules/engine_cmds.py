@@ -20,13 +20,12 @@ Design decisions:
       wrappers. This keeps the engine testable without CLI dependencies.
 """
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core.config import FreqConfig
+from freq.core.types import Phase
+from freq.engine.policies import ALL_POLICIES
 from freq.engine.policy import PolicyExecutor, PolicyStore
 from freq.engine.runner import run_sync
-from freq.engine.policies import ALL_POLICIES
-from freq.core.types import Phase
 
 
 def _build_store() -> PolicyStore:

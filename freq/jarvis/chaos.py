@@ -24,7 +24,6 @@ import os
 import time
 from dataclasses import dataclass, field
 
-
 CHAOS_DIR_NAME = "chaos"
 MAX_DURATION = 300  # 5 minutes max for any experiment
 
@@ -416,7 +415,7 @@ def cmd_chaos(cfg, pack, args) -> int:
         # Confirm
         if not getattr(args, "yes", False):
             fmt.warn(f"About to run {exp_type} on {host} for {exp.duration}s")
-            confirm = input(f"  Type YES to proceed: ")
+            confirm = input("  Type YES to proceed: ")
             if confirm.strip() != "YES":
                 fmt.line(f"  {fmt.C.DIM}Cancelled.{fmt.C.RESET}")
                 return 0

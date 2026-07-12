@@ -197,7 +197,7 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
     fmt.line(f"  Command: {command}")
     fmt.line(f"  Token:   {token}")
     if secret:
-        fmt.line(f"  Secret:  (configured for HMAC verification)")
+        fmt.line("  Secret:  (configured for HMAC verification)")
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Trigger URL:{fmt.C.RESET}")
     fmt.line(f"  POST http://<freq-host>:8888/api/webhook/{name}?token={token}")
@@ -255,7 +255,7 @@ def _cmd_test(cfg: FreqConfig, args) -> int:
             timeout=120,
         )
         if result.returncode == 0:
-            fmt.step_ok(f"Success (exit 0)")
+            fmt.step_ok("Success (exit 0)")
         else:
             fmt.step_fail(f"Failed (exit {result.returncode})")
             if result.stderr:
@@ -344,7 +344,7 @@ def handle_webhook_request(cfg: FreqConfig, name: str, token: str, payload: byte
             timeout=120,
         )
         exit_code = result.returncode
-    except (subprocess.TimeoutExpired, Exception) as e:
+    except (subprocess.TimeoutExpired, Exception):
         exit_code = 1
 
     # Update fire count

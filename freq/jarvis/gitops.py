@@ -27,7 +27,6 @@ from dataclasses import dataclass
 
 from freq.core import log as logger
 
-
 GITOPS_DIR_NAME = "gitops"
 STATE_FILE = "gitops_state.json"
 

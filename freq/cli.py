@@ -12,11 +12,10 @@ import argparse
 import os
 
 import freq
-from freq.core.config import load_config, FreqConfig
 from freq.core import fmt
 from freq.core import log as logger
+from freq.core.config import FreqConfig, load_config
 from freq.core.personality import load_pack, show_vibe
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -2459,6 +2458,7 @@ def cmd_perf(cfg: FreqConfig, pack, args) -> int:
 def cmd_audit_log(cfg: FreqConfig, pack, args) -> int:
     """Show infrastructure audit trail."""
     import json as _json
+
     from freq.core import audit
 
     host = getattr(args, "host", "") or ""

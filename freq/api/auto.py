@@ -14,21 +14,20 @@ function that receives the HTTP handler as its first argument.
 import os
 import re
 
+from freq.api.helpers import get_params, json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import require_post,  json_response, get_params
 from freq.core.config import load_config
 from freq.modules.serve import (
-    _check_session_role,
     CACHE_DIR,
+    _check_session_role,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
 def _get_params_flat(handler):
     """Parse query params into a flat {key: str} dict."""
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import parse_qs, urlparse
 
     raw = parse_qs(urlparse(handler.path).query)
     return {k: v[0] if v else "" for k, v in raw.items()}
@@ -39,7 +38,7 @@ def _get_params_flat(handler):
 
 def handle_rules(handler):
     """GET /api/rules — list all alert rules and their current state."""
-    from freq.jarvis.rules import load_rules, rules_to_dicts, load_rule_state
+    from freq.jarvis.rules import load_rule_state, load_rules, rules_to_dicts
 
     cfg = load_config()
     rules = load_rules(cfg.conf_dir)
@@ -240,8 +239,8 @@ def handle_playbooks_run(handler):
         json_response(handler, {"error": "Invalid or missing filename"}, 400)
         return
 
-    from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
     from freq.core.ssh import run as ssh_run
+    from freq.jarvis.playbook import load_playbooks, result_to_dict, run_step
 
     cfg = load_config()
     playbooks = load_playbooks(cfg.conf_dir)
@@ -304,8 +303,8 @@ def handle_playbooks_step(handler):
         json_response(handler, {"error": "step must be an integer"}, 400)
         return
 
-    from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
     from freq.core.ssh import run as ssh_run
+    from freq.jarvis.playbook import load_playbooks, result_to_dict, run_step
 
     cfg = load_config()
     playbooks = load_playbooks(cfg.conf_dir)
@@ -354,7 +353,9 @@ def handle_playbooks_create(handler):
 
     description = params.get("description", "")
     trigger = params.get("trigger", "")
-    _te = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
+    def _te(value):
+        return value.replace("\\", "\\\\").replace('"', '\\"')
+
     content = f'[playbook]\nname = "{_te(name)}"\ndescription = "{_te(description)}"\ntrigger = "{_te(trigger)}"\n'
     try:
         with open(path, "w") as f:
@@ -384,8 +385,8 @@ def handle_chaos_run(handler):
     if err:
         json_response(handler, {"error": err}, 403)
         return
-    from freq.jarvis.chaos import Experiment, run_experiment, result_to_dict
     from freq.core.ssh import run as ssh_run
+    from freq.jarvis.chaos import Experiment, result_to_dict, run_experiment
 
     cfg = load_config()
     params = _get_params_flat(handler)
@@ -446,8 +447,8 @@ def handle_patrol_status(handler):
     """GET /api/patrol/status — get patrol (continuous monitoring) status."""
     cfg = load_config()
     try:
-        import io
         import contextlib
+        import io
 
         # Patrol is a long-running process — we return a one-shot status check
         from freq.modules.engine_cmds import cmd_check

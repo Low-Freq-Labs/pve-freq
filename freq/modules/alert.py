@@ -27,7 +27,8 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 # ─────────────────────────────────────────────────────────────
 # CONSTANTS — File paths, timeouts, severity levels, condition types
@@ -228,10 +229,6 @@ def _evaluate_fleet(cfg: FreqConfig, rules: list) -> list:
                     m["disk_pct"] = int(parts[4])
                     m["boot_time"] = parts[5]
                     m["docker"] = parts[6] if len(parts) > 6 else "unknown"
-                    # Uptime in minutes from /proc/uptime seconds
-                    uptime_val = parts[6] if len(parts) > 6 else "0"
-                    # Actually docker is parts[5] check, uptime_seconds is parts[6]
-                    # Let me reconsider the parsing
                 except (ValueError, IndexError):
                     pass
         metrics[h.label] = m
@@ -528,7 +525,6 @@ def _cmd_history(cfg: FreqConfig, args) -> int:
         ts = entry.get("timestamp", "")[:19]
         sev = entry.get("severity", "info")
         sev_color = {"info": fmt.C.CYAN, "warning": fmt.C.YELLOW, "critical": fmt.C.RED}.get(sev, "")
-        fired = f"{fmt.C.RED}FIRED{fmt.C.RESET}" if entry.get("fired") else f"{fmt.C.GREEN}OK{fmt.C.RESET}"
         fmt.table_row(
             (ts, 20),
             (entry.get("rule", ""), 18),
@@ -584,7 +580,7 @@ def _cmd_test(cfg: FreqConfig, args) -> int:
 
     # Import notify
     try:
-        from freq.jarvis.notify import notify, configured_providers
+        from freq.jarvis.notify import configured_providers, notify
     except ImportError:
         fmt.step_fail("Notification module not available")
         fmt.blank()
@@ -718,7 +714,7 @@ def _cmd_check(cfg: FreqConfig, args) -> int:
         fmt.blank()
 
         try:
-            from freq.jarvis.notify import notify, configured_providers
+            from freq.jarvis.notify import configured_providers, notify
 
             providers = configured_providers(cfg)
             if providers:

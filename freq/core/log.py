@@ -16,6 +16,7 @@ Usage:
     logger.perf("ssh", 0.42, host="10.0.0.1", ok=True)
 """
 
+import atexit as _atexit
 import json
 import os
 import re
@@ -23,7 +24,6 @@ import sqlite3
 import sys
 import threading
 from datetime import datetime, timezone
-
 
 # ── Redaction ────────────────────────────────────────────────────────
 
@@ -172,7 +172,6 @@ def shutdown() -> None:
         _db_conn = None
 
 
-import atexit as _atexit
 _atexit.register(shutdown)
 
 
@@ -192,7 +191,6 @@ def _maybe_rotate() -> None:
     # Rotate: freq.log -> freq.log.1 -> freq.log.2 -> freq.log.3 (deleted)
     for i in range(_ROTATE_KEEP, 0, -1):
         src = f"{_LOG_FILE}.{i}" if i > 1 else (f"{_LOG_FILE}.1" if i == 1 else _LOG_FILE)
-        dst = f"{_LOG_FILE}.{i + 1}" if i < _ROTATE_KEEP else None
 
         if i == _ROTATE_KEEP:
             # Delete oldest

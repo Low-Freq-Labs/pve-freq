@@ -25,7 +25,9 @@ import os
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_run
+from freq.core.ssh import run_many as ssh_run_many
 
 STACK_CMD_TIMEOUT = 30
 STACK_DEPLOY_TIMEOUT = 300
@@ -138,7 +140,6 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
         for stack in stacks:
             name = stack.get("Name", "unknown")
             status = stack.get("Status", "unknown")
-            config = stack.get("ConfigFiles", "")
 
             # Count running services
             svc_match = status.split("(")

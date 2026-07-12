@@ -19,8 +19,7 @@ Design decisions:
       If the host is unreachable, it tells you the manual step. No magic.
 """
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
@@ -57,9 +56,9 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
     )
 
     if r.returncode == 0:
-        fmt.step_ok(f"Already reachable via SSH")
+        fmt.step_ok("Already reachable via SSH")
     else:
-        fmt.step_warn(f"Not reachable — deploy key manually first")
+        fmt.step_warn("Not reachable — deploy key manually first")
         fmt.blank()
         fmt.line(f"  {fmt.C.GRAY}Run: ssh-copy-id {cfg.ssh_service_account}@{ip}{fmt.C.RESET}")
         fmt.blank()

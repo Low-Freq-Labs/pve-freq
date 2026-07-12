@@ -22,14 +22,15 @@ Design decisions:
 
 import json
 import os
-import ssl
 import socket
+import ssl
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 # Storage
 CERT_DIR = "certs"

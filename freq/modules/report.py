@@ -26,7 +26,9 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_run
+from freq.core.ssh import run_many as ssh_run_many
 
 # Report storage
 REPORT_DIR = "reports"
@@ -224,7 +226,7 @@ def _report_to_markdown(report: dict) -> str:
     issues = report.get("issues", [])
 
     lines = [
-        f"# FREQ Fleet Report",
+        "# FREQ Fleet Report",
         f"**Generated:** {ts}",
         "",
         "## Fleet Status",

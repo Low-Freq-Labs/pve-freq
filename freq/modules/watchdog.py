@@ -24,8 +24,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from freq.core import fmt
-from freq.core.config import FreqConfig, load_config
-
+from freq.core.config import FreqConfig
 
 STATUS_DIR = "/var/lib/freq-watchdog"
 STATUS_FILE = os.path.join(STATUS_DIR, "status.json")

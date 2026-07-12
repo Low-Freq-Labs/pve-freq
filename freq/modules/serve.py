@@ -26,10 +26,12 @@ Design decisions:
     - Auth via session cookies + RBAC. Setup wizard creates first admin.
 """
 
+import collections
 import concurrent.futures
 import datetime
 import json
 import os
+import queue
 import re
 import shlex
 import shutil
@@ -43,41 +45,38 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
-from freq.core import audit
+from freq.core import audit, truenas_api
 from freq.core import log as logger
 from freq.core import resolve as res
 from freq.core.config import load_config, load_toml, save_hosts_toml
+from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.health_state import (
-    STATE_LIVE,
-    STATE_STALE,
-    STATE_DEGRADED,
     STATE_AUTH_FAILED,
-    STATE_UNREACHABLE,
+    STATE_DEGRADED,
+    STATE_LIVE,
     STATE_RECOVERING,
+    STATE_STALE,
+    STATE_UNREACHABLE,
     aggregate_probe_state,
     classify_probe_failure,
     entry_base,
-    legacy_status_for,
     mark_stale,
 )
 from freq.core.host_scope import managed_probe_hosts
-from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
-from freq.core import truenas_api
-from freq.core.device_credentials import resolve_device_ssh_auth, resolve_staged_device_ssh_auth
+from freq.core.ssh import run as ssh_single
 from freq.core.validate import (
     label as valid_label,
 )
-from freq.modules.pve import _find_reachable_node, _pve_cmd
-from freq.modules.users import _load_users, _save_users, _save_users_error
-from freq.modules.vault import vault_get, vault_set, vault_init
 from freq.jarvis.agent import TEMPLATES, _load_agents, _save_agents
 from freq.jarvis.notify import notify as jarvis_notify
 from freq.jarvis.risk import _load_kill_chain
-
+from freq.modules.pve import _find_reachable_node, _pve_cmd
+from freq.modules.users import _load_users, _save_users_error
+from freq.modules.vault import vault_get, vault_init, vault_set
 
 IDRAC_READ_CONNECT_TIMEOUT = 10
 IDRAC_READ_COMMAND_TIMEOUT = 30
@@ -387,9 +386,6 @@ def _run_idrac_subprocess(cmd, timeout):
 # from memory cache (instant). On startup, stale data loads from disk so
 # the very first request is never cold.
 
-import threading
-
-
 def _get_cache_dir():
     """Resolve cache directory from config at runtime — not from __file__.
     Using __file__ breaks pip-installed packages where site-packages is read-only."""
@@ -441,8 +437,6 @@ _shutdown_flag = threading.Event()  # Set on SIGTERM to stop background loops
 # ── SSE EVENT BUS ────────────────────────────────────────────────────────
 # Lightweight pub/sub: each connected EventSource client gets a Queue.
 # Background probes broadcast events after cache updates.
-
-import queue
 
 _sse_clients: list = []  # list of queue.Queue, one per SSE client
 _sse_lock = threading.Lock()  # guards _sse_clients list
@@ -616,8 +610,6 @@ def _reuse_recent_infra_device_success(prev: dict, now_wall: float, failure_reas
 # ── ACTIVITY FEED ────────────────────────────────────────────────────────
 # Ring buffer for recent system events — powers the dashboard activity widget.
 # Max 200 events kept in memory, newest first.
-
-import collections
 
 _activity_feed: collections.deque = collections.deque(maxlen=200)
 _activity_lock = threading.Lock()
@@ -1688,7 +1680,7 @@ def _bg_probe_health():
 
     # Save capacity snapshot if due (weekly)
     try:
-        from freq.jarvis.capacity import should_snapshot, save_snapshot
+        from freq.jarvis.capacity import save_snapshot, should_snapshot
 
         if should_snapshot(cfg.data_dir):
             save_snapshot(cfg.data_dir, result)
@@ -2313,7 +2305,9 @@ def _bg_sync_hosts():
         return  # Not time yet
 
     try:
-        import io, sys
+        import io
+        import sys
+
         from freq.modules.hosts import _hosts_sync
 
         cfg = load_config()
@@ -2378,13 +2372,13 @@ def _evaluate_alert_rules(cfg, health_data):
     """Evaluate alert rules and fire notifications for triggered alerts."""
     try:
         from freq.jarvis.rules import (
-            load_rules,
-            evaluate_rules,
-            load_rule_state,
-            save_rule_state,
-            load_alert_history,
-            save_alert_history,
             alert_to_dict,
+            evaluate_rules,
+            load_alert_history,
+            load_rule_state,
+            load_rules,
+            save_alert_history,
+            save_rule_state,
         )
 
         rules = load_rules(cfg.conf_dir)
@@ -2722,18 +2716,29 @@ def _check_vm_permission(cfg, vmid, action):
     return False, f"Action '{action}' blocked on VMID {vmid} ({cat_name}/{tier})"
 
 
-# Auth functions delegated to freq.api.auth
-from freq.api.auth import (
-    hash_password as _hash_password,
-    verify_password as _verify_password,
-    check_session_role as _check_session_role,
-    check_csrf as _check_csrf,
+# These imports intentionally follow the helpers they replace so serve.py can
+# finish defining its compatibility surface before loading the auth module.
+from freq.api.auth import (  # noqa: E402
     _request_has_query_token,
-    request_is_https as _request_is_https,
+    handle_auth_change_password,
     handle_auth_login,
     handle_auth_logout,
     handle_auth_verify,
-    handle_auth_change_password,
+)
+from freq.api.auth import (  # noqa: E402
+    check_csrf as _check_csrf,
+)
+from freq.api.auth import (  # noqa: E402
+    check_session_role as _check_session_role,
+)
+from freq.api.auth import (  # noqa: E402
+    hash_password as _hash_password,
+)
+from freq.api.auth import (  # noqa: E402
+    request_is_https as _request_is_https,
+)
+from freq.api.auth import (  # noqa: E402
+    verify_password as _verify_password,
 )
 
 
@@ -2963,8 +2968,8 @@ def _inline_style_csp_hashes() -> list[str]:
         except Exception as e:
             logger.error(f"inline_style_csp_hashes: failed to read app.html: {e}")
             return []
-        import hashlib
         import base64
+        import hashlib
         seen: set[str] = set()
         tokens: list[str] = []
         # Match every style="…" attribute. Use a non-greedy capture
@@ -4303,7 +4308,7 @@ class FreqHandler(BaseHTTPRequestHandler):
                     cfg=cfg,
                 )
                 if r.returncode == 0 and "no-dl-client" not in r.stdout:
-                    lines = [l for l in r.stdout.split("\n") if l.strip()]
+                    lines = [line for line in r.stdout.split("\n") if line.strip()]
                     downloads["total"] += len(lines)
                     for line in lines:
                         downloads["active"].append({"host": h.get("label", ""), "detail": line})
@@ -5574,8 +5579,9 @@ a:hover{{text-decoration:underline}}
             return
 
         cfg = load_config()
-        from freq.jarvis.learn import _init_db, _seed_db, _search, _load_knowledge
         import sqlite3
+
+        from freq.jarvis.learn import _init_db, _load_knowledge, _search, _seed_db
 
         db_path = os.path.join(cfg.data_dir, "jarvis", "knowledge.db")
         try:
@@ -5592,15 +5598,15 @@ a:hover{{text-decoration:underline}}
 
         lesson_list = [
             {
-                "number": l[0],
-                "session": l[1],
-                "platform": l[2],
-                "severity": l[3],
-                "title": l[4],
-                "description": l[5],
-                "commands": l[6],
+                "number": lesson[0],
+                "session": lesson[1],
+                "platform": lesson[2],
+                "severity": lesson[3],
+                "title": lesson[4],
+                "description": lesson[5],
+                "commands": lesson[6],
             }
-            for l in lessons
+            for lesson in lessons
         ]
         gotcha_list = [{"platform": g[0], "trigger": g[1], "description": g[2], "fix": g[3]} for g in gotchas]
 
@@ -7182,8 +7188,11 @@ a:hover{{text-decoration:underline}}
                 self._json_response(cached)
                 return
 
+            import contextlib
+            import io
+            import json as _json
+
             from freq.core.doctor import run as doctor_run
-            import io, contextlib, json as _json
 
             with FreqHandler._doctor_lock:
                 now = time.monotonic()
@@ -7305,7 +7314,8 @@ a:hover{{text-decoration:underline}}
         if not host or not ports_str:
             self._json_response({"error": "host and ports required"}, 400)
             return
-        import re as _re, socket
+        import re as _re
+        import socket
 
         if not _re.match(r"^[a-zA-Z0-9._-]+$", host):
             self._json_response({"error": "Invalid hostname"}, 400)
@@ -7543,8 +7553,8 @@ a:hover{{text-decoration:underline}}
         if not target:
             self._json_response({"error": "target required"}, 400)
             return
-        from freq.core.ssh import run as ssh_single
         from freq.core.resolve import by_target
+        from freq.core.ssh import run as ssh_single
         from freq.core.types import Host
 
         h = by_target(cfg.hosts, target)
@@ -7558,9 +7568,9 @@ a:hover{{text-decoration:underline}}
             if not h:
                 try:
                     from freq.api.terminal import (
+                        _extract_guest_ipv4,
                         _find_live_vm_node_ip,
                         _guest_agent_network_json,
-                        _extract_guest_ipv4,
                     )
 
                     node_ip, node_name = _find_live_vm_node_ip(cfg, vmid, "")
@@ -7871,7 +7881,7 @@ def cmd_serve(cfg, pack, args) -> int:
     import signal
 
     port = getattr(args, "port", None) or cfg.dashboard_port or 8888
-    print(f"\n  \033[38;5;93mPVE FREQ → Dashboard\033[0m")
+    print("\n  \033[38;5;93mPVE FREQ → Dashboard\033[0m")
     print(f"  Starting on port {port}...\n")
     start_background_cache()
     _start_embedded_watchdog_if_needed(cfg)
@@ -7932,16 +7942,16 @@ def cmd_serve(cfg, pack, args) -> int:
                     f"{', '.join(no_pw)}"
                 )
                 print(
-                    f"    \033[38;5;245mRecover with: "
-                    f"sudo freq user dashboard-passwd <user> [--file PATH]\033[0m"
+                    "    \033[38;5;245mRecover with: "
+                    "sudo freq user dashboard-passwd <user> [--file PATH]\033[0m"
                 )
     except Exception:
         pass
-    print(f"  \033[38;5;245mPress Ctrl+C to stop\033[0m\n")
+    print("  \033[38;5;245mPress Ctrl+C to stop\033[0m\n")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print(f"\n  \033[38;5;220mDashboard stopped.\033[0m")
+        print("\n  \033[38;5;220mDashboard stopped.\033[0m")
     finally:
         httpd.server_close()
         # Kill SSH ControlMaster mux sockets left by background probes.

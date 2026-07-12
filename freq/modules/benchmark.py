@@ -27,7 +27,6 @@ import time
 
 from freq.core.ssh import run as ssh_single
 
-
 # -- Tool availability check -------------------------------------------------
 
 

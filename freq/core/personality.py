@@ -27,6 +27,9 @@ import logging
 import os
 import random
 from dataclasses import dataclass, field
+from typing import Optional
+
+from freq.core.fmt import C, term_width
 
 try:
     import tomllib
@@ -34,9 +37,6 @@ except ModuleNotFoundError:
     tomllib = None
 
 _logger = logging.getLogger(__name__)
-from typing import Optional
-
-from freq.core.fmt import C, term_width
 
 
 @dataclass

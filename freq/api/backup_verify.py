@@ -9,12 +9,11 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import re
 
+from freq.api.helpers import get_json_body, json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import require_post, json_response, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import _check_session_role
-
 
 # -- Helpers -----------------------------------------------------------------
 
@@ -223,8 +222,8 @@ def handle_cert_expiry(handler):
         json_response(handler, {"ok": True, "certs": []})
         return
 
-    import ssl
     import socket
+    import ssl
     from datetime import datetime, timezone
 
     ports = [443, 8006, 8443, 8888]

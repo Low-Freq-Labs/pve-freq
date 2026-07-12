@@ -9,19 +9,19 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import re
 
+from freq.api.helpers import get_json_body, get_param, json_response, require_post
 from freq.core import log as logger
-from freq.api.helpers import require_post,  json_response, get_param, get_json_body
 from freq.core.config import load_config
-from freq.core.ssh import run as ssh_single, result_for
-from freq.modules.serve import _parse_query, _check_session_role
-
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_single
+from freq.modules.serve import _check_session_role, _parse_query
 
 # -- Switch Deployer Helpers ------------------------------------------------
 
 
 def _resolve_switch(cfg, target=None):
     """Resolve switch target and load deployer. Returns (ip, label, deployer) or Nones."""
-    from freq.modules.switch_orchestration import _resolve_target, _get_deployer
+    from freq.modules.switch_orchestration import _get_deployer, _resolve_target
 
     ip, label, vendor = _resolve_target(target, cfg)
     if not ip:
@@ -276,7 +276,7 @@ def handle_map_data(handler):
 
 def handle_map_impact(handler):
     """GET /api/map/impact -- impact analysis for a host."""
-    from freq.modules.depmap import _load_map, _get_impact
+    from freq.modules.depmap import _get_impact, _load_map
 
     cfg = load_config()
     params = _parse_query(handler)
@@ -300,7 +300,7 @@ def handle_netmon_interfaces(handler):
         return
 
     command = "ip -j addr show 2>/dev/null || echo '[]'"
-    from freq.core.ssh import run_many as ssh_run_many, result_for
+    from freq.core.ssh import run_many as ssh_run_many
 
     results = ssh_run_many(
         hosts=hosts,
@@ -364,8 +364,9 @@ def handle_netmon_data(handler):
 
 def handle_config_history(handler):
     """GET /api/v1/net/config/history -- config backup history."""
-    from freq.modules.config_management import _list_backups
     import os
+
+    from freq.modules.config_management import _list_backups
 
     cfg = load_config()
     target = get_param(handler, "target")
@@ -409,7 +410,7 @@ def handle_config_search(handler):
         seen.add(label)
         with open(filepath) as f:
             lines = f.readlines()
-        matches = [(i + 1, l.rstrip()) for i, l in enumerate(lines) if regex.search(l)]
+        matches = [(i + 1, line.rstrip()) for i, line in enumerate(lines) if regex.search(line)]
         if matches:
             results.append({"device": label, "matches": [{"line": n, "text": t} for n, t in matches[:20]]})
 

@@ -19,9 +19,8 @@ import re
 import socket
 
 from freq.core import fmt
-from freq.core.config import FreqConfig
 from freq.core import log as logger
-
+from freq.core.config import FreqConfig
 
 # ---------------------------------------------------------------------------
 # Commands — Find
@@ -35,7 +34,7 @@ def cmd_find_mac(cfg: FreqConfig, pack, args) -> int:
         fmt.error("Usage: freq net find-mac <mac-address>")
         return 1
 
-    from freq.modules.switch_orchestration import _get_switch_hosts, _get_deployer, _vendor_for_host
+    from freq.modules.switch_orchestration import _get_deployer, _get_switch_hosts, _vendor_for_host
 
     fmt.header(f"Find MAC: {mac_query}", breadcrumb="FREQ > Net")
     fmt.blank()
@@ -97,7 +96,7 @@ def cmd_find_ip(cfg: FreqConfig, pack, args) -> int:
         fmt.error("Usage: freq net find-ip <ip-address>")
         return 1
 
-    from freq.modules.switch_orchestration import _get_switch_hosts, _get_deployer, _vendor_for_host
+    from freq.modules.switch_orchestration import _get_deployer, _get_switch_hosts, _vendor_for_host
 
     fmt.header(f"Find IP: {ip_query}", breadcrumb="FREQ > Net")
     fmt.blank()
@@ -210,7 +209,7 @@ def cmd_troubleshoot(cfg: FreqConfig, pack, args) -> int:
                 rtt = m.group(1) if m else "?"
                 fmt.step_ok(f"Reachable (RTT: {rtt}ms)")
             else:
-                fmt.step_fail(f"Unreachable")
+                fmt.step_fail("Unreachable")
         except (subprocess.TimeoutExpired, FileNotFoundError):
             fmt.step_fail("Ping failed")
 
@@ -224,7 +223,7 @@ def cmd_troubleshoot(cfg: FreqConfig, pack, args) -> int:
             fmt.step_warn("No reverse DNS record")
 
     # Step 4: Find in ARP/MAC tables
-    from freq.modules.switch_orchestration import _get_switch_hosts, _get_deployer, _vendor_for_host
+    from freq.modules.switch_orchestration import _get_deployer, _get_switch_hosts, _vendor_for_host
 
     switches = _get_switch_hosts(cfg)
 
@@ -350,7 +349,7 @@ def cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
     fmt.header("IP Conflict Detection", breadcrumb="FREQ > Net > IP")
     fmt.blank()
 
-    from freq.modules.switch_orchestration import _get_switch_hosts, _get_deployer, _vendor_for_host
+    from freq.modules.switch_orchestration import _get_deployer, _get_switch_hosts, _vendor_for_host
 
     switches = _get_switch_hosts(cfg)
     if not switches:

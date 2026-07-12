@@ -7,49 +7,49 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
+import concurrent.futures
 import json
-import os
 import re
 import threading
 import time
-import concurrent.futures
 
-from freq.api.helpers import require_post,  json_response, get_params
-from freq.core.config import load_config
-from freq.core import resolve as res
+import freq
+from freq.api.helpers import get_params, json_response, require_post
 from freq.core import log as logger
-from freq.core.types import Host
-from freq.core.ssh import run as ssh_single, run_many as ssh_run_many, result_for
+from freq.core import resolve as res
+from freq.core.config import load_config
 from freq.core.health_state import (
+    STATE_AUTH_FAILED,
+    STATE_DEGRADED,
     STATE_LIVE,
     STATE_STALE,
-    STATE_DEGRADED,
-    STATE_AUTH_FAILED,
     STATE_UNREACHABLE,
     aggregate_probe_state,
     classify_probe_failure,
     entry_base,
 )
 from freq.core.host_scope import managed_probe_hosts
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_single
+from freq.core.ssh import run_many as ssh_run_many
+from freq.core.types import Host
+from freq.jarvis.agent import _load_agents
 from freq.modules.serve import (
-    _bg_cache,
-    _bg_lock,
-    _bg_cache_ts,
-    _bg_cache_errors,
-    _bg_cache_from_disk,
-    _get_fleet_vms,
-    _get_discovered_nodes,
-    _get_discovered_node_ips,
-    _check_session_role,
-    _parse_query,
-    _parse_query_flat,
-    _parse_pct,
     _activity_feed,
     _activity_lock,
+    _bg_cache,
+    _bg_cache_errors,
+    _bg_cache_from_disk,
+    _bg_cache_ts,
+    _bg_lock,
+    _check_session_role,
+    _get_discovered_node_ips,
+    _get_discovered_nodes,
+    _get_fleet_vms,
+    _parse_pct,
+    _parse_query,
+    _parse_query_flat,
 )
-from freq.jarvis.agent import _load_agents
-import freq
-
 
 IDRAC_SESSION_LOCK = threading.Lock()
 IDRAC_SESSION_GAP_SECONDS = 2.0
@@ -69,9 +69,9 @@ def _target_host_or_direct_ip(cfg, target: str):
                 return h
         try:
             from freq.api.terminal import (
+                _extract_guest_ipv4,
                 _find_live_vm_node_ip,
                 _guest_agent_network_json,
-                _extract_guest_ipv4,
             )
 
             node_ip, node_name = _find_live_vm_node_ip(cfg, vmid, "")
@@ -1271,7 +1271,6 @@ def handle_topology(handler):
     """GET /api/topology -- network topology data for visualization."""
     with _bg_lock:
         health = _bg_cache.get("health")
-        fo_cached = _bg_cache.get("infra_quick")
         _health_ts = _bg_cache_ts.get("health", 0)
 
     health_map = {}
@@ -1370,7 +1369,8 @@ def handle_docker_fleet(handler):
     """GET /api/docker-fleet -- fleet-wide container inventory."""
     cfg = load_config()
     from freq.core.resolve import by_type
-    from freq.core.ssh import run_many as ssh_run_many_fn, result_for
+    from freq.core.ssh import result_for
+    from freq.core.ssh import run_many as ssh_run_many_fn
 
     docker_hosts = by_type(cfg.hosts, "docker")
     if not docker_hosts:
@@ -1429,7 +1429,7 @@ def handle_docker_fleet(handler):
 
 def handle_inventory(handler):
     """GET /api/inventory -- full fleet inventory."""
-    from freq.modules.inventory import _gather_hosts, _gather_vms, _gather_containers
+    from freq.modules.inventory import _gather_containers, _gather_hosts, _gather_vms
 
     cfg = load_config()
     hosts = _gather_hosts(cfg)
@@ -1475,8 +1475,8 @@ def handle_inventory_containers(handler):
 
 def handle_compare(handler):
     """GET /api/compare -- compare two hosts."""
-    from freq.modules.compare import _gather_host_info
     from freq.core.resolve import by_target as resolve_host
+    from freq.modules.compare import _gather_host_info
 
     cfg = load_config()
     params = _parse_query(handler)
@@ -1514,7 +1514,9 @@ def handle_discover(handler):
     query = _parse_query(handler)
     subnet = query.get("subnet", [""])[0]
     try:
-        import io, contextlib
+        import contextlib
+        import io
+
         from freq.modules.discover import cmd_discover
 
         class Args:
@@ -1539,8 +1541,8 @@ def handle_watchdog_health(handler):
     automatically, so default optional absence must not look like a failed
     resource in browser tooling.
     """
-    import urllib.request
     import urllib.error
+    import urllib.request
     from urllib.parse import urlparse as _urlparse
 
     cfg = load_config()
@@ -1573,7 +1575,7 @@ def handle_watchdog_health(handler):
 
 def handle_federation_status(handler):
     """GET /api/federation/status -- return federation status and registered sites."""
-    from freq.jarvis.federation import load_sites, sites_to_dicts, federation_summary
+    from freq.jarvis.federation import federation_summary, load_sites, sites_to_dicts
 
     cfg = load_config()
     sites = load_sites(cfg.data_dir)
@@ -1602,8 +1604,8 @@ def handle_federation_register(handler):
     if err:
         json_response(handler, {"error": err}, 403)
         return
-    from freq.jarvis.federation import register_site
     from freq.api.helpers import get_json_body
+    from freq.jarvis.federation import register_site
 
     cfg = load_config()
     body = get_json_body(handler)
@@ -1647,7 +1649,7 @@ def handle_federation_poll(handler):
     if err:
         json_response(handler, {"error": err}, 403)
         return
-    from freq.jarvis.federation import poll_all_sites, sites_to_dicts, federation_summary
+    from freq.jarvis.federation import federation_summary, poll_all_sites, sites_to_dicts
 
     cfg = load_config()
     sites = poll_all_sites(cfg.data_dir)

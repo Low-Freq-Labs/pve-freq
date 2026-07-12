@@ -18,8 +18,7 @@ Design decisions:
       not thirty-four. Fast enough to run ad-hoc during incidents.
 """
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
@@ -154,10 +153,6 @@ def cmd_compare(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     fmt.blank()
-
-    # Build comparison table
-    header_a = f"{fmt.C.CYAN}{host_a.label}{fmt.C.RESET}"
-    header_b = f"{fmt.C.CYAN}{host_b.label}{fmt.C.RESET}"
 
     fmt.table_header(
         ("FIELD", 16),

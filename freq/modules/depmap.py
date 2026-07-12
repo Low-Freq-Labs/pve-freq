@@ -25,7 +25,8 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 MAP_DIR = "depmap"
 MAP_FILE = "dependency-map.json"
@@ -126,7 +127,6 @@ def _discover_connections(cfg: FreqConfig) -> dict:
             elif current_section == "conns":
                 parts = line.split("|")
                 if len(parts) >= 2:
-                    local = parts[0].strip()
                     remote = parts[1].strip()
                     # Extract remote IP
                     remote_ip = remote.rsplit(":", 1)[0] if ":" in remote else remote

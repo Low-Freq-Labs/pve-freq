@@ -26,11 +26,11 @@ import os
 import re
 import shlex
 
-from freq.core import fmt
-from freq.core import validate
+from freq.core import fmt, validate
 from freq.core import log as logger
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 # User management timeouts
 USER_CMD_TIMEOUT = 15
@@ -340,7 +340,7 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
 
     try:
         new_pass = getpass.getpass(f"  New password for '{username}': ")
-        confirm = getpass.getpass(f"  Confirm password: ")
+        confirm = getpass.getpass("  Confirm password: ")
     except (EOFError, KeyboardInterrupt):
         print()
         return 1
@@ -363,7 +363,6 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Use chpasswd via SSH (requires sudo, full path for non-login shells)
-    escaped_pass = new_pass.replace("'", "'\\''")
     safe_user = shlex.quote(username)
     results = ssh_run_many(
         hosts=hosts,
@@ -410,8 +409,8 @@ def cmd_dashboard_passwd(cfg: FreqConfig, pack, args) -> int:
     the legacy roles.conf fallback) — refuses to seed a password for
     unknown users to avoid bypassing the setup wizard's user creation.
     """
-    from freq.modules.vault import vault_init, vault_set
     from freq.api.auth import hash_password
+    from freq.modules.vault import vault_init, vault_set
 
     username = getattr(args, "username", None)
     if not username:
@@ -472,8 +471,8 @@ def cmd_dashboard_passwd(cfg: FreqConfig, pack, args) -> int:
     # a hash that can't be decrypted on readback). Pre-fix the CLI
     # returned success even if the write was a no-op.
     try:
-        from freq.modules.vault import vault_get
         from freq.api.auth import verify_password as _verify_password
+        from freq.modules.vault import vault_get
 
         if not os.path.exists(cfg.vault_file):
             vault_init(cfg)
@@ -481,8 +480,8 @@ def cmd_dashboard_passwd(cfg: FreqConfig, pack, args) -> int:
         write_ok = vault_set(cfg, "auth", f"password_{username}", new_hash)
         if not write_ok:
             fmt.error(
-                f"vault_set returned False — hash NOT written. Check vault "
-                f"file permissions and /etc/machine-id."
+                "vault_set returned False — hash NOT written. Check vault "
+                "file permissions and /etc/machine-id."
             )
             return 1
         readback = vault_get(cfg, "auth", f"password_{username}") or ""

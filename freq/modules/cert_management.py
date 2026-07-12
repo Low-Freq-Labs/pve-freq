@@ -16,23 +16,22 @@ Design decisions:
     - Deploy is SCP + service reload via SSH — works everywhere.
 """
 
-import json
 import hashlib
 import ipaddress
+import json
 import os
 import shlex
 import shutil
-import ssl
 import socket
+import ssl
 import subprocess
 import tempfile
 import time
 import urllib.request
 
 from freq.core import fmt
-from freq.core.config import FreqConfig
 from freq.core import log as logger
-
+from freq.core.config import FreqConfig
 
 # ---------------------------------------------------------------------------
 # Data Storage
@@ -1276,6 +1275,8 @@ def _verify_tls_target(target):
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 der = ssock.getpeercert(binary_form=True)
                 cert = _decode_der_peer_cert(der) if der else {}
+                if verify_hostname:
+                    ssl.match_hostname(cert, host)
         duration = time.monotonic() - started
         subject = dict(x[0] for x in cert.get("subject", [])) if cert else {}
         issuer = dict(x[0] for x in cert.get("issuer", [])) if cert else {}
@@ -1980,7 +1981,6 @@ def cmd_cert_inspect(cfg: FreqConfig, pack, args) -> int:
         with socket.create_connection((host, port), timeout=5) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert(binary_form=False)
-                der = ssock.getpeercert(binary_form=True)
     except Exception as e:
         fmt.error(f"Could not connect to {host}:{port}: {e}")
         return 1

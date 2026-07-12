@@ -13,19 +13,17 @@ import base64
 import json
 import re
 import ssl
-
-from freq.core import log as logger
-
-# OPNsense uses UUID-v4 format for resource identifiers
-_SAFE_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
-import urllib.request
 import urllib.error
+import urllib.request
 
-from freq.api.helpers import require_post,  json_response, get_json_body
+from freq.api.helpers import get_json_body, json_response, require_post
+from freq.core import log as logger
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
 from freq.modules.vault import vault_get
 
+# OPNsense uses UUID-v4 format for resource identifiers
+_SAFE_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 
 # -- Helpers -----------------------------------------------------------------
 

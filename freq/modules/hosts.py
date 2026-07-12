@@ -25,10 +25,9 @@ import os
 import re
 import shutil
 
-from freq.core import fmt
+from freq.core import fmt, resolve, validate
+from freq.core import log as logger
 from freq.core.config import FreqConfig
-from freq.core import resolve
-from freq.core import validate
 
 # ─────────────────────────────────────────────────────────────
 # CONSTANTS — Timeouts for PVE and agent sync operations
@@ -997,7 +996,6 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
                     detail = node.get("detail", "")
                     f.write(f'{key} = {{ ip = "{ip}", detail = "{detail}" }}\n')
 
-    count = len(new_physical) + len(new_pve)
     fmt.step_ok(f"Fleet boundaries: auto-added {len(new_physical)} physical + {len(new_pve)} PVE nodes")
 
 

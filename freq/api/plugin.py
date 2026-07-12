@@ -8,8 +8,7 @@ Routes:
     POST /api/v1/plugin/remove   — remove a plugin
 """
 
-from freq.core import log as logger
-from freq.api.helpers import json_response, get_param, get_cfg
+from freq.api.helpers import get_cfg, get_param, json_response
 
 
 def register(routes):
@@ -21,9 +20,10 @@ def register(routes):
 
 def handle_plugin_list(handler):
     """GET /api/v1/plugin/list — list installed plugins."""
-    from freq.modules.plugin_manager import _load_registry
-    from freq.core.plugins import discover_plugins
     import os
+
+    from freq.core.plugins import discover_plugins
+    from freq.modules.plugin_manager import _load_registry
 
     cfg = get_cfg()
     plugin_dir = os.path.join(cfg.conf_dir, "plugins")

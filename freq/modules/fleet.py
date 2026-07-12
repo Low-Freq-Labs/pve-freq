@@ -25,19 +25,19 @@ import socket
 import subprocess
 import time
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core.config import FreqConfig
 from freq.core.health_state import (
-    STATE_LIVE,
-    STATE_STALE,
-    STATE_DEGRADED,
     STATE_AUTH_FAILED,
+    STATE_DEGRADED,
+    STATE_LIVE,
     STATE_UNREACHABLE,
     aggregate_probe_state,
     classify_probe_failure,
 )
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run as ssh_run
+from freq.core.ssh import run_many as ssh_run_many
 
 # ─────────────────────────────────────────────────────────────
 # CONSTANTS — Timeouts for fleet SSH operations
@@ -1024,7 +1024,7 @@ def cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
                 return 1
             cmd = f"docker logs --tail {lines} {service} 2>&1"
         else:
-            cmd = f"docker ps --format '{{{{.Names}}}}' 2>/dev/null | head -5 | while read c; do echo \"=== $c ===\"; docker logs --tail 3 $c 2>&1; done"
+            cmd = "docker ps --format '{{.Names}}' 2>/dev/null | head -5 | while read c; do echo \"=== $c ===\"; docker logs --tail 3 $c 2>&1; done"
     elif action == "stats":
         cmd = "docker stats --no-stream --format '{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}' 2>/dev/null"
     else:
@@ -1304,7 +1304,7 @@ def cmd_ssh_host(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Host not found: {target}")
         return 1
 
-    from freq.core.ssh import get_platform_ssh, result_for
+    from freq.core.ssh import get_platform_ssh
 
     platform = get_platform_ssh(host.htype, cfg)
     user = platform["user"]
@@ -1442,7 +1442,7 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
     pub_key_path = cfg.ssh_key_path + ".pub"
     try:
         with open(pub_key_path) as f:
-            pub_key = f.read().strip()
+            f.read(1)
     except FileNotFoundError:
         fmt.error(f"Public key not found: {pub_key_path}")
         return 1
@@ -1451,7 +1451,7 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
     fmt.blank()
     fmt.step_start(f"Deploying key to {host.label}")
 
-    from freq.core.ssh import get_platform_ssh, result_for
+    from freq.core.ssh import get_platform_ssh
 
     platform = get_platform_ssh(host.htype, cfg)
     user = platform["user"]
@@ -1493,7 +1493,6 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
         fmt.error(f"Current key not found: {cfg.ssh_key_path}")
         return 1
 
-    key_dir = os.path.dirname(cfg.ssh_key_path)
     old_key = cfg.ssh_key_path
     old_pub = old_key + ".pub"
 
@@ -1575,7 +1574,7 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
         if h.htype in ("switch", "idrac"):
             continue  # Skip non-Linux hosts
         fmt.step_start(f"Deploying to {h.label} ({h.ip})")
-        from freq.core.ssh import run as ssh_run, result_for
+        from freq.core.ssh import run as ssh_run
 
         # Use the backup key to add the new key
         escaped = new_pubkey.replace('"', '\\"')
@@ -1612,7 +1611,7 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
             for h in cfg.hosts:
                 if h.htype in ("switch", "idrac"):
                     continue
-                from freq.core.ssh import run as ssh_run, result_for
+                from freq.core.ssh import run as ssh_run
 
                 old_escaped = old_pubkey.replace("/", "\\/").replace(".", "\\.")
                 rm_cmd = f"sed -i '/{old_escaped}/d' ~/.ssh/authorized_keys 2>/dev/null; echo OK"

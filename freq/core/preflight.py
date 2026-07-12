@@ -25,7 +25,6 @@ import os
 import platform
 import shutil
 import sys
-
 from typing import Dict, List, Tuple
 
 MIN_PYTHON = (3, 11)

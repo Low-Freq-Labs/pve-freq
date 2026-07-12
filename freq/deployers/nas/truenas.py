@@ -21,7 +21,7 @@ NEEDS_RSA = False
 
 def deploy(ip, ctx, auth_pass, auth_key, auth_user, htype="truenas"):
     """Deploy FREQ service account to TrueNAS."""
-    from freq.modules.init_cmd import _init_ssh, _run, MARKER_DEPLOY_OK
+    from freq.modules.init_cmd import MARKER_DEPLOY_OK, _init_ssh, _run
 
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]

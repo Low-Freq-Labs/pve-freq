@@ -23,7 +23,7 @@ import os
 import socket
 import subprocess
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = int(os.environ.get("FREQ_AGENT_PORT", 9990))
 HOSTNAME = socket.gethostname()

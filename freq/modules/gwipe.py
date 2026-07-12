@@ -21,11 +21,10 @@ Design decisions:
 
 import json
 import logging
-import urllib.request
 import urllib.error
+import urllib.request
 
-from freq.core import fmt
-from freq.core import validate
+from freq.core import fmt, validate
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +185,8 @@ def cmd_gwipe(cfg, pack, args):
             return 1
         try:
             import os
-            from freq.modules.vault import vault_set, vault_init
+
+            from freq.modules.vault import vault_init, vault_set
 
             if not os.path.exists(cfg.vault_file):
                 vault_init(cfg)

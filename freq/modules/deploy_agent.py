@@ -25,8 +25,7 @@ import json
 import urllib.error
 import urllib.request
 
-from freq.core import fmt
-from freq.core import resolve
+from freq.core import fmt, resolve
 from freq.core.config import FreqConfig
 from freq.modules.agent_deployment import deploy_to_host, load_agent_source
 

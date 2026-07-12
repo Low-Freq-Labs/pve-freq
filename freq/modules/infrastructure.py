@@ -21,7 +21,6 @@ Design decisions:
       the same pattern (SSH + action dict), so the code is shared.
 """
 
-import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
@@ -320,7 +319,7 @@ def cmd_rescue(cfg: FreqConfig, pack, args) -> int:
         fmt.info("Cancelled.")
         return 0
 
-    fmt.step_start(f"Executing rescue action")
+    fmt.step_start("Executing rescue action")
     stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=INFRA_RESCUE_TIMEOUT)
     if ok:
         fmt.step_ok("Rescue action completed")

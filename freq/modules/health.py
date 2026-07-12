@@ -30,7 +30,8 @@ from freq.core.health_state import (
     classify_probe_failure,
 )
 from freq.core.host_scope import managed_probe_hosts
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 # Health check thresholds
 HEALTH_CMD_TIMEOUT = 15
@@ -172,8 +173,6 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
             ram_used = int(parts[2])
             ram_total = int(parts[3])
             disk_pct = int(parts[4])
-            uptime_str = parts[5]
-            sshd_status = parts[6] if len(parts) > 6 else "?"
             docker_count = parts[7].strip() if len(parts) > 7 else "0"
         except (ValueError, IndexError) as _e:
             # Probe ran but the values aren't numeric. Same class as

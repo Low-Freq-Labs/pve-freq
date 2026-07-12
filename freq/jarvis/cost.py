@@ -25,7 +25,6 @@ from dataclasses import dataclass
 
 from freq.core import log as logger
 
-
 COST_STATE_FILE = "cost_state.json"
 
 # Estimated power draw per resource unit (when no iDRAC data available)
@@ -268,7 +267,8 @@ def cmd_cost(cfg, pack, args) -> int:
     # Get iDRAC data if available
     idrac_data = {}
     try:
-        from freq.modules.serve import _bg_cache as bgc, _bg_lock as bgl
+        from freq.modules.serve import _bg_cache as bgc
+        from freq.modules.serve import _bg_lock as bgl
 
         with bgl:
             infra = bgc.get("infra_quick")

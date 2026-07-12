@@ -25,6 +25,7 @@ Design decisions:
 
 import os
 import shutil
+import time as _time
 
 try:
     import tomllib
@@ -35,19 +36,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from freq import __version__
 from freq.core.types import (
-    Host,
     VLAN,
-    Distro,
     Container,
     ContainerVM,
+    Distro,
     FleetBoundaries,
+    Host,
+    Monitor,
     PhysicalDevice,
     PVENode,
-    Monitor,
 )
-from freq import __version__
-
 
 # --- Safe Defaults (set BEFORE config load) ---
 # These survive missing/broken config. Trap #4 lesson.
@@ -404,8 +404,6 @@ def _deprecation_warn(old_name: str, new_name: str):
 
     print(f"[FREQ] DEPRECATION: {old_name} detected. Migrate to {new_name} for long-term support.", file=sys.stderr)
 
-
-import time as _time
 
 _config_cache = None
 _config_cache_ts = 0

@@ -255,7 +255,8 @@ def provision_agent_vm(
 
 def cmd_import(cfg: FreqConfig, pack, args) -> int:
     """Import a cloud image as a VM with cloud-init."""
-    from freq.modules.pve import _find_reachable_node, _pve_cmd as pve_cmd
+    from freq.modules.pve import _find_reachable_node
+    from freq.modules.pve import _pve_cmd as pve_cmd
 
     image = getattr(args, "image", None) or "debian-13"
     name = getattr(args, "name", None) or "freq-{}".format(image)

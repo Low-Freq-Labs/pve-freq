@@ -28,7 +28,8 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 SECRETS_DIR = "secrets"
 SECRETS_LEASES = "leases.json"
@@ -250,8 +251,8 @@ def _cmd_audit(cfg: FreqConfig, args) -> int:
     now = time.time()
 
     # Check leases
-    expired = [l for l in leases if l.get("expires_epoch", 0) < now and l.get("expires_epoch", 0) > 0]
-    expiring_soon = [l for l in leases if 0 < l.get("expires_epoch", 0) - now < 30 * 86400]
+    expired = [lease for lease in leases if lease.get("expires_epoch", 0) < now and lease.get("expires_epoch", 0) > 0]
+    expiring_soon = [lease for lease in leases if 0 < lease.get("expires_epoch", 0) - now < 30 * 86400]
 
     fmt.divider("Lease Status")
     fmt.blank()
@@ -349,7 +350,7 @@ def _cmd_lease(cfg: FreqConfig, args) -> int:
     leases = _load_leases(cfg)
 
     # Update or create
-    existing = next((l for l in leases if l["name"] == name), None)
+    existing = next((lease for lease in leases if lease["name"] == name), None)
     if existing:
         existing["expires_epoch"] = time.time() + expires_secs
         existing["expires"] = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(time.time() + expires_secs))

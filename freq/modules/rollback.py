@@ -24,7 +24,7 @@ import time
 from freq.core import fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
-from freq.modules.pve import _find_reachable_node, _pve_cmd, PVE_CMD_TIMEOUT
+from freq.modules.pve import PVE_CMD_TIMEOUT, PVE_QUICK_TIMEOUT, _find_reachable_node, _pve_cmd
 
 # Timeouts
 PVE_ROLLBACK_TIMEOUT = 180

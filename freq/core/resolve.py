@@ -21,7 +21,7 @@ Design decisions:
 
 from typing import Optional
 
-from freq.core.types import Host, ContainerVM
+from freq.core.types import ContainerVM, Host
 
 
 def by_label(hosts: list, label: str) -> Optional[Host]:
@@ -77,7 +77,7 @@ def by_scope(hosts: list, scope: list) -> list:
 
 def by_labels(hosts: list, labels: str) -> list:
     """Filter hosts by comma-separated labels."""
-    label_list = [l.strip().lower() for l in labels.split(",")]
+    label_list = [label.strip().lower() for label in labels.split(",")]
     return [h for h in hosts if h.label.lower() in label_list]
 
 

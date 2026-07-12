@@ -24,7 +24,8 @@ import re
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many, result_for
+from freq.core.ssh import result_for
+from freq.core.ssh import run_many as ssh_run_many
 
 LOGS_CMD_TIMEOUT = 15
 LOGS_SEARCH_TIMEOUT = 30
@@ -179,7 +180,7 @@ def _cmd_search(cfg: FreqConfig, args) -> int:
         if not r or r.returncode != 0 or not r.stdout.strip():
             continue
 
-        match_lines = [l for l in r.stdout.strip().split("\n") if l.strip()]
+        match_lines = [line for line in r.stdout.strip().split("\n") if line.strip()]
         if not match_lines:
             continue
 
