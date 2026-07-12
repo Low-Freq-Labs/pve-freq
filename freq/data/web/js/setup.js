@@ -1,578 +1,465 @@
 (function(){
   'use strict';
 
+  var SCHEMA = 'zero-state-web-v1';
+  var DEFAULT_SERVICE_ACCOUNT = 'freq-admin';
   var API = {
     status: '/api/setup/status',
+    verify: '/api/auth/verify',
     createAdmin: '/api/setup/create-admin',
-    start: '/api/setup/init/start',
-    runStatus: '/api/setup/init/status',
-    logs: '/api/setup/init/logs',
-    certAdopt: '/api/cert/lifecycle/adopt-existing',
-    certBootstrap: '/api/cert/lifecycle/bootstrap',
-    certReconcile: '/api/cert/lifecycle/reconcile'
+    discoveryStart: '/api/setup/discovery/start',
+    discoveryStatus: '/api/setup/discovery/status',
+    contract: '/api/setup/contract',
+    credentials: '/api/setup/device-credentials',
+    initStart: '/api/setup/init/start',
+    initStatus: '/api/setup/init/status',
+    initLogs: '/api/setup/init/logs'
+  };
+  var STEP_ORDER = ['operator','connect','discover','credentials','launch','progress'];
+  var model = {
+    csrf: '', setupId: '', discoveryId: '', contractId: '', initJobId: '',
+    discovery: null, contract: null, selections: {}, unlocked: 0,
+    discoveryTimer: 0, initTimer: 0, handoffRetried: false
   };
 
-  var nodeList = document.getElementById('pve-node-list');
-  var deviceList = document.getElementById('device-list');
-  var form = document.getElementById('init-form');
-  var errorBox = document.getElementById('form-error');
-  var phaseLog = document.getElementById('phase-log');
-  var progressState = document.getElementById('progress-state');
-  var progressPhase = document.getElementById('progress-phase');
-  var setupCsrfToken = '';
-
   function $(id){return document.getElementById(id);}
-  function val(id){var el=$(id);return el ? el.value.trim() : '';}
-  function boolRadio(name,value){
-    var el = document.querySelector('input[name="'+name+'"][value="'+value+'"]');
-    return !!(el && el.checked);
+  function text(value){return value == null ? '' : String(value);}
+  function trim(id){var el=$(id);return el ? el.value.trim() : '';}
+  function clampPoll(value,fallback){
+    var n=Number(value || fallback || 1000);
+    return Math.max(500,Math.min(5000,isFinite(n) ? n : fallback || 1000));
   }
-  function radioValue(name){
-    var el = document.querySelector('input[name="'+name+'"]:checked');
-    return el ? el.value : '';
+  function uuid(){
+    if(window.crypto && typeof window.crypto.randomUUID === 'function'){
+      return window.crypto.randomUUID();
+    }
+    var bytes=new Uint8Array(16);
+    if(window.crypto && window.crypto.getRandomValues){window.crypto.getRandomValues(bytes);}
+    else{for(var i=0;i<bytes.length;i+=1){bytes[i]=Math.floor(Math.random()*256);}}
+    bytes[6]=(bytes[6]&15)|64; bytes[8]=(bytes[8]&63)|128;
+    return Array.prototype.map.call(bytes,function(b,i){
+      return (i===4||i===6||i===8||i===10?'-':'')+b.toString(16).padStart(2,'0');
+    }).join('');
   }
-  function esc(s){
-    return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  function el(tag,className,content){
+    var node=document.createElement(tag);
+    if(className){node.className=className;}
+    if(content != null){node.textContent=text(content);}
+    return node;
+  }
+  function setBusy(button,busy,label){
+    if(!button){return;}
+    if(busy){button.dataset.label=button.textContent;button.textContent=label || 'Working…';}
+    else if(button.dataset.label){button.textContent=button.dataset.label;delete button.dataset.label;}
+    button.disabled=!!busy;
+  }
+  function setError(message,field){
+    var box=$('form-error');
+    box.hidden=!message;
+    box.textContent=message || '';
+    if(message){box.scrollIntoView({behavior:'smooth',block:'nearest'});}
+    if(field){
+      var target=document.querySelector('[data-api-field="'+CSS.escape(field)+'"]');
+      if(target){target.focus();}
+    }
+  }
+  function errorMessage(data,status,url){
+    var error=data && data.error;
+    if(error && typeof error === 'object'){
+      return {message:error.message || error.code || (url+' returned HTTP '+status),field:error.field || '',code:error.code || ''};
+    }
+    return {message:text(error || (url+' returned HTTP '+status)),field:'',code:''};
+  }
+  function request(url,options,timeoutMs){
+    var opts=options || {};
+    var controller=typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer=controller ? window.setTimeout(function(){controller.abort();},timeoutMs || 20000) : 0;
+    opts.credentials='same-origin';
+    opts.headers=Object.assign({'Accept':'application/json'},opts.headers || {});
+    opts.signal=controller ? controller.signal : undefined;
+    return fetch(url,opts).then(function(response){
+      return response.text().then(function(raw){
+        var data={};
+        try{data=raw ? JSON.parse(raw) : {};}catch(ignore){data={};}
+        if(!response.ok){
+          var detail=errorMessage(data,response.status,url);
+          var failure=new Error(detail.message);
+          failure.status=response.status;failure.code=detail.code;failure.field=detail.field;
+          throw failure;
+        }
+        return data;
+      });
+    }).catch(function(error){
+      if(error && error.name === 'AbortError'){throw new Error(url+' timed out. No success was assumed.');}
+      throw error;
+    }).finally(function(){if(timer){window.clearTimeout(timer);}});
+  }
+  function getJson(url){return request(url,{method:'GET'},15000);}
+  function postJson(url,payload,authenticated){
+    var headers={'Content-Type':'application/json'};
+    if(authenticated){
+      if(!model.csrf){return Promise.reject(new Error('Setup session has no CSRF token. Recheck the session before continuing.'));}
+      headers['X-Freq-CSRF']=model.csrf;
+    }
+    return request(url,{method:'POST',headers:headers,body:JSON.stringify(payload)},30000);
+  }
+  function rememberStatus(data){
+    model.setupId=text(data.setup_id || model.setupId);
+    model.discoveryId=text(data.active_discovery_id || model.discoveryId);
+    model.contractId=text(data.active_contract_id || model.contractId);
+    model.initJobId=text(data.active_init_job_id || model.initJobId);
+    $('setup-health').textContent=text(data.state || data.setup_health || 'unknown').replace(/_/g,' ');
+    $('setup-reason').textContent=data.setup_reason || 'Setup state received without additional detail.';
+  }
+  function rememberSession(data){
+    model.csrf=text(data.csrf_token);
+    var ttl=Number(data.session_ttl_s || 0);
+    $('session-state').textContent=data.valid === false ? 'session required' : (ttl ? 'admin session · '+Math.ceil(ttl/60)+'m idle TTL' : 'admin session active');
+  }
+  function unlockThrough(step){
+    var index=STEP_ORDER.indexOf(step);
+    if(index>model.unlocked){model.unlocked=index;}
+    document.querySelectorAll('[data-step-target]').forEach(function(button){
+      button.disabled=STEP_ORDER.indexOf(button.dataset.stepTarget)>model.unlocked;
     });
   }
-  function splitList(s){
-    return String(s || '').split(',').map(function(v){return v.trim();}).filter(Boolean);
-  }
-  function boolSelect(id,defaultValue){
-    var raw = val(id);
-    if(!raw){return defaultValue;}
-    return raw !== 'false' && raw !== '0' && raw !== 'no' && raw !== 'off';
-  }
-  function defaultDashboardOriginHost(){
-    return window.location && window.location.hostname ? window.location.hostname : '';
-  }
-  function defaultDashboardOriginPort(){
-    if(window.location && window.location.port){return window.location.port;}
-    return '8888';
-  }
-  function targetFromHostname(hostname,baseDomain,mode,origin){
-    var h = String(hostname || '').trim().toLowerCase();
-    var suffix = baseDomain ? '.' + String(baseDomain).toLowerCase() : '';
-    var subdomain = suffix && h.endsWith(suffix) ? h.slice(0,-suffix.length) : '';
-    var target = {
-      name: subdomain || h,
-      hostname: h,
-      subdomain: subdomain,
-      mode: mode || 'direct',
-      enabled: true,
-      scope: 'web-init'
-    };
-    if(origin && mode === 'behind-proxy'){
-      target.origin_ip = origin.host || '';
-      target.origin_port = Number(origin.port || 8888);
-      target.origin_scheme = origin.scheme || 'http';
-      target.origin_tls_verify = !!origin.tlsVerify;
-    }
-    return target;
-  }
-  function certTargets(hostnames,baseDomain,mode,origin){
-    return (hostnames || []).map(function(hostname){
-      return targetFromHostname(hostname,baseDomain,mode,origin);
+  function showStep(step){
+    if(STEP_ORDER.indexOf(step)>model.unlocked){return;}
+    document.querySelectorAll('[data-step]').forEach(function(section){section.hidden=section.dataset.step!==step;});
+    document.querySelectorAll('[data-step-target]').forEach(function(button){
+      var active=button.dataset.stepTarget===step;
+      if(active){button.setAttribute('aria-current','step');}else{button.removeAttribute('aria-current');}
     });
+    setError('');
+    var current=$('step-'+step);
+    if(current){current.focus({preventScroll:true});window.scrollTo({top:0,behavior:'smooth'});}
   }
-  function setError(msg){
-    errorBox.hidden = !msg;
-    errorBox.textContent = msg || '';
+  function advance(step){unlockThrough(step);showStep(step);}
+  function formatAsOf(value){
+    if(!value){return 'AS OF unavailable';}
+    var date=new Date(value);
+    return isNaN(date.getTime()) ? 'AS OF '+text(value) : 'AS OF '+date.toLocaleString();
   }
-  function appendLog(line){
-    var current = phaseLog.textContent || '';
-    phaseLog.textContent = (current && current !== 'No init run has started in this browser session.' ? current + '\n' : '') + line;
-    phaseLog.scrollTop = phaseLog.scrollHeight;
-  }
-
-  function rememberSetupAuth(data){
-    data = data || {};
-    if(typeof data.csrf_token === 'string' && data.csrf_token){
-      setupCsrfToken = data.csrf_token;
-    }
+  function progress(prefix,progressData){
+    var p=progressData || {};
+    var current=Number(p.current || 0), total=Number(p.total || 0);
+    $(prefix+'-phase').textContent=text(p.phase_name || p.phase || 'Working');
+    $(prefix+'-count').textContent=total ? current+' / '+total : 'in progress';
+    $(prefix+'-message').textContent=p.message || 'Waiting for the next verified update.';
+    $(prefix+'-bar').style.width=total ? Math.min(100,(current/total)*100)+'%' : '12%';
   }
 
   function addNode(data){
-    var row = document.createElement('div');
-    row.className = 'list-row node-row';
-    row.innerHTML =
-      '<label>Node name<input type="text" class="node-name" placeholder="pve01" value="'+esc(data && data.name || '')+'"></label>'+
-      '<label>Node IP<input type="text" class="node-ip" placeholder="192.168.10.26" value="'+esc(data && data.ip || '')+'"></label>'+
-      '<button class="icon-btn" type="button" data-action="remove-row" aria-label="Remove PVE node">x</button>';
-    nodeList.appendChild(row);
+    var row=el('div','list-row node-row');
+    var nameLabel=el('label');nameLabel.appendChild(document.createTextNode('Node name (optional)'));
+    var name=document.createElement('input');name.type='text';name.className='node-name';name.placeholder='pve01';name.value=text(data && data.name);nameLabel.appendChild(name);
+    var hostLabel=el('label');hostLabel.appendChild(document.createTextNode('Node IP'));
+    var host=document.createElement('input');host.type='text';host.className='node-host';host.placeholder='10.25.255.26';host.inputMode='decimal';host.required=true;host.dataset.apiField='cluster.nodes['+document.querySelectorAll('.node-row').length+'].host';host.value=text(data && (data.host || data.ip));hostLabel.appendChild(host);
+    var remove=el('button','icon-btn','Remove');remove.type='button';remove.dataset.action='remove-node';remove.setAttribute('aria-label','Remove PVE node');
+    row.append(nameLabel,hostLabel,remove);$('pve-node-list').appendChild(row);
   }
-
-  function addDevice(data){
-    var row = document.createElement('div');
-    row.className = 'list-row device-row';
-    row.innerHTML =
-      '<label>Type<select class="device-type">'+
-      '<option value="pfsense">pfSense</option><option value="truenas">TrueNAS</option>'+
-      '<option value="switch">Switch</option><option value="bmc">BMC</option>'+
-      '<option value="linux">Linux</option><option value="other">Other</option></select></label>'+
-      '<label>Target<input type="text" class="device-target" placeholder="label or IP" value="'+esc(data && data.target || '')+'"></label>'+
-      '<label>User<input type="text" class="device-user" placeholder="admin" value="'+esc(data && data.user || '')+'"></label>'+
-      '<label>Secret<input type="password" class="device-secret" value="'+esc(data && data.secret || '')+'"></label>'+
-      '<button class="icon-btn" type="button" data-action="remove-row" aria-label="Remove device credential">x</button>';
-    deviceList.appendChild(row);
-    if(data && data.type){row.querySelector('.device-type').value=data.type;}
-  }
-
-  function showSslFields(){
-    var mode = radioValue('ssl_mode');
-    document.querySelectorAll('[data-ssl-fields]').forEach(function(el){
-      el.hidden = el.getAttribute('data-ssl-fields') !== mode;
-    });
-  }
-  function seedSslDefaults(){
-    var originHost = $('ssl-dashboard-origin-host');
-    var originPort = $('ssl-dashboard-origin-port');
-    if(originHost && !originHost.value){originHost.value = defaultDashboardOriginHost();}
-    if(originPort && !originPort.value){originPort.value = defaultDashboardOriginPort();}
-  }
-
   function collectNodes(){
-    return Array.prototype.slice.call(document.querySelectorAll('.node-row')).map(function(row,idx){
-      return {
-        name: row.querySelector('.node-name').value.trim() || 'pve' + String(idx + 1).padStart(2,'0'),
-        ip: row.querySelector('.node-ip').value.trim()
-      };
-    }).filter(function(n){return n.ip;});
+    return Array.prototype.map.call(document.querySelectorAll('.node-row'),function(row){
+      return {host:row.querySelector('.node-host').value.trim(),name:row.querySelector('.node-name').value.trim()};
+    }).filter(function(node){return node.host;});
   }
-
-  function collectDevices(){
-    var devices = {};
-    Array.prototype.slice.call(document.querySelectorAll('.device-row')).forEach(function(row,idx){
-      var item = {
-        type: row.querySelector('.device-type').value,
-        target: row.querySelector('.device-target').value.trim(),
-        username: row.querySelector('.device-user').value.trim(),
-        secret: row.querySelector('.device-secret').value
-      };
-      if(item.target || item.username || item.secret){
-        var key = item.type + '_' + String(idx + 1);
-        devices[key] = item;
-      }
-    });
-    return devices;
-  }
-
-  function collectStartPayload(payload){
-    var nodes = payload.cluster.pve_nodes;
-    var start = {
-      contract_version: payload.contract_version,
-      bootstrap_user: payload.ssh.bootstrap_user,
-      service_account: payload.ssh.service_account,
-      dashboard_user: payload.operator.username,
-      pve_nodes: nodes.map(function(n){return n.ip;}),
-      pve_node_names: nodes.map(function(n){return n.name;}),
-      gateway: payload.cluster.gateway,
-      nameserver: payload.cluster.nameserver,
-      cluster_name: payload.cluster.cluster_name,
-      timezone: payload.cluster.timezone,
-      ssh_mode: payload.ssh.mode,
-      hosts_import: payload.fleet.hosts_import,
-      hosts_file: '',
-      owned_vmids: payload.fleet.owned_vmids,
-      template_vmids: payload.fleet.template_vmids,
-      acknowledged_out_of_contract_vmids: payload.fleet.acknowledged_out_of_contract_vmids,
-      vm_contract: payload.fleet.vm_contract,
-      core_devices: payload.fleet.core_devices,
-      lab_devices: payload.fleet.lab_devices,
-      install_pdm: payload.pdm.mode === 'install',
-      skip_pdm: payload.pdm.mode === 'skip',
-      pdm_password: payload.pdm.root_pam_password,
-      pdm_remote_name: payload.pdm.remote_name,
-      device_credentials_file: payload.fleet.device_credentials_file,
-      device_credentials: payload.fleet.device_credentials,
-      ssl_mode: payload.ssl.mode
-    };
-    if(payload.ssh.service_password_source === 'path'){
-      start.service_account_password_file = payload.ssh.service_password;
-    }else{
-      start.service_account_password = payload.ssh.service_password;
-    }
-    if(payload.operator.password_source === 'path'){
-      start.dashboard_password_file = payload.operator.password;
-    }else{
-      start.dashboard_password = payload.operator.password;
-    }
-    if(payload.ssh.bootstrap_auth === 'password'){
-      start.bootstrap_password = payload.ssh.bootstrap_secret;
-    }else if(payload.ssh.bootstrap_auth === 'password-path'){
-      start.bootstrap_password_file = payload.ssh.bootstrap_secret;
-    }else if(payload.ssh.bootstrap_auth === 'key'){
-      start.bootstrap_key = payload.ssh.bootstrap_secret;
-    }else{
-      start.bootstrap_key_path = payload.ssh.bootstrap_secret;
-    }
-    return start;
-  }
-
-  function collectPayload(){
-    var sslMode = radioValue('ssl_mode');
-    return {
-      contract_version: 'zero-state-web-init-v1',
-      operator: {
-        username: val('operator-user').toLowerCase(),
-        password_source: val('operator-pass-source') || 'secret',
-        password: $('operator-pass').value
-      },
-      cluster: {
-        cluster_name: val('cluster-name'),
-        timezone: val('timezone') || 'UTC',
-        gateway: val('gateway'),
-        nameserver: val('nameserver') || '1.1.1.1',
-        pve_nodes: collectNodes()
-      },
-      ssh: {
-        mode: val('ssh-mode') || 'sudo',
-        bootstrap_user: val('bootstrap-user') || 'root',
-        bootstrap_auth: val('bootstrap-auth') || 'password',
-        bootstrap_secret: $('bootstrap-secret').value,
-        service_account: val('service-account') || 'freq-admin',
-        service_password_source: val('service-pass-source') || 'secret',
-        service_password: $('service-pass').value
-      },
-      fleet: {
-        owned_vmids: val('owned-vmids'),
-        template_vmids: val('template-vmids'),
-        acknowledged_out_of_contract_vmids: val('ack-vmids'),
-        vm_contract: val('vm-contract'),
-        core_devices: val('core-devices'),
-        lab_devices: val('lab-devices'),
-        hosts_import: $('hosts-import').value,
-        device_credentials_file: val('device-credentials-file'),
-        device_credentials: collectDevices()
-      },
-      pdm: {
-        mode: radioValue('pdm_mode'),
-        root_pam_password: $('pdm-pass').value,
-        remote_name: val('pdm-remote')
-      },
-      ssl: {
-        mode: sslMode,
-        defer_base_init_ssl: boolRadio('ssl_mode','defer'),
-        adopt_existing: {
-          base_domain: val('ssl-adopt-domain'),
-          cert_source: val('ssl-adopt-source'),
-          reverse_proxy_host: val('ssl-proxy-host'),
-          reverse_proxy_upstream_scheme: val('ssl-upstream-scheme') || 'http',
-          reverse_proxy_upstream_tls_verify: boolSelect('ssl-upstream-tls-verify', true),
-          dashboard_origin_host: val('ssl-dashboard-origin-host') || defaultDashboardOriginHost(),
-          dashboard_origin_port: val('ssl-dashboard-origin-port') || defaultDashboardOriginPort(),
-          cert_fullchain_path: val('ssl-fullchain-path'),
-          cert_key_path: val('ssl-key-path'),
-          target_hostnames: splitList(val('ssl-targets')),
-          renewal_owner: 'external'
-        },
-        bootstrap_new: {
-          base_domain: val('ssl-bootstrap-domain'),
-          cloudflare_token_path: val('cloudflare-token-path'),
-          target_hostnames: splitList(val('ssl-bootstrap-targets'))
-        }
-      }
-    };
-  }
-
-  function validatePayload(payload){
-    if(!payload.operator.username){return 'Operator username is required.';}
-    if(!/^[a-z_][a-z0-9_-]{0,31}$/.test(payload.operator.username)){
-      return 'Operator username must be lowercase with letters, numbers, underscores, or hyphens.';
-    }
-    if(!payload.operator.password){return 'Operator password or password file path is required.';}
-    if(payload.operator.password_source !== 'path' && payload.operator.password.length < 8){return 'Operator password must be at least 8 characters.';}
-    if(payload.operator.password_source !== 'path' && payload.operator.password !== $('operator-pass2').value){return 'Operator passwords do not match.';}
-    if(!payload.cluster.cluster_name){return 'Cluster name is required for full init.';}
-    if(!payload.cluster.pve_nodes.length){return 'At least one PVE node is required.';}
-    if(!payload.ssh.bootstrap_secret){return 'Bootstrap secret is required so web init can reach the fleet.';}
-    if(!payload.ssh.service_password){return 'Service account password or password file path is required.';}
-    if(payload.ssh.service_password_source !== 'path' && payload.ssh.service_password.length < 8){return 'Service account password must be at least 8 characters.';}
-    if(payload.ssl.mode === 'adopt-existing'){
-      if(!payload.ssl.adopt_existing.base_domain){return 'Existing SSL adoption requires a base domain.';}
-      if(payload.ssl.adopt_existing.cert_source === 'managed-paths' &&
-        (!payload.ssl.adopt_existing.cert_fullchain_path || !payload.ssl.adopt_existing.cert_key_path)){
-        return 'Existing SSL managed paths require both fullchain and key paths.';
-      }
-      if(payload.ssl.adopt_existing.cert_source === 'reverse-proxy' &&
-        !payload.ssl.adopt_existing.reverse_proxy_host){
-        return 'Existing SSL reverse-proxy mode requires the proxy host.';
-      }
-      if(payload.ssl.adopt_existing.cert_source === 'reverse-proxy' &&
-        !payload.ssl.adopt_existing.dashboard_origin_host){
-        return 'Existing SSL reverse-proxy mode requires the dashboard upstream host.';
-      }
-    }
-    if(payload.ssl.mode === 'bootstrap-new'){
-      if(!payload.ssl.bootstrap_new.base_domain){return 'New SSL bootstrap requires a base domain.';}
-      if(!payload.ssl.bootstrap_new.cloudflare_token_path){return 'New SSL bootstrap requires the Cloudflare token path.';}
-    }
+  function validateOperator(){
+    var user=trim('operator-user').toLowerCase(), password=$('operator-pass').value;
+    if(!/^[a-z_][a-z0-9_-]{0,31}$/.test(user)){return 'Operator username must use lowercase letters, numbers, underscores, or hyphens.';}
+    if(password.length<8){return 'Operator password must be at least 8 characters.';}
+    if(password!==$('operator-pass2').value){return 'Operator passwords do not match.';}
     return '';
   }
-
-  function postJson(url,payload,timeoutMs){
-    var headers = {'Content-Type':'application/json'};
-    if(setupCsrfToken){
-      headers['X-Freq-CSRF'] = setupCsrfToken;
-    }
-    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timer = null;
-    var limit = timeoutMs || 30000;
-    if(controller){
-      timer = window.setTimeout(function(){controller.abort();}, limit);
-    }
-    return fetch(url,{
-      method:'POST',
-      credentials:'same-origin',
-      headers:headers,
-      body:JSON.stringify(payload),
-      signal: controller ? controller.signal : undefined
-    }).then(function(r){
-      return r.text().then(function(text){
-        var data = {};
-        try{data = text ? JSON.parse(text) : {};}catch(e){data = {raw:text};}
-        if(!r.ok){
-          var msg = url+' returned HTTP '+r.status;
-          if(data && data.error){msg += ': '+data.error;}
-          throw new Error(msg);
-        }
-        return data;
-      });
-    }).catch(function(err){
-      if(err && err.name === 'AbortError'){
-        throw new Error(url+' timed out after '+Math.round(limit / 1000)+'s');
-      }
-      throw err;
-    }).finally(function(){
-      if(timer){window.clearTimeout(timer);}
+  function createOperator(event){
+    event.preventDefault();setError('');
+    var invalid=validateOperator();if(invalid){setError(invalid);return;}
+    var button=$('create-operator');setBusy(button,true,'Creating secure session…');
+    postJson(API.createAdmin,{schema:SCHEMA,username:trim('operator-user').toLowerCase(),password:$('operator-pass').value,client_request_id:uuid()},false)
+      .then(function(data){
+        if(!data.session_started || !data.csrf_token){throw new Error('The operator was not given an authenticated setup session.');}
+        model.setupId=text(data.setup_id);rememberSession(data);
+        $('operator-pass').value='';$('operator-pass2').value='';
+        advance('connect');
+      }).catch(function(error){
+        if(error.code==='operator_exists'){$('operator-form').hidden=true;$('resume-session').hidden=false;}
+        setError(error.message,error.field);
+      }).finally(function(){setBusy(button,false);});
+  }
+  function verifySession(){
+    return getJson(API.verify).then(function(data){
+      if(!data.valid || data.role!=='admin'){throw new Error('A valid admin setup session is required.');}
+      rememberSession(data);return data;
     });
   }
-
-  function getJson(url,timeoutMs){
-    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timer = null;
-    var limit = timeoutMs || 15000;
-    if(controller){
-      timer = window.setTimeout(function(){controller.abort();}, limit);
-    }
-    return fetch(url,{
-      credentials:'same-origin',
-      signal: controller ? controller.signal : undefined
-    }).then(function(r){
-      return r.text().then(function(text){
-        var data = {};
-        try{data = text ? JSON.parse(text) : {};}catch(e){data = {raw:text};}
-        if(!r.ok){
-          var msg = url+' returned HTTP '+r.status;
-          if(data && data.error){msg += ': '+data.error;}
-          throw new Error(msg);
-        }
-        return data;
-      });
-    }).catch(function(err){
-      if(err && err.name === 'AbortError'){
-        throw new Error(url+' timed out after '+Math.round(limit / 1000)+'s');
-      }
-      throw err;
-    }).finally(function(){
-      if(timer){window.clearTimeout(timer);}
-    });
-  }
-
-  function ensureAdminSession(payload){
-    appendLog('Creating first operator session via '+API.createAdmin+'.');
-    return postJson(API.createAdmin,{
-      username: payload.operator.username,
-      password: payload.operator.password_source === 'path' ? '' : payload.operator.password,
-      password_file: payload.operator.password_source === 'path' ? payload.operator.password : ''
-    }).then(function(data){
-      rememberSetupAuth(data);
-      if(!data.session_started){
-        throw new Error('Setup admin session was not started.');
-      }
-      appendLog('Operator session ready: '+(data.user || payload.operator.username)+'.');
-      return data;
-    }).catch(function(err){
-      appendLog('Operator create-admin did not complete: '+String(err.message || err));
-      throw err;
-    });
-  }
-
-  function applySslChoice(payload){
-    if(payload.ssl.mode === 'defer'){
-      appendLog('SSL choice: deferred. Base init will not require SSL.');
-      return Promise.resolve({ok:true,mode:'defer'});
-    }
-    if(payload.ssl.mode === 'adopt-existing'){
-      appendLog('SSL choice: adopting existing ownership via '+API.certAdopt+'.');
-      var adoptMode = payload.ssl.adopt_existing.cert_source === 'reverse-proxy' ? 'behind-proxy' : 'direct';
-      var adoptOrigin = {
-        host: payload.ssl.adopt_existing.dashboard_origin_host,
-        port: payload.ssl.adopt_existing.dashboard_origin_port,
-        scheme: payload.ssl.adopt_existing.reverse_proxy_upstream_scheme,
-        tlsVerify: payload.ssl.adopt_existing.reverse_proxy_upstream_tls_verify
-      };
-      var adoptTargets = certTargets(
-        payload.ssl.adopt_existing.target_hostnames,
-        payload.ssl.adopt_existing.base_domain,
-        adoptMode,
-        adoptOrigin
-      );
-      return postJson(API.certAdopt,{
-        base_domain: payload.ssl.adopt_existing.base_domain,
-        cert_fullchain_path: payload.ssl.adopt_existing.cert_source === 'managed-paths' ? payload.ssl.adopt_existing.cert_fullchain_path : '',
-        cert_key_path: payload.ssl.adopt_existing.cert_source === 'managed-paths' ? payload.ssl.adopt_existing.cert_key_path : '',
-        reverse_proxy_host: payload.ssl.adopt_existing.reverse_proxy_host,
-        reverse_proxy_upstream_scheme: payload.ssl.adopt_existing.reverse_proxy_upstream_scheme,
-        reverse_proxy_upstream_tls_verify: payload.ssl.adopt_existing.reverse_proxy_upstream_tls_verify,
-        dashboard_origin_host: payload.ssl.adopt_existing.dashboard_origin_host,
-        dashboard_origin_port: payload.ssl.adopt_existing.dashboard_origin_port,
-        renewal_owner: payload.ssl.adopt_existing.renewal_owner,
-        cert_targets: adoptTargets,
-        targets: adoptTargets,
-        replace: true,
-        dry_run: false,
-        infer_targets: true
-      }).then(function(data){
-        appendLog('Existing SSL target_source: '+(data.target_source || 'not returned')+'.');
-        return data;
-      });
-    }
-    appendLog('SSL choice: bootstrapping Cloudflare lifecycle via '+API.certBootstrap+'.');
-    var bootstrapTargets = certTargets(
-      payload.ssl.bootstrap_new.target_hostnames,
-      payload.ssl.bootstrap_new.base_domain,
-      'direct'
-    );
-    return postJson(API.certBootstrap,{
-      base_domain: payload.ssl.bootstrap_new.base_domain,
-      cloudflare_token_path: payload.ssl.bootstrap_new.cloudflare_token_path,
-      cert_targets: bootstrapTargets,
-      targets: bootstrapTargets,
-      replace: true,
-      dry_run: false
-    }).then(function(data){
-      appendLog('New SSL target_source: '+(data.target_source || 'not returned')+'.');
-      return data;
-    });
-  }
-
-  function refreshCertTruth(){
-    return getJson(API.certReconcile).then(function(data){
-      appendLog('SSL served-cert truth: '+JSON.stringify(data.summary || data));
-      return data;
-    }).catch(function(err){
-      appendLog('SSL reconcile unavailable: '+String(err.message || err));
-      return null;
-    });
-  }
-
-  function refreshStatus(){
-    getJson(API.status).then(function(data){
-      $('setup-health').textContent = data.setup_health || 'unknown';
-      $('setup-reason').textContent = data.setup_reason || 'No setup reason returned.';
-      if(data.initialized){
-        progressState.textContent = 'configured';
-        progressPhase.textContent = 'initialized marker present';
-      }
-    }).catch(function(err){
-      $('setup-health').textContent = 'unreachable';
-      $('setup-reason').textContent = String(err);
-    });
-  }
-
-  function handleStart(evt){
-    evt.preventDefault();
+  function checkSession(){
     setError('');
-    var payload = collectPayload();
-    var invalid = validatePayload(payload);
-    if(invalid){setError(invalid);return;}
-
-    var btn = $('start-init');
-    btn.disabled = true;
-    btn.textContent = 'Starting...';
-    progressState.textContent = 'starting';
-    progressPhase.textContent = 'posting init contract';
-    phaseLog.textContent = '';
-    appendLog('Collected zero-state-web-init-v1 payload in browser.');
-    appendLog('Posting to '+API.start+'.');
-
-    ensureAdminSession(payload).then(function(){
-      return applySslChoice(payload);
-    }).then(function(){
-      return refreshCertTruth();
-    }).then(function(){
-      appendLog('Posting full init start payload to '+API.start+'.');
-      return postJson(API.start,collectStartPayload(payload));
-    }).then(function(data){
-      progressState.textContent = data.state || 'running';
-      progressPhase.textContent = data.phase || 'init runner accepted';
-      appendLog('Backend accepted init run: '+JSON.stringify(data));
-      pollRun();
-    }).catch(function(err){
-      progressState.textContent = 'blocked';
-      var msg = String(err.message || err);
-      progressPhase.textContent = msg.indexOf(API.createAdmin) !== -1 ? 'operator session failed' : 'backend contract missing';
-      if(msg.indexOf(API.start) !== -1){
-        msg += '. Required: accept the flat zero-state-web-init-v1 payload, stage browser-entered secrets to 0600 temp files/vault, launch freq init --headless, expose '+API.runStatus+' with {running,job:{state,pid,lines,returncode,initialized}}, then mark success only when /api/setup/status reports initialized/configured.';
-      }
-      setError(msg);
-      appendLog('BLOCKER: '+String(err.message || err));
-      btn.disabled = false;
-      btn.textContent = 'Start Web Init';
+    verifySession().then(function(){return refreshStatus(true);}).catch(function(error){
+      $('operator-form').hidden=true;$('resume-session').hidden=false;$('session-state').textContent='session required';setError(error.message);
     });
   }
 
-  function pollRun(){
-    getJson(API.runStatus).then(function(data){
-      var job = data.job || {};
-      var state = data.state || job.state || (data.running ? 'running' : 'idle');
-      var logTail = data.log_tail || job.lines || [];
-      if(state === 'succeeded'){state = 'complete';}
-      progressState.textContent = state || 'running';
-      progressPhase.textContent = data.phase || (logTail.length ? logTail[logTail.length - 1] : '');
-      if(logTail.length){phaseLog.textContent = logTail.join ? logTail.join('\n') : String(logTail);}
-      if(state === 'complete'){
-        refreshStatus();
-        refreshCertTruth();
-        $('start-init').textContent = 'Init Complete';
-        return;
+  function validateDiscovery(){
+    var nodes=collectNodes();
+    if(!trim('cluster-name')){return 'Cluster name is required.';}
+    if(!trim('bootstrap-user')){return 'Bootstrap SSH user is required.';}
+    if(!$('bootstrap-pass').value){return 'Bootstrap SSH password is required.';}
+    if(nodes.length<1 || nodes.length>16){return 'Enter between 1 and 16 PVE node IPs.';}
+    var unique={};
+    for(var i=0;i<nodes.length;i+=1){if(unique[nodes[i].host]){return 'PVE node IPs must be unique.';}unique[nodes[i].host]=true;}
+    return '';
+  }
+  function startDiscovery(event){
+    if(event){event.preventDefault();}
+    setError('');var invalid=validateDiscovery();if(invalid){setError(invalid);return;}
+    var button=$('start-discovery');setBusy(button,true,'Starting discovery…');
+    postJson(API.discoveryStart,{
+      schema:SCHEMA,setup_id:model.setupId,client_request_id:uuid(),
+      cluster:{name:trim('cluster-name'),nodes:collectNodes()},
+      bootstrap:{username:trim('bootstrap-user'),password:$('bootstrap-pass').value}
+    },true).then(function(data){
+      model.discoveryId=text(data.discovery && data.discovery.id);model.contractId='';model.contract=null;model.selections={};
+      $('bootstrap-pass').value='';advance('discover');
+      progress('discovery',{phase:'queued',message:'Discovery accepted and queued.'});
+      scheduleDiscovery(data.discovery && data.discovery.poll_after_ms);
+    }).catch(function(error){setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
+  }
+  function scheduleDiscovery(delay){
+    window.clearTimeout(model.discoveryTimer);
+    model.discoveryTimer=window.setTimeout(pollDiscovery,clampPoll(delay,1000));
+  }
+  function pollDiscovery(){
+    if(!model.discoveryId){setError('No active discovery ID was returned.');return;}
+    getJson(API.discoveryStatus+'?id='+encodeURIComponent(model.discoveryId)).then(function(data){
+      var discovery=data.discovery || {};progress('discovery',discovery.progress);
+      $('discovery-as-of').textContent=formatAsOf(discovery.updated_at);
+      if(discovery.state==='succeeded'){
+        model.discovery=discovery;renderDiscovery(discovery);return;
       }
-      if(state === 'failed' || data.blocker){
-        setError(data.blocker || job.error || data.error || 'Init failed. See phase log.');
-        $('start-init').disabled = false;
-        $('start-init').textContent = 'Start Web Init';
-        return;
-      }
-      window.setTimeout(pollRun, 2000);
-    }).catch(function(err){
-      progressState.textContent = 'blocked';
-      progressPhase.textContent = 'progress endpoint missing';
-      setError('Missing progress endpoint '+API.runStatus+': '+String(err));
-      $('start-init').disabled = false;
-      $('start-init').textContent = 'Start Web Init';
+      if(discovery.state==='failed'){setError((discovery.error && discovery.error.message) || 'Discovery failed. Return to Connect and retry.');return;}
+      scheduleDiscovery(discovery.poll_after_ms);
+    }).catch(function(error){setError(error.message,error.field);});
+  }
+  function resourceTitle(item){return item.label || item.name || item.host || item.id;}
+  function resourceMeta(item,isDevice){
+    if(isDevice){return [item.kind,item.host,item.reachable===false?'unreachable':'reachable'].filter(Boolean).join(' · ');}
+    return [item.kind,item.vmid!=null?'VMID '+item.vmid:'',item.node,item.status].filter(Boolean).join(' · ');
+  }
+  function renderNodeTruth(nodes){
+    var root=$('node-truth');root.replaceChildren();
+    (nodes || []).forEach(function(node){
+      var card=el('div','node-card');
+      card.append(el('strong','',node.name || node.host),el('span','',node.host),el('small',node.reachable===false?'unreachable':('PVE '+text(node.version || 'reachable'))));
+      if(node.reachable===false){card.classList.add('is-blocked');}
+      root.appendChild(card);
     });
   }
+  function renderDiscovery(discovery){
+    var results=discovery.results || {}, rows=[];
+    (results.resources || []).forEach(function(item){rows.push({item:item,group:'virtual'});});
+    (results.devices || []).forEach(function(item){rows.push({item:item,group:'device'});});
+    renderNodeTruth(results.pve_nodes || []);
+    var warnings=$('discovery-warnings');warnings.replaceChildren();
+    (results.warnings || []).forEach(function(warning){warnings.appendChild(el('p','',warning.message || warning));});
+    warnings.hidden=!warnings.children.length;
+    var body=$('resource-rows');body.replaceChildren();model.selections={};
+    rows.forEach(function(entry,index){body.appendChild(renderResourceRow(entry.item,entry.group,index));});
+    $('review-surface').hidden=false;
+    progress('discovery',{phase:'complete',current:rows.length,total:rows.length,message:'Discovery complete. Review every row before freezing the contract.'});
+    updateReviewCount();
+  }
+  function renderResourceRow(item,group,index){
+    var row=document.createElement('tr');row.dataset.resourceId=item.id;row.dataset.group=group;row.dataset.decided='false';
+    var identity=document.createElement('td');identity.append(el('strong','resource-name',resourceTitle(item)),el('span','resource-id',item.id));
+    var truth=document.createElement('td');truth.append(el('span','kind-chip',text(item.kind).toUpperCase()),el('small','',resourceMeta(item,group==='device')));
+    if(item.suggested_disposition){truth.appendChild(el('em','suggestion','hint: '+item.suggested_disposition+(item.suggested_placement?' / '+item.suggested_placement:'')));}
+    var choice=document.createElement('td');var choices=el('div','row-choices');
+    var unknown=group==='device' && item.kind==='unknown';
+    ['owned','acknowledged'].forEach(function(value){
+      var label=el('label','choice-pill');var input=document.createElement('input');input.type='radio';input.name='selection-'+index;input.value=value;input.disabled=unknown && value==='owned';input.dataset.resourceId=item.id;
+      label.append(input,document.createTextNode(value==='owned'?'Owned':'Acknowledge'));if(input.disabled){label.title='Unknown devices are acknowledged-only in v1.';label.classList.add('is-disabled');}choices.appendChild(label);
+    });
+    if(unknown){choices.appendChild(el('small','honest-note','Unknown kind: ownership is unavailable in v1.'));}
+    choice.appendChild(choices);
+    var placementCell=document.createElement('td');var select=document.createElement('select');select.className='placement-select';select.disabled=true;select.dataset.resourceId=item.id;select.setAttribute('aria-label','Placement for '+resourceTitle(item));
+    [['','Choose placement'],['production','Production'],['lab','Lab']].forEach(function(option){var node=document.createElement('option');node.value=option[0];node.textContent=option[1];select.appendChild(node);});
+    placementCell.appendChild(select);
+    row.append(identity,truth,choice,placementCell);return row;
+  }
+  function selectionChanged(target){
+    var id=target.dataset.resourceId,row=document.querySelector('tr[data-resource-id="'+CSS.escape(id)+'"]'),placement=row.querySelector('.placement-select');
+    model.selections[id]={resource_id:id,disposition:target.value};
+    placement.disabled=target.value!=='owned';
+    if(target.value!=='owned'){placement.value='';delete model.selections[id].placement;}
+    row.dataset.decided='true';updateReviewCount();
+  }
+  function placementChanged(target){
+    var choice=model.selections[target.dataset.resourceId];if(choice){choice.placement=target.value || '';}
+    updateReviewCount();
+  }
+  function updateReviewCount(){
+    var rows=Array.prototype.slice.call(document.querySelectorAll('#resource-rows tr'));
+    var complete=rows.filter(function(row){var choice=model.selections[row.dataset.resourceId];return choice && (choice.disposition==='acknowledged' || (choice.disposition==='owned' && choice.placement));}).length;
+    $('review-count').textContent=complete+' of '+rows.length+' decided';$('save-contract').disabled=!rows.length || complete!==rows.length;
+  }
+  function filterRows(filter){
+    document.querySelectorAll('.filter-btn').forEach(function(button){var active=button.dataset.filter===filter;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',text(active));});
+    document.querySelectorAll('#resource-rows tr').forEach(function(row){row.hidden=!(filter==='all' || row.dataset.group===filter || (filter==='undecided' && row.dataset.decided!=='true'));});
+  }
+  function saveContract(){
+    setError('');var button=$('save-contract');if(button.disabled){return;}setBusy(button,true,'Freezing contract…');
+    postJson(API.contract,{schema:SCHEMA,setup_id:model.setupId,discovery_id:model.discoveryId,client_request_id:uuid(),selections:Object.keys(model.selections).map(function(id){return model.selections[id];})},true)
+      .then(function(data){model.contract=data.contract || {};model.contractId=text(model.contract.id);renderContractSummary();renderCredentials();})
+      .catch(function(error){setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
+  }
+  function deviceFor(id){
+    var devices=model.discovery && model.discovery.results && model.discovery.results.devices || [];
+    return devices.find(function(item){return item.id===id;}) || {id:id,label:id,credential_fields:[]};
+  }
+  function renderCredentials(){
+    var requirements=model.contract && model.contract.credential_requirements || [],root=$('credential-list');root.replaceChildren();
+    $('credential-count').textContent=requirements.length+' required';
+    if(!requirements.length){root.appendChild(el('div','empty-state','No owned devices require credentials. The frozen contract is ready for init.'));$('save-credentials').textContent='Continue to launch';}
+    else{$('save-credentials').textContent='Store device credentials';requirements.forEach(function(requirement){root.appendChild(credentialCard(requirement));});}
+    advance('credentials');
+    if(model.contract.ready && !requirements.length){renderContractSummary();}
+  }
+  function credentialCard(requirement){
+    var device=deviceFor(requirement.resource_id),card=el('fieldset','credential-card');card.dataset.resourceId=requirement.resource_id;
+    var legend=document.createElement('legend');legend.append(el('strong','',resourceTitle(device)),el('span','',resourceMeta(device,true)));card.appendChild(legend);
+    var alternatives=(requirement.required_any || []).map(function(group){return group.join(' + ');}).join(' or ');
+    card.appendChild(el('p','requirement-copy','Required: '+(alternatives || 'server-requested credential')));
+    if((requirement.stored_fields || []).length){card.appendChild(el('p','stored-fields','Stored: '+requirement.stored_fields.join(', ')+' (values never returned)'));}
+    var fields={};(requirement.required_any || []).forEach(function(group){group.forEach(function(name){fields[name]=true;});});
+    (device.credential_fields || []).forEach(function(name){fields[name]=true;});
+    var grid=el('div','field-row credential-fields');
+    Object.keys(fields).forEach(function(name){
+      var label=el('label');label.appendChild(document.createTextNode(name.replace(/_/g,' ')));
+      var input=document.createElement(name==='ssh_private_key'?'textarea':'input');input.dataset.credentialField=name;input.autocomplete=name==='username'?'username':'new-password';
+      if(input.tagName==='INPUT'){input.type=name==='username'?'text':'password';}
+      if(name==='ssh_private_key'){input.rows=4;input.spellcheck=false;}
+      label.appendChild(input);grid.appendChild(label);
+    });
+    card.appendChild(grid);return card;
+  }
+  function collectCredentials(){
+    return Array.prototype.map.call(document.querySelectorAll('.credential-card'),function(card){
+      var item={resource_id:card.dataset.resourceId,secrets:{}};
+      card.querySelectorAll('[data-credential-field]').forEach(function(input){
+        var value=input.value;if(!value){return;}var field=input.dataset.credentialField;
+        if(field==='username'){item.username=value.trim();}else{item.secrets[field]=value;}
+      });
+      return item;
+    }).filter(function(item){return item.username || Object.keys(item.secrets).length;});
+  }
+  function clearCredentialInputs(){document.querySelectorAll('[data-credential-field]').forEach(function(input){input.value='';});}
+  function saveCredentials(event){
+    event.preventDefault();setError('');
+    var requirements=model.contract && model.contract.credential_requirements || [];
+    if(!requirements.length){renderContractSummary();advance('launch');return;}
+    var button=$('save-credentials');setBusy(button,true,'Storing in vault…');
+    postJson(API.credentials,{schema:SCHEMA,setup_id:model.setupId,contract_id:model.contractId,client_request_id:uuid(),credentials:collectCredentials()},true)
+      .then(function(data){clearCredentialInputs();if(!data.ready){throw new Error('Required device credentials are still incomplete. Stored values were not returned.');}model.contract.ready=true;renderContractSummary();advance('launch');})
+      .catch(function(error){clearCredentialInputs();setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
+  }
+  function renderContractSummary(){
+    var counts=model.contract && model.contract.counts || {},root=$('contract-summary');root.replaceChildren();
+    [['Owned virtual',counts.owned_virtual],['Templates',counts.templates],['Acknowledged virtual',counts.acknowledged_virtual],['Owned devices',counts.owned_devices],['Acknowledged devices',counts.acknowledged_devices]].forEach(function(pair){var item=el('div');item.append(el('span','',pair[0]),el('strong','',pair[1] == null ? '—' : pair[1]));root.appendChild(item);});
+  }
+  function validateLaunch(){
+    if(!trim('service-account')){return 'Service account username is required.';}
+    if($('service-pass').value.length<8){return 'Service account password must be at least 8 characters.';}
+    if($('service-pass').value!==$('service-pass2').value){return 'Service account passwords do not match.';}
+    return '';
+  }
+  function startInit(event){
+    event.preventDefault();setError('');var invalid=validateLaunch();if(invalid){setError(invalid);return;}
+    var button=$('start-init');setBusy(button,true,'Starting init…');
+    postJson(API.initStart,{schema:SCHEMA,setup_id:model.setupId,discovery_id:model.discoveryId,contract_id:model.contractId,client_request_id:uuid(),service_account:{username:trim('service-account'),password:$('service-pass').value},options:{ssh_mode:'sudo',pdm:{mode:'skip'},ssl:{mode:'defer'}}},true)
+      .then(function(data){$('service-pass').value='';$('service-pass2').value='';model.initJobId=text(data.job && data.job.id);model.handoffRetried=false;advance('progress');progress('progress',{phase:'queued',message:'Init accepted and queued.'});scheduleInit(data.job && data.job.poll_after_ms);})
+      .catch(function(error){$('service-pass').value='';$('service-pass2').value='';setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
+  }
+  function scheduleInit(delay){window.clearTimeout(model.initTimer);model.initTimer=window.setTimeout(pollInit,clampPoll(delay,1000));}
+  function pollInit(){
+    if(!model.initJobId){setError('No active init job ID was returned.');return;}
+    getJson(API.initStatus+'?id='+encodeURIComponent(model.initJobId)).then(function(data){
+      model.handoffRetried=false;var job=data.job || {};progress('progress',job.progress);$('progress-state').textContent=text(job.state || 'running');$('init-as-of').textContent='AS OF '+new Date().toLocaleString();
+      if(Array.isArray(job.log_tail)){$('phase-log').textContent=job.log_tail.join('\n') || 'No redacted log lines returned.';}
+      if(job.state==='succeeded'){
+        if(!job.initialized || !job.web_setup_complete){throw new Error('Init reported success without both completion markers. No completion was assumed.');}
+        confirmCompletion();return;
+      }
+      if(job.state==='failed'){setError((job.error && job.error.message) || 'Init failed. Stored selections remain available for a bounded retry.');return;}
+      scheduleInit(job.poll_after_ms || 2000);
+    }).catch(function(error){
+      if(!model.handoffRetried){model.handoffRetried=true;getJson(API.status).then(function(status){rememberStatus(status);if(status.active_init_job_id===model.initJobId || status.state==='initializing'){scheduleInit(1000);}else{throw error;}}).catch(function(){setError(error.message);});return;}
+      setError(error.message,error.field);
+    });
+  }
+  function refreshLogs(){
+    if(!model.initJobId){return;}
+    getJson(API.initLogs+'?id='+encodeURIComponent(model.initJobId)).then(function(data){var lines=data.log_tail || (data.job && data.job.log_tail) || [];if(Array.isArray(lines)){$('phase-log').textContent=lines.join('\n') || 'No redacted log lines returned.';}}).catch(function(error){setError(error.message);});
+  }
+  function confirmCompletion(){
+    getJson(API.status).then(function(status){rememberStatus(status);if(status.state!=='complete' || !status.initialized || !status.web_setup_complete){throw new Error('Init stopped, but setup/status has not verified complete.');}$('progress-state').textContent='complete';$('progress-phase').textContent='Verification';$('progress-message').textContent='Runner exit, initialized marker, and web setup marker all verified.';$('progress-bar').style.width='100%';$('completion-card').hidden=false;}).catch(function(error){setError(error.message);});
+  }
 
-  document.addEventListener('click',function(evt){
-    var action = evt.target && evt.target.getAttribute('data-action');
-    if(action === 'add-node'){addNode({});}
-    if(action === 'add-device'){addDevice({});}
-    if(action === 'remove-row'){
-      var row = evt.target.closest('.list-row');
-      if(row){row.remove();}
+  function loadDiscovery(id){
+    model.discoveryId=text(id || model.discoveryId);
+    if(!model.discoveryId){return Promise.reject(new Error('Setup state did not include an active discovery.'));}
+    return getJson(API.discoveryStatus+'?id='+encodeURIComponent(model.discoveryId)).then(function(data){var discovery=data.discovery || {};model.discovery=discovery;if(discovery.state==='succeeded'){renderDiscovery(discovery);}else{progress('discovery',discovery.progress);scheduleDiscovery(discovery.poll_after_ms);}return discovery;});
+  }
+  function loadContract(){
+    return getJson(API.contract).then(function(data){model.contract=data.contract || {};model.contractId=text(model.contract.id || model.contractId);renderContractSummary();return model.contract;});
+  }
+  function resumeFromStatus(status){
+    var state=status.state || 'collecting';
+    if(state==='complete'){model.unlocked=5;advance('progress');$('completion-card').hidden=false;$('progress-state').textContent='complete';return;}
+    if(state==='collecting'){advance('connect');return;}
+    if(state==='discovering'){model.discoveryId=text(status.active_discovery_id);advance('discover');scheduleDiscovery(0);return;}
+    if(state==='selecting'){model.discoveryId=text(status.active_discovery_id);advance('discover');loadDiscovery();return;}
+    if(state==='credentials' || state==='ready'){
+      model.discoveryId=text(status.active_discovery_id);model.contractId=text(status.active_contract_id);
+      loadDiscovery().then(loadContract).then(function(){renderCredentials();if(state==='ready'){advance('launch');}}).catch(function(error){setError(error.message);});return;
     }
-  });
-  document.querySelectorAll('input[name="ssl_mode"]').forEach(function(el){
-    el.addEventListener('change',showSslFields);
-  });
-  $('refresh-status').addEventListener('click',refreshStatus);
-  form.addEventListener('submit',handleStart);
+    if(state==='initializing'){model.initJobId=text(status.active_init_job_id);advance('progress');scheduleInit(0);return;}
+    if(state==='blocked'){
+      if(status.active_init_job_id){model.initJobId=text(status.active_init_job_id);advance('progress');scheduleInit(0);}
+      else if(status.active_discovery_id){model.discoveryId=text(status.active_discovery_id);advance('discover');loadDiscovery();}
+      else{advance('connect');}
+      setError(status.setup_reason || 'The last setup job is blocked. Review the visible state and retry.');return;
+    }
+    advance('connect');
+  }
+  function refreshStatus(resume){
+    return getJson(API.status).then(function(status){rememberStatus(status);if(resume){resumeFromStatus(status);}return status;}).catch(function(error){$('setup-health').textContent='unreachable';$('setup-reason').textContent=error.message;throw error;});
+  }
+  function boot(){
+    if(!trim('service-account')){$('service-account').value=DEFAULT_SERVICE_ACCOUNT;}
+    refreshStatus(false).then(function(status){
+      if(status.state==='needs_operator' || (!status.state && status.first_run)){$('session-state').textContent='operator required';showStep('operator');return;}
+      return verifySession().then(function(){resumeFromStatus(status);}).catch(function(){model.unlocked=0;showStep('operator');$('operator-form').hidden=true;$('resume-session').hidden=false;$('session-state').textContent='session required';});
+    }).catch(function(error){setError(error.message);});
+  }
 
-  addNode({name:'pve01',ip:''});
-  addDevice({});
-  seedSslDefaults();
-  showSslFields();
-  refreshStatus();
+  document.addEventListener('click',function(event){
+    var target=event.target.closest('[data-action],[data-step-target],.filter-btn');if(!target){return;}
+    if(target.dataset.stepTarget){showStep(target.dataset.stepTarget);return;}
+    if(target.classList.contains('filter-btn')){filterRows(target.dataset.filter);return;}
+    var action=target.dataset.action;
+    if(action==='add-node'){addNode({});}
+    if(action==='remove-node'){var rows=document.querySelectorAll('.node-row');if(rows.length>1){target.closest('.node-row').remove();}}
+    if(action==='back'){showStep(target.dataset.back);}
+    if(action==='rediscover'){showStep('connect');}
+  });
+  $('resource-rows').addEventListener('change',function(event){if(event.target.matches('input[type="radio"]')){selectionChanged(event.target);}if(event.target.matches('.placement-select')){placementChanged(event.target);}});
+  $('operator-form').addEventListener('submit',createOperator);
+  $('discovery-form').addEventListener('submit',startDiscovery);
+  $('credentials-form').addEventListener('submit',saveCredentials);
+  $('launch-form').addEventListener('submit',startInit);
+  $('save-contract').addEventListener('click',saveContract);
+  $('retry-session').addEventListener('click',checkSession);
+  $('refresh-logs').addEventListener('click',refreshLogs);
+  $('refresh-status').addEventListener('click',function(){refreshStatus(false).catch(function(){});});
+  addNode({name:'pve01'});
+  boot();
 })();

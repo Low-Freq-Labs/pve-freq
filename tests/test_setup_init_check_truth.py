@@ -88,7 +88,7 @@ class TestSetupUXHonesty(unittest.TestCase):
             src = f.read()
         self.assertIn("/api/setup/init/start", src,
                        "Setup JS must submit to the web init runner endpoint")
-        self.assertIn("zero-state-web-init-v1", src,
+        self.assertIn("zero-state-web-v1", src,
                        "Setup JS must name the full init payload contract")
         self.assertNotIn("freq doctor", src,
                           "Old 'freq doctor' guidance must be gone — init is the next step")

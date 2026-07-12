@@ -90,25 +90,37 @@ class TestSetupHtmlCopy(unittest.TestCase):
                           "Run panel must not use old 'Dashboard admin is configured' phrasing")
 
     def test_setup_collects_real_init_inputs(self):
-        """Setup must collect the inputs needed for full headless init."""
+        """Setup collects values and discovery decisions, never file contracts."""
         src = self._src()
         self.assertIn("Service account", src)
         self.assertIn("PVE nodes", src)
-        self.assertIn("Device credentials", src)
-        self.assertIn("VM contract path", src)
-        self.assertIn("Device credentials path", src)
-        self.assertIn("Certificate path", src)
+        self.assertIn("Credentials for owned devices", src)
+        self.assertIn("Review every discovered row", src)
+        for legacy in (
+            "VM contract path", "Device credentials path", "Owned VMIDs",
+            "Template VMIDs", "hosts import", "Cloudflare token path",
+        ):
+            self.assertNotIn(legacy, src)
 
-    def test_ssl_contract_has_defer_adopt_and_bootstrap_paths(self):
-        """SSL setup must not force Cloudflare during base init."""
+    def test_base_flow_defers_optional_certificate_lifecycle(self):
+        """Frozen v1 keeps certificate lifecycle out of first-run setup."""
         src = self._src()
-        self.assertIn("Finish init without SSL", src)
-        self.assertIn("Adopt existing SSL", src)
-        self.assertIn("Bootstrap new SSL after init", src)
-        self.assertIn("Cloudflare token path", src)
-        self.assertIn("Dashboard upstream host", src)
-        self.assertIn("Upstream protocol", src)
-        self.assertIn("Upstream TLS verification", src)
+        self.assertIn("certificate lifecycle stay deferred", src)
+        self.assertNotIn("ssl-fullchain-path", src)
+        self.assertNotIn("cloudflare-token-path", src)
+
+    def test_discovery_review_is_the_centerpiece(self):
+        src = self._src()
+        self.assertIn('id="resource-rows"', src)
+        self.assertIn("Every choice is explicit", src)
+        self.assertIn("production or lab placement", src)
+        self.assertIn('id="discovery-as-of"', src)
+
+    def test_wizard_is_semantic_and_stepped(self):
+        src = self._src()
+        self.assertIn('class="wizard-rail"', src)
+        for step in ("operator", "connect", "discover", "credentials", "launch", "progress"):
+            self.assertIn(f'data-step="{step}"', src)
 
 
 class TestSetupJsCopy(unittest.TestCase):
@@ -120,8 +132,8 @@ class TestSetupJsCopy(unittest.TestCase):
 
     def test_summary_references_init_flow(self):
         src = self._src()
-        self.assertIn("zero-state-web-init-v1", src,
-                       "Setup JS must collect the full web init payload contract")
+        self.assertIn("zero-state-web-v1", src,
+                       "Setup JS must use the frozen browser contract")
         self.assertIn("/api/setup/init/start", src,
                        "Setup JS must call the backend init runner endpoint")
         self.assertIn("/api/setup/status", src,
@@ -133,30 +145,25 @@ class TestSetupJsCopy(unittest.TestCase):
         self.assertIn("freq-admin", src,
                        "Setup JS must name freq-admin as the default service account")
 
-    def test_js_payload_includes_two_ssl_objects(self):
-        """Payload must distinguish adopt-existing from bootstrap-new SSL."""
+    def test_js_uses_frozen_endpoint_surface(self):
         src = self._src()
-        self.assertIn("adopt_existing", src)
-        self.assertIn("bootstrap_new", src)
-        self.assertIn("defer_base_init_ssl", src)
-        self.assertIn("/api/cert/lifecycle/reconcile", src)
-        self.assertIn("cert_targets", src)
-        self.assertIn("target_source", src)
-        self.assertIn("reverse_proxy_upstream_scheme", src)
-        self.assertIn("reverse_proxy_upstream_tls_verify", src)
-        self.assertIn("dashboard_origin_host", src)
-        self.assertIn("defaultDashboardOriginHost", src)
+        for endpoint in (
+            "/api/auth/verify", "/api/setup/discovery/start",
+            "/api/setup/discovery/status", "/api/setup/contract",
+            "/api/setup/device-credentials", "/api/setup/init/status",
+            "/api/setup/init/logs",
+        ):
+            self.assertIn(endpoint, src)
 
-    def test_js_preserves_credential_path_fields(self):
-        """Path-mode credentials must remain path fields for the backend."""
+    def test_js_removes_legacy_browser_contract_fields(self):
         src = self._src()
-        self.assertIn("bootstrap_password_file", src)
-        self.assertIn("bootstrap_key_path", src)
-        self.assertIn("service_account_password_file", src)
-        self.assertIn("dashboard_password_file", src)
-        self.assertIn("vm_contract", src)
-        self.assertIn("device_credentials_file", src)
-        self.assertIn("password_file", src)
+        for legacy in (
+            "bootstrap_password_file", "bootstrap_key_path",
+            "service_account_password_file", "dashboard_password_file",
+            "vm_contract", "device_credentials_file", "password_file",
+            "owned_vmids", "template_vmids", "hosts_import",
+        ):
+            self.assertNotIn(legacy, src)
 
     def test_summary_not_dashboard_admin_label(self):
         """Summary must not label the first user as 'Dashboard admin' —
@@ -175,24 +182,38 @@ class TestSetupJsCopy(unittest.TestCase):
     def test_create_admin_failure_does_not_continue_to_init(self):
         """Setup must stop when the first operator session cannot be created."""
         src = self._src()
-        self.assertIn("throw err;", src)
+        create_block = src.split("function createOperator", 1)[1].split("function verifySession", 1)[0]
+        self.assertIn(".catch(function(error)", create_block)
         self.assertNotIn("Continuing to init/start", src)
         self.assertNotIn("backend admin auth will be final truth", src)
 
     def test_setup_js_captures_csrf_for_post_admin_calls(self):
         """Setup page owns its CSRF token because it does not load app.js."""
         src = self._src()
-        self.assertIn("setupCsrfToken", src)
+        self.assertIn("model.csrf", src)
         self.assertIn("X-Freq-CSRF", src)
-        self.assertIn("rememberSetupAuth(data)", src)
+        self.assertIn("rememberSession(data)", src)
+        self.assertIn("verifySession()", src)
 
     def test_setup_post_json_has_timeout_and_operator_failure_state(self):
         """Setup must not leave the browser stuck forever on create-admin."""
         src = self._src()
         self.assertIn("AbortController", src)
         self.assertIn("function getJson", src)
-        self.assertIn("timed out after", src)
-        self.assertIn("operator session failed", src)
+        self.assertIn("timed out", src)
+        self.assertIn("operator_exists", src)
+
+    def test_unknown_devices_are_acknowledged_only(self):
+        src = self._src()
+        self.assertIn("item.kind==='unknown'", src)
+        self.assertIn("acknowledged-only in v1", src)
+        self.assertIn("input.disabled=unknown", src)
+
+    def test_success_requires_both_markers_and_status_complete(self):
+        src = self._src()
+        self.assertIn("!job.initialized || !job.web_setup_complete", src)
+        self.assertIn("status.state!=='complete'", src)
+        self.assertIn("No completion was assumed", src)
 
 
 class TestSetupDeviceCredentialWriter(unittest.TestCase):

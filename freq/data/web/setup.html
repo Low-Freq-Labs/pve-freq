@@ -3,290 +3,204 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PVE FREQ | Zero-State Init</title>
+<title>PVE FREQ | Browser Setup</title>
 <link rel="stylesheet" href="/static/css/setup.css">
 </head>
 <body>
 <main class="setup-shell">
   <header class="setup-hero">
     <div>
-      <p class="eyebrow">first-run full init</p>
+      <p class="eyebrow">first-run · browser-only init</p>
       <h1>PVE FREQ</h1>
-      <p class="hero-copy">Build the dashboard operator, cluster identity, fleet access, device credentials, PDM choice, and SSL posture from the web UI.</p>
+      <p class="hero-copy">Connect the cluster, review what discovery finds, and build the fleet contract without SSH, config files, or typed VMID ranges.</p>
     </div>
     <aside class="status-card" aria-live="polite">
-      <span class="status-label">setup status</span>
-      <strong id="setup-health">probing</strong>
-      <p id="setup-reason">Checking setup truth from /api/setup/status.</p>
+      <span class="status-label">setup truth</span>
+      <strong id="setup-health">checking</strong>
+      <p id="setup-reason">Reading the current setup state.</p>
+      <span id="session-state" class="session-state">session unknown</span>
     </aside>
   </header>
 
-  <section class="contract-strip" aria-label="init contract">
-    <div><span>01</span> Operator login</div>
-    <div><span>02</span> Cluster + network</div>
-    <div><span>03</span> SSH + secrets</div>
-    <div><span>04</span> Fleet + devices</div>
-    <div><span>05</span> PDM + SSL</div>
-    <div><span>06</span> Run + verify</div>
+  <nav class="wizard-rail" aria-label="Setup progress">
+    <button type="button" data-step-target="operator" aria-current="step"><span>01</span><b>Operator</b><small>Secure this setup</small></button>
+    <button type="button" data-step-target="connect" disabled><span>02</span><b>Connect</b><small>Cluster access</small></button>
+    <button type="button" data-step-target="discover" disabled><span>03</span><b>Discover</b><small>Review the scan</small></button>
+    <button type="button" data-step-target="credentials" disabled><span>04</span><b>Credentials</b><small>Owned devices</small></button>
+    <button type="button" data-step-target="launch" disabled><span>05</span><b>Launch</b><small>Service identity</small></button>
+    <button type="button" data-step-target="progress" disabled><span>06</span><b>Verify</b><small>Honest completion</small></button>
+  </nav>
+
+  <div id="form-error" class="blocker" role="alert" hidden></div>
+
+  <section id="step-operator" class="panel panel-operator" data-step="operator" aria-labelledby="operator-title" tabindex="-1">
+    <div class="step-kicker"><span>Step 01</span><span>only unauthenticated mutation</span></div>
+    <div class="panel-head">
+      <div>
+        <p>Operator</p>
+        <h2 id="operator-title">First web operator</h2>
+      </div>
+      <span class="truth-chip">cookie + CSRF</span>
+    </div>
+    <p class="panel-copy">Create the human admin who owns this setup session. The fleet service account is separate runtime identity and full init deploys it later.</p>
+    <form id="operator-form" class="step-form" autocomplete="off">
+      <div class="field-row two-up">
+        <label for="operator-user">Operator username
+          <input id="operator-user" name="operator_user" type="text" value="admin" autocomplete="username" required>
+        </label>
+        <div></div>
+        <label for="operator-pass">Password
+          <input id="operator-pass" name="operator_pass" type="password" autocomplete="new-password" required>
+        </label>
+        <label for="operator-pass2">Confirm password
+          <input id="operator-pass2" name="operator_pass2" type="password" autocomplete="new-password" required>
+        </label>
+      </div>
+      <div class="action-row">
+        <button id="create-operator" class="btn-primary" type="submit">Create operator &amp; continue</button>
+      </div>
+    </form>
+    <div id="resume-session" class="resume-card" hidden>
+      <div><strong>Existing setup detected</strong><p>The first operator already exists. Sign in through the dashboard, then return here to resume the same setup.</p></div>
+      <a class="btn-secondary button-link" href="/">Open sign in</a>
+      <button id="retry-session" class="btn-secondary" type="button">Check session</button>
+    </div>
   </section>
 
-  <form id="init-form" class="setup-grid" autocomplete="off">
-    <section class="panel panel-operator">
-      <div class="panel-head">
-        <p>Operator</p>
-        <h2>First web operator</h2>
-      </div>
-      <p class="panel-copy">Creates the first human dashboard operator. The fleet service account is separate runtime identity and is deployed by full init.</p>
-      <div class="field-row">
-        <label>Username
-          <input id="operator-user" name="operator_user" type="text" value="admin" autocomplete="username">
+  <section id="step-connect" class="panel panel-connect" data-step="connect" aria-labelledby="connect-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 02</span><span>declared targets only</span></div>
+    <div class="panel-head">
+      <div><p>Connect</p><h2 id="connect-title">Point discovery at the cluster</h2></div>
+      <span class="truth-chip">1–16 literal IPs</span>
+    </div>
+    <p class="panel-copy">Enter PVE node addresses and one bootstrap SSH login. The password is sent as a value into the setup vault—never as a server path.</p>
+    <form id="discovery-form" class="step-form" autocomplete="off">
+      <div class="field-row two-up compact-fields">
+        <label for="cluster-name">Cluster name
+          <input id="cluster-name" name="cluster_name" type="text" placeholder="dc01" required>
         </label>
-        <label>Password source
-          <select id="operator-pass-source" name="operator_pass_source">
-            <option value="secret">Typed password</option>
-            <option value="path">Password file path</option>
-          </select>
+        <label for="bootstrap-user">Bootstrap SSH user
+          <input id="bootstrap-user" name="bootstrap_user" type="text" value="freq-ops" autocomplete="username" required>
         </label>
-        <label>Password
-          <input id="operator-pass" name="operator_pass" type="password" autocomplete="new-password" placeholder="Password or server-side password file path">
-        </label>
-        <label>Confirm
-          <input id="operator-pass2" name="operator_pass2" type="password" autocomplete="new-password">
-        </label>
-      </div>
-    </section>
-
-    <section class="panel panel-cluster">
-      <div class="panel-head">
-        <p>Cluster</p>
-        <h2>Identity and network</h2>
-      </div>
-      <div class="field-row">
-        <label>Cluster name
-          <input id="cluster-name" name="cluster_name" type="text" placeholder="home-lab">
-        </label>
-        <label>Timezone
-          <input id="timezone" name="timezone" type="text" value="America/Chicago">
-        </label>
-        <label>Gateway
-          <input id="gateway" name="gateway" type="text" placeholder="192.0.2.1">
-        </label>
-        <label>Nameserver
-          <input id="nameserver" name="nameserver" type="text" value="1.1.1.1">
+        <label for="bootstrap-pass">Bootstrap SSH password
+          <input id="bootstrap-pass" name="bootstrap_password" type="password" autocomplete="current-password" required>
         </label>
       </div>
       <div class="subhead-row">
-        <h3>PVE nodes</h3>
+        <div><h3>PVE nodes</h3><p>Names are optional; discovery replaces them with cluster truth when available.</p></div>
         <button class="mini-btn" type="button" data-action="add-node">Add node</button>
       </div>
       <div id="pve-node-list" class="stack-list"></div>
-    </section>
+      <div class="action-row split-actions">
+        <button class="btn-secondary" type="button" data-action="back" data-back="operator">Back</button>
+        <button id="start-discovery" class="btn-primary" type="submit">Start bounded discovery</button>
+      </div>
+    </form>
+  </section>
 
-    <section class="panel panel-access">
-      <div class="panel-head">
-        <p>Access</p>
-        <h2>Bootstrap and service account</h2>
+  <section id="step-discover" class="panel panel-discover" data-step="discover" aria-labelledby="discover-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 03</span><span id="discovery-as-of">not run</span></div>
+    <div class="panel-head">
+      <div><p>Fleet contract</p><h2 id="discover-title">Review every discovered row</h2></div>
+      <span id="review-count" class="truth-chip">0 of 0 decided</span>
+    </div>
+    <p class="panel-copy">Suggestions are shown as hints, never accepted for you. Mark every virtual resource and device as owned or acknowledged; owned rows also need production or lab placement.</p>
+    <div id="discovery-progress" class="job-progress" aria-live="polite">
+      <div><strong id="discovery-phase">Waiting</strong><span id="discovery-count">0 / 0</span></div>
+      <div class="progress-track"><span id="discovery-bar"></span></div>
+      <p id="discovery-message">Discovery has not started.</p>
+    </div>
+    <div id="discovery-warnings" class="warning-list" hidden></div>
+    <div id="review-surface" hidden>
+      <div id="node-truth" class="node-truth"></div>
+      <div class="review-toolbar">
+        <div class="review-filters" role="group" aria-label="Filter discovered resources">
+          <button class="filter-btn is-active" type="button" data-filter="all" aria-pressed="true">All</button>
+          <button class="filter-btn" type="button" data-filter="virtual" aria-pressed="false">VMs &amp; templates</button>
+          <button class="filter-btn" type="button" data-filter="device" aria-pressed="false">Devices</button>
+          <button class="filter-btn" type="button" data-filter="undecided" aria-pressed="false">Undecided</button>
+        </div>
+        <span>Every choice is explicit</span>
       </div>
-      <div class="field-row access-grid">
-        <label>SSH mode
-          <select id="ssh-mode" name="ssh_mode">
-            <option value="sudo">sudo</option>
-            <option value="root">root</option>
-          </select>
-        </label>
-        <label>Bootstrap user
-          <input id="bootstrap-user" name="bootstrap_user" type="text" value="root">
-        </label>
-        <label>Bootstrap auth
-          <select id="bootstrap-auth" name="bootstrap_auth">
-            <option value="password">Password secret</option>
-            <option value="password-path">Password file path</option>
-            <option value="key">Private key secret</option>
-            <option value="key-path">Existing key path</option>
-          </select>
-        </label>
-        <label>Bootstrap secret
-          <textarea id="bootstrap-secret" name="bootstrap_secret" rows="2" placeholder="Password, password file path, private key, or key path"></textarea>
-        </label>
-        <label>Service account
-          <input id="service-account" name="service_account" type="text" value="freq-admin">
-        </label>
-        <label>Service password source
-          <select id="service-pass-source" name="service_pass_source">
-            <option value="secret">Typed password</option>
-            <option value="path">Password file path</option>
-          </select>
-        </label>
-        <label>Service password
-          <input id="service-pass" name="service_pass" type="password" autocomplete="new-password" placeholder="Password or server-side password file path">
-        </label>
+      <div class="resource-table-wrap">
+        <table class="resource-table">
+          <thead><tr><th>Resource</th><th>Discovery truth</th><th>Contract</th><th>Placement</th></tr></thead>
+          <tbody id="resource-rows"></tbody>
+        </table>
       </div>
-    </section>
+      <div class="action-row split-actions">
+        <button class="btn-secondary" type="button" data-action="rediscover">Run discovery again</button>
+        <button id="save-contract" class="btn-primary" type="button" disabled>Freeze selected contract</button>
+      </div>
+    </div>
+  </section>
 
-    <section class="panel panel-fleet">
-      <div class="panel-head">
-        <p>Fleet</p>
-        <h2>Ownership, hosts, and devices</h2>
+  <section id="step-credentials" class="panel panel-credentials" data-step="credentials" aria-labelledby="credentials-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 04</span><span>presence only after save</span></div>
+    <div class="panel-head">
+      <div><p>Device access</p><h2 id="credentials-title">Credentials for owned devices</h2></div>
+      <span id="credential-count" class="truth-chip">0 required</span>
+    </div>
+    <p class="panel-copy">Only server-requested fields appear. Secrets write directly to the setup vault and never return to this page.</p>
+    <form id="credentials-form" class="step-form" autocomplete="off">
+      <div id="credential-list" class="credential-list"></div>
+      <div class="action-row split-actions">
+        <button class="btn-secondary" type="button" data-action="back" data-back="discover">Back to contract</button>
+        <button id="save-credentials" class="btn-primary" type="submit">Store device credentials</button>
       </div>
-      <div class="field-row">
-        <label>Owned VMIDs
-          <input id="owned-vmids" name="owned_vmids" type="text" placeholder="100, 200-210">
-        </label>
-        <label>Template VMIDs
-          <input id="template-vmids" name="template_vmids" type="text" placeholder="9000-9010">
-        </label>
-        <label>Acknowledged out-of-contract VMIDs
-          <input id="ack-vmids" name="ack_vmids" type="text" placeholder="5005">
-        </label>
-      </div>
-      <div class="field-row">
-        <label>VM contract path
-          <input id="vm-contract" name="vm_contract" type="text" placeholder="/root/freq-init-inputs/vm-contract.run.toml">
-        </label>
-        <label>Device credentials path
-          <input id="device-credentials-file" name="device_credentials_file" type="text" placeholder="/root/freq-init-inputs/device-credentials.run.toml">
-        </label>
-      </div>
-      <div class="field-row">
-        <label>Core devices
-          <input id="core-devices" name="core_devices" type="text" placeholder="firewall:192.168.10.1, storage:192.168.10.10">
-        </label>
-        <label>Lab devices
-          <input id="lab-devices" name="lab_devices" type="text" placeholder="switch-lab:192.168.60.2">
-        </label>
-      </div>
-      <label>Optional hosts import
-        <textarea id="hosts-import" name="hosts_import" rows="4" placeholder="Paste hosts.toml or plain host lines if discovery needs a seed. Leave blank for discovery-only init."></textarea>
-      </label>
-      <div class="subhead-row">
-        <h3>Device credentials</h3>
-        <button class="mini-btn" type="button" data-action="add-device">Add credential</button>
-      </div>
-      <div id="device-list" class="stack-list"></div>
-    </section>
+    </form>
+  </section>
 
-    <section class="panel panel-pdm">
-      <div class="panel-head">
-        <p>PDM</p>
-        <h2>Datacenter manager</h2>
-      </div>
-      <div class="choice-grid" role="radiogroup" aria-label="PDM setup choice">
-        <label><input type="radio" name="pdm_mode" value="skip" checked> Skip PDM</label>
-        <label><input type="radio" name="pdm_mode" value="install"> Install PDM</label>
-        <label><input type="radio" name="pdm_mode" value="existing"> Use existing PDM</label>
-      </div>
-      <div class="field-row">
-        <label>root@pam password
-          <input id="pdm-pass" name="pdm_pass" type="password">
+  <section id="step-launch" class="panel panel-launch" data-step="launch" aria-labelledby="launch-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 05</span><span>frozen discovery + contract</span></div>
+    <div class="panel-head">
+      <div><p>Launch</p><h2 id="launch-title">Deploy the fleet service identity</h2></div>
+      <span class="truth-chip">SSL deferred</span>
+    </div>
+    <p class="panel-copy">This account is the deployed SSH/runtime identity, not a dashboard login. Optional PDM and certificate lifecycle stay deferred until after base init.</p>
+    <form id="launch-form" class="step-form" autocomplete="off">
+      <div class="field-row two-up">
+        <label for="service-account">Service account
+          <input id="service-account" name="service_account" type="text" value="freq-admin" autocomplete="username" required>
         </label>
-        <label>Remote name
-          <input id="pdm-remote" name="pdm_remote" type="text" placeholder="site01">
+        <div></div>
+        <label for="service-pass">Service account password
+          <input id="service-pass" name="service_password" type="password" autocomplete="new-password" required>
+        </label>
+        <label for="service-pass2">Confirm password
+          <input id="service-pass2" name="service_password_confirm" type="password" autocomplete="new-password" required>
         </label>
       </div>
-    </section>
+      <div id="contract-summary" class="contract-summary"></div>
+      <div class="action-row split-actions">
+        <button class="btn-secondary" type="button" data-action="back" data-back="credentials">Back</button>
+        <button id="start-init" class="btn-primary" type="submit">Start full init</button>
+      </div>
+    </form>
+  </section>
 
-    <section class="panel panel-ssl">
-      <div class="panel-head">
-        <p>SSL</p>
-        <h2>Certificate path</h2>
-      </div>
-      <p class="panel-copy">Base init can finish without SSL. Choose existing SSL if infra already owns certs or a proxy. Choose bootstrap only when Cloudflare setup is desired.</p>
-      <div class="choice-grid ssl-choice" role="radiogroup" aria-label="SSL setup choice">
-        <label><input type="radio" name="ssl_mode" value="defer" checked> Finish init without SSL</label>
-        <label><input type="radio" name="ssl_mode" value="adopt-existing"> Adopt existing SSL</label>
-        <label><input type="radio" name="ssl_mode" value="bootstrap-new"> Bootstrap new SSL after init</label>
-      </div>
-      <div class="ssl-fields" data-ssl-fields="adopt-existing">
-        <div class="field-row">
-          <label>Base domain
-            <input id="ssl-adopt-domain" name="ssl_adopt_domain" type="text" placeholder="site01.example.com">
-          </label>
-          <label>Cert source
-            <select id="ssl-adopt-source" name="ssl_adopt_source">
-              <option value="reverse-proxy">Reverse proxy owns TLS</option>
-              <option value="managed-paths">Existing fullchain/key paths</option>
-            </select>
-          </label>
-          <label>Reverse proxy host
-            <input id="ssl-proxy-host" name="ssl_proxy_host" type="text" placeholder="web-host-01">
-          </label>
-        </div>
-        <div class="field-row">
-          <label>Dashboard upstream host
-            <input id="ssl-dashboard-origin-host" name="ssl_dashboard_origin_host" type="text" placeholder="10.25.255.50">
-          </label>
-          <label>Dashboard upstream port
-            <input id="ssl-dashboard-origin-port" name="ssl_dashboard_origin_port" type="number" min="1" max="65535" placeholder="8888">
-          </label>
-          <label>Upstream protocol
-            <select id="ssl-upstream-scheme" name="ssl_upstream_scheme">
-              <option value="http">HTTP upstream</option>
-              <option value="https">HTTPS upstream</option>
-            </select>
-          </label>
-        </div>
-        <div class="field-row">
-          <label>Upstream TLS verification
-            <select id="ssl-upstream-tls-verify" name="ssl_upstream_tls_verify">
-              <option value="true">Verify upstream cert</option>
-              <option value="false">Skip upstream cert verification</option>
-            </select>
-          </label>
-          <label>Fullchain path
-            <input id="ssl-fullchain-path" name="ssl_fullchain_path" type="text" placeholder="/etc/ssl/example/fullchain.pem">
-          </label>
-          <label>Key path
-            <input id="ssl-key-path" name="ssl_key_path" type="text" placeholder="/etc/ssl/example/privkey.pem">
-          </label>
-        </div>
-        <div class="field-row">
-          <label>Target hostnames
-            <input id="ssl-targets" name="ssl_targets" type="text" placeholder="pve01.site01.example.com, freq.site01.example.com">
-          </label>
-        </div>
-      </div>
-      <div class="ssl-fields" data-ssl-fields="bootstrap-new">
-        <div class="field-row">
-          <label>Base domain
-            <input id="ssl-bootstrap-domain" name="ssl_bootstrap_domain" type="text" placeholder="site01.example.com">
-          </label>
-          <label>Cloudflare token path
-            <input id="cloudflare-token-path" name="cloudflare_token_path" type="text" placeholder="/etc/freq/credentials/cloudflare_dns_token">
-          </label>
-          <label>Target hostnames
-            <input id="ssl-bootstrap-targets" name="ssl_bootstrap_targets" type="text" placeholder="pve01.site01.example.com, freq.site01.example.com">
-          </label>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel panel-run">
-      <div class="panel-head">
-        <p>Run</p>
-        <h2>Start full init</h2>
-      </div>
-      <p class="panel-copy">This UI is intentionally honest: it does not mark setup complete until a backend init runner starts, streams phases, and /api/setup/status reports initialized/configured.</p>
-      <div class="action-row">
-        <button id="start-init" class="btn-primary" type="submit">Start Web Init</button>
-        <button id="refresh-status" class="btn-secondary" type="button">Refresh Status</button>
-      </div>
-      <div id="form-error" class="blocker" hidden></div>
-      <div class="progress-box">
-        <div class="progress-head">
-          <span id="progress-state">idle</span>
-          <span id="progress-phase">waiting for backend runner</span>
-        </div>
-        <pre id="phase-log">No init run has started in this browser session.</pre>
-      </div>
-      <div class="contract-note">
-        <strong>Backend endpoint contract required:</strong>
-        <code>POST /api/setup/init/start</code>,
-        <code>GET /api/setup/init/status</code>,
-        <code>GET /api/setup/init/logs</code>,
-        <code>GET /api/cert/lifecycle/reconcile</code>.
-      </div>
-    </section>
-  </form>
+  <section id="step-progress" class="panel panel-run" data-step="progress" aria-labelledby="progress-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 06</span><span id="init-as-of">not started</span></div>
+    <div class="panel-head">
+      <div><p>Verify</p><h2 id="progress-title">Init progress</h2></div>
+      <span id="progress-state" class="truth-chip">idle</span>
+    </div>
+    <p class="panel-copy">Completion is honest only when the runner exits zero and <code>/api/setup/status</code> reports both initialized/configured markers.</p>
+    <div class="job-progress" aria-live="polite">
+      <div><strong id="progress-phase">Waiting for init</strong><span id="progress-count">0 / 0</span></div>
+      <div class="progress-track"><span id="progress-bar"></span></div>
+      <p id="progress-message">No init run has started in this browser session.</p>
+    </div>
+    <div class="progress-box">
+      <div class="progress-head"><span>Redacted operator log</span><button id="refresh-logs" class="text-btn" type="button">Refresh</button></div>
+      <pre id="phase-log">No log lines returned.</pre>
+    </div>
+    <div id="completion-card" class="completion-card" hidden>
+      <div><strong>Setup verified complete</strong><p>Init exited cleanly and both durable completion markers are present.</p></div>
+      <a class="btn-primary button-link" href="/">Open dashboard</a>
+    </div>
+    <div class="action-row"><button id="refresh-status" class="btn-secondary" type="button">Refresh setup truth</button></div>
+  </section>
 </main>
 
 <script src="/static/js/setup.js"></script>
