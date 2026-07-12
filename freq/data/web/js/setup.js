@@ -53,10 +53,22 @@
     else if(button.dataset.label){button.textContent=button.dataset.label;delete button.dataset.label;}
     button.disabled=!!busy;
   }
-  function setError(message,field){
+  function setupErrorDetailText(detail){
+    if(!detail || typeof detail !== 'object'){return '';}
+    var code=text(detail.code || 'invalid value').replace(/_/g,' ');
+    var resource=typeof detail.resource_id === 'string' ? detail.resource_id.slice(0,160) : '';
+    return code+(resource ? ' · '+resource : '');
+  }
+  function setError(message,field,details){
     var box=$('form-error');
     box.hidden=!message;
-    box.textContent=message || '';
+    box.replaceChildren();
+    if(message){box.appendChild(el('div','error-message',message));}
+    var readable=Array.isArray(details) ? details.map(setupErrorDetailText).filter(Boolean).slice(0,8) : [];
+    if(readable.length){
+      var list=el('ul','error-details');readable.forEach(function(item){list.appendChild(el('li','',item));});box.appendChild(list);
+      if(details.length>readable.length){box.appendChild(el('p','error-more','+'+(details.length-readable.length)+' more validation results'));}
+    }
     if(message){box.scrollIntoView({behavior:'smooth',block:'nearest'});}
     if(field){
       var target=document.querySelector('[data-api-field="'+CSS.escape(field)+'"]');
@@ -66,9 +78,9 @@
   function errorMessage(data,status,url){
     var error=data && data.error;
     if(error && typeof error === 'object'){
-      return {message:error.message || error.code || (url+' returned HTTP '+status),field:error.field || '',code:error.code || ''};
+      return {message:error.message || error.code || (url+' returned HTTP '+status),field:error.field || '',code:error.code || '',details:Array.isArray(error.details)?error.details:[]};
     }
-    return {message:text(error || (url+' returned HTTP '+status)),field:'',code:''};
+    return {message:text(error || (url+' returned HTTP '+status)),field:'',code:'',details:[]};
   }
   function request(url,options,timeoutMs){
     var opts=options || {};
@@ -84,7 +96,7 @@
         if(!response.ok){
           var detail=errorMessage(data,response.status,url);
           var failure=new Error(detail.message);
-          failure.status=response.status;failure.code=detail.code;failure.field=detail.field;
+          failure.status=response.status;failure.code=detail.code;failure.field=detail.field;failure.details=detail.details;
           throw failure;
         }
         return data;
@@ -187,7 +199,7 @@
         advance('connect');
       }).catch(function(error){
         if(error.code==='operator_exists'){$('operator-form').hidden=true;$('resume-session').hidden=false;}
-        setError(error.message,error.field);
+        setError(error.message,error.field,error.details);
       }).finally(function(){setBusy(button,false);});
   }
   function verifySession(){
@@ -227,7 +239,7 @@
       $('bootstrap-pass').value='';advance('discover');
       progress('discovery',{phase:'queued',message:'Discovery accepted and queued.'});
       scheduleDiscovery(data.discovery && data.discovery.poll_after_ms);
-    }).catch(function(error){setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
+    }).catch(function(error){setError(error.message,error.field,error.details);}).finally(function(){setBusy(button,false);});
   }
   function scheduleDiscovery(delay){
     window.clearTimeout(model.discoveryTimer);
@@ -243,7 +255,7 @@
       }
       if(discovery.state==='failed'){setError((discovery.error && discovery.error.message) || 'Discovery failed. Return to Connect and retry.');return;}
       scheduleDiscovery(discovery.poll_after_ms);
-    }).catch(function(error){setError(error.message,error.field);});
+    }).catch(function(error){setError(error.message,error.field,error.details);});
   }
   function resourceTitle(item){return item.label || item.name || item.host || item.id;}
   function resourceMeta(item,isDevice){
@@ -327,7 +339,7 @@
     setError('');var button=$('save-contract');if(button.disabled){return;}setBusy(button,true,'Freezing contract…');
     postJson(API.contract,{schema:SCHEMA,setup_id:model.setupId,discovery_id:model.discoveryId,client_request_id:uuid(),selections:Object.keys(model.selections).map(function(id){return model.selections[id];})},true)
       .then(function(data){model.contract=data.contract || {};model.contractId=text(model.contract.id);setLocalTruth(model.contract.ready?'ready':'credentials',model.contract.ready?'The frozen contract is ready for init.':'The frozen contract still requires owned-device credentials.');renderContractSummary();renderCredentials();})
-      .catch(function(error){setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
+      .catch(function(error){setError(error.message,error.field,error.details);}).finally(function(){setBusy(button,false);});
   }
   function deviceFor(id){
     var devices=model.discovery && model.discovery.results && model.discovery.results.devices || [];
@@ -342,7 +354,7 @@
     if(model.contract.ready && !requirements.length){renderContractSummary();}
   }
   function credentialCard(requirement){
-    var device=deviceFor(requirement.resource_id),card=el('fieldset','credential-card');card.dataset.resourceId=requirement.resource_id;
+    var device=deviceFor(requirement.resource_id),card=el('fieldset','credential-card');card.dataset.resourceId=requirement.resource_id;card.tabIndex=-1;
     var legend=document.createElement('legend');legend.append(el('strong','',resourceTitle(device)),el('span','',resourceMeta(device,true)));card.appendChild(legend);
     var alternatives=(requirement.required_any || []).map(function(group){return group.join(' + ');}).join(' or ');
     card.appendChild(el('p','requirement-copy','Required: '+(alternatives || 'server-requested credential')));
@@ -360,14 +372,34 @@
     card.appendChild(grid);return card;
   }
   function collectCredentials(){
-    return Array.prototype.map.call(document.querySelectorAll('.credential-card'),function(card){
+    var collected=[];
+    Array.prototype.forEach.call(document.querySelectorAll('.credential-card'),function(card){
+      delete card.dataset.apiField;
+      card.querySelectorAll('[data-credential-field]').forEach(function(input){delete input.dataset.apiField;});
       var item={resource_id:card.dataset.resourceId,secrets:{}};
       card.querySelectorAll('[data-credential-field]').forEach(function(input){
         var value=input.value;if(!value){return;}var field=input.dataset.credentialField;
         if(field==='username'){item.username=value.trim();}else{item.secrets[field]=value;}
       });
-      return item;
-    }).filter(function(item){return item.username || Object.keys(item.secrets).length;});
+      if(item.username || Object.keys(item.secrets).length){
+        var index=collected.length;card.dataset.apiField='credentials['+index+'].resource_id';
+        card.querySelectorAll('[data-credential-field]').forEach(function(input){
+          var field=input.dataset.credentialField;
+          input.dataset.apiField='credentials['+index+'].'+(field==='username'?'username':'secrets.'+field);
+        });
+        collected.push(item);
+      }
+    });
+    return collected;
+  }
+  function mergeCredentialPresence(rows){
+    var presence={};
+    (rows || []).forEach(function(row){if(row && row.resource_id){presence[row.resource_id]=row;}});
+    (model.contract.credential_requirements || []).forEach(function(requirement){
+      var update=presence[requirement.resource_id];if(!update){return;}
+      requirement.stored_fields=Array.isArray(update.stored_fields)?update.stored_fields.slice():[];
+      requirement.complete=!!update.complete;
+    });
   }
   function clearCredentialInputs(){document.querySelectorAll('[data-credential-field]').forEach(function(input){input.value='';});}
   function saveCredentials(event){
@@ -376,8 +408,12 @@
     if(!requirements.length){renderContractSummary();advance('launch');return;}
     var button=$('save-credentials');setBusy(button,true,'Storing in vault…');
     postJson(API.credentials,{schema:SCHEMA,setup_id:model.setupId,contract_id:model.contractId,client_request_id:uuid(),credentials:collectCredentials()},true)
-      .then(function(data){clearCredentialInputs();if(!data.ready){throw new Error('Required device credentials are still incomplete. Stored values were not returned.');}model.contract.ready=true;setLocalTruth('ready','Contract and required credential presence are complete. Init may start.');renderContractSummary();advance('launch');})
-      .catch(function(error){clearCredentialInputs();setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
+      .then(function(data){
+        clearCredentialInputs();mergeCredentialPresence(data.credentials);model.contract.ready=!!data.ready;
+        if(!data.ready){setLocalTruth('credentials','Credential presence was stored successfully. Complete the remaining required fields.');renderCredentials();return;}
+        setLocalTruth('ready','Contract and required credential presence are complete. Init may start.');renderContractSummary();advance('launch');
+      })
+      .catch(function(error){clearCredentialInputs();setError(error.message,error.field,error.details);}).finally(function(){setBusy(button,false);});
   }
   function renderContractSummary(){
     var counts=model.contract && model.contract.counts || {},root=$('contract-summary');root.replaceChildren();
@@ -394,7 +430,7 @@
     var button=$('start-init');setBusy(button,true,'Starting init…');
     postJson(API.initStart,{schema:SCHEMA,setup_id:model.setupId,discovery_id:model.discoveryId,contract_id:model.contractId,client_request_id:uuid(),service_account:{username:trim('service-account'),password:$('service-pass').value},options:{ssh_mode:'sudo',pdm:{mode:'skip'},ssl:{mode:'defer'}}},true)
       .then(function(data){$('service-pass').value='';$('service-pass2').value='';model.initJobId=text(data.job && data.job.id);model.handoffRetried=false;setLocalTruth('initializing','Browser-launched init is running. Completion has not been assumed.');advance('progress');progress('progress',{phase:'queued',message:'Init accepted and queued.'});scheduleInit(data.job && data.job.poll_after_ms);})
-      .catch(function(error){$('service-pass').value='';$('service-pass2').value='';setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
+      .catch(function(error){$('service-pass').value='';$('service-pass2').value='';setError(error.message,error.field,error.details);}).finally(function(){setBusy(button,false);});
   }
   function scheduleInit(delay){window.clearTimeout(model.initTimer);model.initTimer=window.setTimeout(pollInit,clampPoll(delay,1000));}
   function pollInit(){
@@ -410,7 +446,7 @@
       scheduleInit(job.poll_after_ms || 2000);
     }).catch(function(error){
       if(!model.handoffRetried){model.handoffRetried=true;getJson(API.status).then(function(status){rememberStatus(status);if(status.active_init_job_id===model.initJobId || status.state==='initializing'){scheduleInit(1000);}else{throw error;}}).catch(function(){setError(error.message);});return;}
-      setError(error.message,error.field);
+      setError(error.message,error.field,error.details);
     });
   }
   function refreshLogs(){

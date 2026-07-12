@@ -215,6 +215,20 @@ class TestSetupJsCopy(unittest.TestCase):
         self.assertIn("status.state!=='complete'", src)
         self.assertIn("No completion was assumed", src)
 
+    def test_incremental_credential_success_merges_presence(self):
+        src = self._src()
+        self.assertIn("function mergeCredentialPresence", src)
+        self.assertIn("mergeCredentialPresence(data.credentials)", src)
+        self.assertIn("Credential presence was stored successfully", src)
+        self.assertNotIn("Required device credentials are still incomplete", src)
+
+    def test_structured_errors_bind_to_generated_credential_paths(self):
+        src = self._src()
+        self.assertIn("failure.details=detail.details", src)
+        self.assertIn("input.dataset.apiField='credentials['+index+'].'", src)
+        self.assertIn("'username':'secrets.'+field", src)
+        self.assertIn("setupErrorDetailText", src)
+
 
 class TestSetupDeviceCredentialWriter(unittest.TestCase):
     """Web setup inline device credentials must become init-readable TOML."""

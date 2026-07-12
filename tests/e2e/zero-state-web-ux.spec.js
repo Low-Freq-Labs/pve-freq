@@ -39,6 +39,8 @@ function forbiddenKey(value) {
 
 test('browser-only wizard builds an explicit fleet contract and verifies completion', async ({ page }) => {
   let setupState = 'needs_operator';
+  let contractAttempts = 0;
+  let credentialAttempts = 0;
   const mutations = [];
 
   await page.route('**/api/setup/status', route => {
@@ -90,18 +92,31 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
     if (route.request().method() === 'GET') return route.fallback();
     const body = route.request().postDataJSON();
     mutations.push({ path: '/api/setup/contract', body, csrf: route.request().headers()['x-freq-csrf'] });
+    contractAttempts += 1;
     expect(body.selections).toEqual([
       { resource_id: 'pve:pve01:qemu:100', disposition: 'owned', placement: 'lab' },
       { resource_id: 'device:truenas:10.25.255.10', disposition: 'owned', placement: 'production' },
       { resource_id: 'device:unknown:10.25.255.99', disposition: 'acknowledged' }
     ]);
+    if (contractAttempts === 1) {
+      return route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ ok: false, schema: 'zero-state-web-v1', error: { code: 'incomplete_selections', message: 'Every discovered resource requires exactly one valid disposition.', field: 'selections', retryable: false, details: [{ resource_id: 'device:unknown:10.25.255.99', code: 'unsupported_device_kind' }] } }) });
+    }
     setupState = 'credentials';
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, schema: 'zero-state-web-v1', contract: { id: 'contract-opaque', discovery_id: 'discovery-opaque', revision: 1, sha256: 'hash', counts: { owned_virtual: 1, templates: 0, acknowledged_virtual: 0, owned_devices: 1, acknowledged_devices: 1 }, credential_requirements: [{ resource_id: 'device:truenas:10.25.255.10', required_any: [['username', 'password']], stored_fields: [] }], ready: false } }) });
   });
   await page.route('**/api/setup/device-credentials', async route => {
     const body = route.request().postDataJSON();
     mutations.push({ path: '/api/setup/device-credentials', body, csrf: route.request().headers()['x-freq-csrf'] });
-    expect(body.credentials).toEqual([{ resource_id: 'device:truenas:10.25.255.10', username: 'root', secrets: { password: 'device-password' } }]);
+    credentialAttempts += 1;
+    if (credentialAttempts === 1) {
+      expect(body.credentials).toEqual([{ resource_id: 'device:truenas:10.25.255.10', username: 'root', secrets: { password: 'invalid-password' } }]);
+      return route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ ok: false, schema: 'zero-state-web-v1', error: { code: 'invalid_credential_value', message: 'Credential value has an invalid or unsafe format.', field: 'credentials[0].secrets.password', retryable: false } }) });
+    }
+    if (credentialAttempts === 2) {
+      expect(body.credentials).toEqual([{ resource_id: 'device:truenas:10.25.255.10', username: 'root', secrets: {} }]);
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, schema: 'zero-state-web-v1', contract_id: 'contract-opaque', credentials: [{ resource_id: 'device:truenas:10.25.255.10', stored_fields: ['username'], complete: false }], ready: false }) });
+    }
+    expect(body.credentials).toEqual([{ resource_id: 'device:truenas:10.25.255.10', secrets: { password: 'device-password' } }]);
     setupState = 'ready';
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, schema: 'zero-state-web-v1', contract_id: 'contract-opaque', credentials: [{ resource_id: 'device:truenas:10.25.255.10', stored_fields: ['username', 'password'], complete: true }], ready: true }) });
   });
@@ -148,9 +163,25 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
   await unknown.locator('input[value="acknowledged"]').check();
   await expect(page.locator('#save-contract')).toBeEnabled();
   await page.locator('#save-contract').click();
+  await expect(page.locator('#form-error')).toContainText('Every discovered resource requires exactly one valid disposition.');
+  await expect(page.locator('#form-error')).toContainText('unsupported device kind · device:unknown:10.25.255.99');
+  await expect(page.locator('#form-error')).not.toContainText('[object Object]');
+  await page.locator('#save-contract').click();
 
   await expect(page.locator('#step-credentials')).toBeVisible();
   await page.locator('[data-credential-field="username"]').fill('root');
+  await page.locator('[data-credential-field="password"]').fill('invalid-password');
+  await page.locator('#credentials-form').evaluate(form => form.requestSubmit());
+  await expect(page.locator('#form-error')).toContainText('Credential value has an invalid or unsafe format.');
+  await expect(page.locator('[data-credential-field="password"]')).toBeFocused();
+
+  await page.locator('[data-credential-field="username"]').fill('root');
+  await page.locator('#credentials-form').evaluate(form => form.requestSubmit());
+  await expect(page.locator('#step-credentials')).toBeVisible();
+  await expect(page.locator('.stored-fields')).toContainText('Stored: username (values never returned)');
+  await expect(page.locator('#form-error')).toBeHidden();
+  await expect(page.locator('#setup-health')).toHaveText('credentials');
+
   await page.locator('[data-credential-field="password"]').fill('device-password');
   await page.locator('#credentials-form').evaluate(form => form.requestSubmit());
 
@@ -164,7 +195,7 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
   await expect(page.locator('#phase-log')).toContainText('verification passed');
   await expect(page.locator('#form-error')).toBeHidden();
 
-  expect(mutations).toHaveLength(5);
+  expect(mutations).toHaveLength(8);
   for (const mutation of mutations) {
     expect(forbiddenKey(mutation.body), `${mutation.path} emitted a forbidden browser key`).toBe('');
     if (mutation.path !== '/api/setup/create-admin') expect(mutation.csrf).toBe(CSRF);
