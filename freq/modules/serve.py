@@ -74,6 +74,7 @@ from freq.core.setup_contract import (
     contract_credential_keys,
     contract_payload,
     credential_presence,
+    credential_runtime_value,
     credential_storage_value,
     credential_vault_key,
     load_setup_contract,
@@ -93,6 +94,7 @@ from freq.core.setup_state import (
     clear_setup_state,
     ensure_setup_state,
     load_setup_state,
+    setup_state_path,
     touch_setup_state,
     update_setup_state,
 )
@@ -2491,6 +2493,7 @@ def _bg_slow_loop():
             (_bg_probe_fleet_overview, "fleet overview"),
             (_bg_check_update, "update check"),
             (_bg_sync_hosts, "hosts sync"),
+            (_bg_cleanup_expired_setup, "setup expiry cleanup"),
         ]:
             if _shutdown_flag.is_set():
                 break
@@ -3259,7 +3262,7 @@ def _setup_init_snapshot():
             return {"running": False, "job": None}
         job = dict(_setup_init_job)
         job["lines"] = list(_setup_init_job.get("lines", []))[-300:]
-        return {"running": job.get("state") == "running", "job": job}
+        return {"running": job.get("state") in {"queued", "running"}, "job": job}
 
 
 def _setup_discovery_snapshot():
@@ -3321,6 +3324,42 @@ def _clear_setup_contract_credentials(cfg, contract):
     remaining = {key for entry_host, key, _value in vault_list(cfg) if entry_host == host}
     if remaining.intersection(updates):
         raise OSError("setup credential cleanup failed")
+
+
+def _cleanup_expired_setup(cfg):
+    """Remove orphaned setup secrets when TTL expiry is observed."""
+    raw_state = {}
+    try:
+        with open(setup_state_path(cfg), encoding="utf-8") as handle:
+            raw_state = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        pass
+    if load_setup_state(cfg):
+        return False
+    contract = load_setup_contract(cfg)
+    setup_id = ""
+    if isinstance(raw_state, dict) and raw_state.get("schema") == ZERO_STATE_WEB_SCHEMA:
+        setup_id = str(raw_state.get("setup_id") or "")
+    if not setup_id and contract:
+        setup_id = str(contract.get("setup_id") or "")
+    if setup_id and len(setup_id) <= 256:
+        _delete_setup_vault_namespace(cfg, setup_id)
+    if contract:
+        clear_setup_contract(cfg)
+    return bool(setup_id or contract)
+
+
+def _bg_cleanup_expired_setup():
+    try:
+        _cleanup_expired_setup(load_config())
+    except Exception as exc:
+        logger.warn(f"setup_expiry_cleanup_failed: {exc}")
+
+
+def _observe_setup_state(cfg):
+    """Load setup state while making expiry cleanup part of observation."""
+    _cleanup_expired_setup(cfg)
+    return load_setup_state(cfg)
 
 
 def _run_setup_discovery_job(cfg, job_id):
@@ -3485,7 +3524,16 @@ def _toml_scalar(value):
         return str(value)
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(_toml_scalar(v) for v in value) + "]"
-    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    escaped = (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\b", "\\b")
+        .replace("\t", "\\t")
+        .replace("\n", "\\n")
+        .replace("\f", "\\f")
+        .replace("\r", "\\r")
+    )
     return f'"{escaped}"'
 
 
@@ -3652,6 +3700,248 @@ def _setup_init_command(cfg, body, job_id):
     return cmd, env, secret_dir
 
 
+def _setup_init_request(body, state, contract, discovery):
+    """Validate the value-only zero-state init request."""
+    if not isinstance(body, dict):
+        raise SetupContractError("invalid_json", "JSON object required.")
+    allowed = {
+        "schema", "setup_id", "discovery_id", "contract_id",
+        "client_request_id", "service_account", "options",
+    }
+    unknown = sorted(set(body) - allowed)
+    if unknown:
+        raise SetupContractError(
+            "unsupported_field", f"Unsupported init field: {unknown[0]}", unknown[0]
+        )
+    if body.get("schema") != ZERO_STATE_WEB_SCHEMA:
+        raise SetupContractError("unsupported_schema", "Unsupported setup schema.", "schema")
+    identities = (
+        ("setup_id", state.get("setup_id"), "setup_expired", 410),
+        ("discovery_id", discovery.get("id"), "stale_discovery", 409),
+        ("contract_id", contract.get("contract_id"), "stale_contract", 409),
+    )
+    for field, expected, code, status in identities:
+        if not expected or str(body.get(field) or "") != str(expected):
+            raise SetupContractError(code, f"The {field.replace('_', ' ')} is stale.", field, status)
+    request_id = str(body.get("client_request_id") or "").strip()
+    try:
+        uuid.UUID(request_id)
+    except ValueError as exc:
+        raise SetupContractError(
+            "invalid_client_request_id", "client_request_id must be a UUID.", "client_request_id"
+        ) from exc
+
+    service = body.get("service_account")
+    if not isinstance(service, dict):
+        raise SetupContractError("required_field", "service_account is required.", "service_account")
+    unknown_service = sorted(set(service) - {"username", "password"})
+    if unknown_service:
+        field = f"service_account.{unknown_service[0]}"
+        raise SetupContractError("unsupported_field", "Unsupported service account field.", field)
+    username = str(service.get("username") or "").strip()
+    password = service.get("password")
+    if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", username):
+        raise SetupContractError(
+            "invalid_service_account", "Service account username is invalid.", "service_account.username", 422
+        )
+    if (
+        not isinstance(password, str)
+        or len(password) < 8
+        or len(password.encode("utf-8")) > 4096
+        or "\x00" in password
+        or "\n" in password
+        or "\r" in password
+    ):
+        raise SetupContractError(
+            "invalid_service_password", "Service account password is invalid.", "service_account.password", 422
+        )
+    if len(password) > 20 and any(
+        str(device.get("kind") or "").lower() == "idrac"
+        for device in contract.get("owned_devices") or []
+    ):
+        raise SetupContractError(
+            "service_password_device_limit",
+            "Service account password must be at most 20 characters when iDRAC is owned.",
+            "service_account.password",
+            422,
+        )
+
+    options = body.get("options") or {}
+    if not isinstance(options, dict):
+        raise SetupContractError("invalid_options", "options must be an object.", "options")
+    unknown_options = sorted(set(options) - {"ssh_mode", "pdm", "ssl"})
+    if unknown_options:
+        raise SetupContractError(
+            "unsupported_field", "Unsupported init option.", f"options.{unknown_options[0]}"
+        )
+    ssh_mode = str(options.get("ssh_mode") or "sudo").strip().lower()
+    if ssh_mode != "sudo":
+        raise SetupContractError("invalid_ssh_mode", "ssh_mode must be sudo.", "options.ssh_mode", 422)
+    pdm = options.get("pdm") or {"mode": "skip"}
+    ssl_options = options.get("ssl") or {"mode": "defer"}
+    if not isinstance(pdm, dict) or sorted(set(pdm) - {"mode", "password"}):
+        raise SetupContractError("invalid_pdm_options", "Invalid PDM options.", "options.pdm", 422)
+    if not isinstance(ssl_options, dict) or set(ssl_options) != {"mode"}:
+        raise SetupContractError("invalid_ssl_options", "Invalid SSL options.", "options.ssl", 422)
+    pdm_mode = str(pdm.get("mode") or "skip").strip().lower()
+    if pdm_mode not in {"skip", "install"}:
+        raise SetupContractError("invalid_pdm_mode", "PDM mode is invalid.", "options.pdm.mode", 422)
+    if str(ssl_options.get("mode") or "defer").strip().lower() != "defer":
+        raise SetupContractError("invalid_ssl_mode", "SSL mode must be defer.", "options.ssl.mode", 422)
+    pdm_password = pdm.get("password", "")
+    if pdm_mode == "install" and (
+        not isinstance(pdm_password, str)
+        or not pdm_password
+        or len(pdm_password.encode("utf-8")) > 4096
+        or "\x00" in pdm_password
+        or "\n" in pdm_password
+        or "\r" in pdm_password
+    ):
+        raise SetupContractError(
+            "required_field", "PDM password is required for install mode.", "options.pdm.password", 422
+        )
+    if pdm_mode == "skip" and "password" in pdm:
+        raise SetupContractError(
+            "unsupported_field",
+            "PDM password is not accepted in skip mode.",
+            "options.pdm.password",
+            422,
+        )
+    return {
+        "client_request_id": request_id,
+        "service_account": {"username": username, "password": password},
+        "ssh_mode": ssh_mode,
+        "pdm_mode": pdm_mode,
+        "pdm_password": pdm_password,
+    }
+
+
+def _write_setup_vm_contract(secret_dir, contract):
+    path = os.path.join(secret_dir, "vm-contract.toml")
+    lines = [
+        "[fleet]",
+        f"owned_vmids = {_toml_scalar(contract.get('owned_vmids') or [])}",
+        f"template_vmids = {_toml_scalar(contract.get('template_vmids') or [])}",
+        "acknowledged_out_of_contract_vmids = "
+        + _toml_scalar(contract.get("acknowledged_out_of_contract_vmids") or []),
+        "",
+    ]
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
+    os.chmod(path, 0o600)
+    return path
+
+
+def _write_setup_contract_credentials(cfg, secret_dir, contract):
+    if not (contract.get("owned_devices") or []):
+        return ""
+    getter = _setup_contract_getter(cfg, contract["setup_id"])
+    requirements = {
+        row["resource_id"]: row for row in contract.get("credential_requirements") or []
+    }
+    lines = []
+    for device in contract.get("owned_devices") or []:
+        resource_id = device.get("resource_id", "")
+        requirement = requirements.get(resource_id) or {}
+        kind = str(device.get("kind") or "").strip().lower()
+        section = f"{kind}-{credential_vault_key(resource_id, 'section').split('_')[1]}"
+        values = {}
+        for field in requirement.get("allowed_fields") or []:
+            raw = getter(credential_vault_key(resource_id, field))
+            if raw:
+                values[field] = credential_runtime_value(field, raw)
+        lines.extend(
+            [
+                f"[{section}]",
+                f"type = {_toml_scalar(kind)}",
+                f"host = {_toml_scalar(device.get('host', ''))}",
+                f"label = {_toml_scalar(device.get('label', resource_id))}",
+                f"scope = {_toml_scalar('lab' if device.get('placement') == 'lab' else 'core')}",
+            ]
+        )
+        if values.get("username"):
+            lines.append(f"user = {_toml_scalar(values['username'])}")
+        if kind == "truenas" and values.get("api_key") and not any(
+            values.get(field) for field in ("password", "ssh_private_key")
+        ):
+            lines.append("browser_probe_only = true")
+        for field, suffix, toml_key in (
+            ("password", "password", "password_file"),
+            ("api_key", "api-key", "api_key_file"),
+            ("ssh_private_key", "ssh-key", "ssh_key_file"),
+            ("sudo_password", "sudo-password", "sudo_password_file"),
+        ):
+            if values.get(field):
+                value_path = _write_setup_secret(secret_dir, f"{section}-{suffix}", values[field])
+                lines.append(f"{toml_key} = {_toml_scalar(value_path)}")
+        lines.append("")
+    if not lines:
+        return ""
+    path = os.path.join(secret_dir, "device-credentials.toml")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines).rstrip() + "\n")
+    os.chmod(path, 0o600)
+    return path
+
+
+def _setup_init_command_from_contract(cfg, request, contract, discovery, job_id):
+    """Materialize internal-only adapters for the existing headless CLI."""
+    secret_dir = _setup_secret_dir(cfg, job_id)
+    try:
+        service_file = _write_setup_secret(
+            secret_dir, "service-account-password", request["service_account"]["password"]
+        )
+        bootstrap_password = vault_get(
+            cfg, _setup_vault_host(contract["setup_id"]), "bootstrap_password"
+        )
+        if not bootstrap_password:
+            raise SetupContractError(
+                "bootstrap_secret_missing", "Bootstrap credentials expired; run discovery again.", status=409
+            )
+        bootstrap_file = _write_setup_secret(secret_dir, "bootstrap-password", bootstrap_password)
+        bootstrap_password = ""
+        vm_contract_file = _write_setup_vm_contract(secret_dir, contract)
+        device_file = _write_setup_contract_credentials(cfg, secret_dir, contract)
+        pdm_file = _write_setup_secret(secret_dir, "pdm-password", request.get("pdm_password", ""))
+        cluster = discovery.get("cluster") or {}
+        nodes = cluster.get("nodes") or []
+        node_hosts = [str(row.get("host") or "") for row in nodes if row.get("host")]
+        node_names = [str(row.get("name") or row.get("host") or "") for row in nodes if row.get("host")]
+        if not node_hosts:
+            raise SetupContractError("stale_discovery", "Discovery has no PVE nodes.", "discovery_id", 409)
+        code = "import sys; from freq.cli import main; raise SystemExit(main(sys.argv[1:]))"
+        cmd = [
+            sys.executable, "-c", code, "--yes", "init", "--headless",
+            "--password-file", service_file,
+            "--bootstrap-user", discovery.get("bootstrap_username") or "root",
+            "--bootstrap-password-file", bootstrap_file,
+            "--service-account", request["service_account"]["username"],
+            "--pve-nodes", ",".join(node_hosts),
+            "--pve-node-names", ",".join(node_names),
+            "--cluster-name", str(cluster.get("name") or "pve"),
+            "--ssh-mode", request["ssh_mode"],
+            "--vm-contract", vm_contract_file,
+        ]
+        if device_file:
+            cmd.extend(["--device-credentials", device_file])
+        if request["pdm_mode"] == "install":
+            cmd.append("--install-pdm")
+            cmd.extend(["--pdm-pass", pdm_file])
+        else:
+            cmd.append("--skip-pdm")
+        env = os.environ.copy()
+        env.update({"FREQ_DIR": cfg.install_dir, "FREQ_WEB_INIT": "1", "PYTHONUNBUFFERED": "1"})
+        if os.geteuid() != 0:
+            cmd = [
+                "sudo", "-n", "env", f"FREQ_DIR={cfg.install_dir}",
+                "FREQ_WEB_INIT=1", "PYTHONUNBUFFERED=1",
+            ] + cmd
+        return cmd, env, secret_dir
+    except Exception:
+        shutil.rmtree(secret_dir, ignore_errors=True)
+        raise
+
+
 def _redact_setup_init_line(line, secret_dir):
     text = str(line or "").rstrip()
     if secret_dir:
@@ -3750,10 +4040,43 @@ def _schedule_setup_runtime_handoff(cfg):
         return False
 
 
-def _run_setup_init_job(job_id, cmd, env, secret_dir):
+def _setup_init_progress(line):
+    match = re.search(r"Phase\s+(\d+)\s*(?:/|of)\s*(\d+)\s*[:—-]?\s*(.*)", str(line), re.I)
+    if not match:
+        return None
+    current, total = int(match.group(1)), int(match.group(2))
+    name = match.group(3).strip()[:120] or "Initialization"
+    return {
+        "phase": current,
+        "phase_name": name,
+        "current": current,
+        "total": total,
+        "message": f"Running {name}.",
+    }
+
+
+def _delete_setup_vault_namespace(cfg, setup_id):
+    host = _setup_vault_host(setup_id)
+    keys = {key for entry_host, key, _value in vault_list(cfg) if entry_host == host}
+    if keys and not vault_update(cfg, host, {key: None for key in keys}):
+        raise OSError("setup secret cleanup failed")
+    remaining = {key for entry_host, key, _value in vault_list(cfg) if entry_host == host}
+    if remaining:
+        raise OSError("setup secret cleanup failed")
+
+
+def _run_setup_init_job(job_id, cmd, env, secret_dir, setup_id=""):
     proc = None
     handoff_cfg = None
+    succeeded = False
     try:
+        with _setup_init_lock:
+            if _setup_init_job and _setup_init_job.get("id") == job_id:
+                _setup_init_job["state"] = "running"
+                _setup_init_job["progress"] = {
+                    "phase": 0, "phase_name": "Starting", "current": 0, "total": 12,
+                    "message": "Starting headless initialization.",
+                }
         proc = subprocess.Popen(
             cmd,
             cwd=env.get("FREQ_DIR") or None,
@@ -3770,7 +4093,11 @@ def _run_setup_init_job(job_id, cmd, env, secret_dir):
         for line in proc.stdout or []:
             with _setup_init_lock:
                 if _setup_init_job and _setup_init_job.get("id") == job_id:
-                    _setup_init_job.setdefault("lines", []).append(_redact_setup_init_line(line, secret_dir))
+                    safe_line = _redact_setup_init_line(line, secret_dir)
+                    _setup_init_job.setdefault("lines", []).append(safe_line)
+                    progress = _setup_init_progress(safe_line)
+                    if progress:
+                        _setup_init_job["progress"] = progress
                     _setup_init_job["updated_at"] = time.time()
                     _setup_init_job["lines"] = _setup_init_job["lines"][-1000:]
         rc = proc.wait()
@@ -3781,26 +4108,73 @@ def _run_setup_init_job(job_id, cmd, env, secret_dir):
         if rc == 0 and initialized:
             try:
                 _write_web_setup_markers(cfg)
-            except OSError as exc:
-                marker_error = str(exc)
+            except OSError:
+                marker_error = "setup markers could not be written"
+        web_complete = os.path.isfile(os.path.join(cfg.conf_dir, ".web-setup-complete"))
+        cleanup_error = None
+        try:
+            shutil.rmtree(secret_dir)
+            if os.path.exists(secret_dir):
+                raise OSError("transient init adapters remain")
+        except Exception:
+            cleanup_error = "transient init adapters could not be removed"
+        succeeded = rc == 0 and initialized and web_complete and not marker_error and not cleanup_error
+        if not succeeded and web_complete:
+            try:
+                os.unlink(os.path.join(cfg.conf_dir, ".web-setup-complete"))
+                web_complete = False
+            except OSError:
+                marker_error = marker_error or "failed setup marker could not be removed"
+        if succeeded and setup_id:
+            try:
+                with _setup_lock:
+                    _delete_setup_vault_namespace(cfg, setup_id)
+                    clear_setup_contract(cfg)
+                    clear_setup_state(cfg)
+            except Exception:
+                cleanup_error = "setup secrets could not be removed"
+                succeeded = False
+        if not succeeded and web_complete:
+            try:
+                os.unlink(os.path.join(cfg.conf_dir, ".web-setup-complete"))
+                web_complete = False
+            except OSError:
+                marker_error = marker_error or "failed setup marker could not be removed"
         with _setup_init_lock:
             if _setup_init_job and _setup_init_job.get("id") == job_id:
-                _setup_init_job["state"] = "succeeded" if rc == 0 and initialized and not marker_error else "failed"
+                _setup_init_job["state"] = "succeeded" if succeeded else "failed"
                 _setup_init_job["returncode"] = rc
                 _setup_init_job["initialized"] = initialized
-                if marker_error:
-                    _setup_init_job["error"] = f"setup markers could not be written: {marker_error}"
+                _setup_init_job["web_setup_complete"] = web_complete
+                if marker_error or cleanup_error:
+                    _setup_init_job["error"] = marker_error or cleanup_error
+                elif not succeeded:
+                    _setup_init_job["error"] = "freq init did not complete successfully"
+                else:
+                    _setup_init_job["progress"] = {
+                        "phase": 12, "phase_name": "Verification", "current": 12, "total": 12,
+                        "message": "Initialization and browser setup completed.",
+                    }
                 _setup_init_job["finished_at"] = time.time()
                 _setup_init_job["updated_at"] = time.time()
-    except Exception as exc:
+        if not succeeded:
+            try:
+                update_setup_state(cfg, phase="blocked", last_error_code="init_failed")
+            except (OSError, ValueError):
+                pass
+    except Exception:
         with _setup_init_lock:
             if _setup_init_job and _setup_init_job.get("id") == job_id:
                 _setup_init_job["state"] = "failed"
-                _setup_init_job["error"] = str(exc)
+                _setup_init_job["error"] = "setup init worker failed"
                 _setup_init_job["finished_at"] = time.time()
                 _setup_init_job["updated_at"] = time.time()
+        try:
+            update_setup_state(load_config(force=True), phase="blocked", last_error_code="init_failed")
+        except Exception:
+            pass
     finally:
-        if env.get("FREQ_WEB_INIT") == "1" and handoff_cfg is not None:
+        if succeeded and env.get("FREQ_WEB_INIT") == "1" and handoff_cfg is not None:
             if _schedule_setup_runtime_handoff(handoff_cfg):
                 with _setup_init_lock:
                     if _setup_init_job and _setup_init_job.get("id") == job_id:
@@ -3808,10 +4182,35 @@ def _run_setup_init_job(job_id, cmd, env, secret_dir):
                             "scheduled dashboard handoff to freq-serve.service"
                         )
                         _setup_init_job["updated_at"] = time.time()
-        try:
-            shutil.rmtree(secret_dir)
-        except Exception:
-            pass
+        if os.path.exists(secret_dir):
+            try:
+                shutil.rmtree(secret_dir)
+            except Exception:
+                with _setup_init_lock:
+                    if _setup_init_job and _setup_init_job.get("id") == job_id:
+                        _setup_init_job["state"] = "failed"
+                        _setup_init_job["error"] = "transient init adapters could not be removed"
+
+
+def _setup_init_public_job(job, *, log_limit=100):
+    lines = list((job or {}).get("lines") or [])[-log_limit:] if log_limit else []
+    payload = {
+        "id": (job or {}).get("id"),
+        "state": (job or {}).get("state", "queued"),
+        "returncode": (job or {}).get("returncode"),
+        "initialized": bool((job or {}).get("initialized")),
+        "web_setup_complete": bool((job or {}).get("web_setup_complete")),
+        "poll_after_ms": 0 if (job or {}).get("state") in {"succeeded", "failed"} else 1000,
+        "progress": dict((job or {}).get("progress") or {}),
+        "log_tail": lines,
+    }
+    if (job or {}).get("state") == "failed":
+        payload["error"] = {
+            "code": "init_failed",
+            "message": (job or {}).get("error") or "Setup initialization failed.",
+            "retryable": True,
+        }
+    return payload
 
 
 def _init_blocker_from_artifacts(cfg):
@@ -4950,7 +5349,7 @@ a:hover{{text-decoration:underline}}
             is_authed = authed_err is None
         except Exception:
             is_authed = False
-        setup_record = load_setup_state(cfg)
+        setup_record = _observe_setup_state(cfg)
         if dashboard_accounts_configured and is_authed and not (is_initialized and is_web_setup_complete):
             setup_user = getattr(self, "_session_user", "") or (
                 dashboard_users[0].get("username", "") if dashboard_users else ""
@@ -5563,7 +5962,7 @@ a:hover{{text-decoration:underline}}
             _setup_error(self, 400, "invalid_json", "Invalid discovery request.")
             return
 
-        state = load_setup_state(cfg)
+        state = _observe_setup_state(cfg)
         if not state:
             _setup_error(self, 410, "setup_expired", "The setup window expired; reload setup status.")
             return
@@ -5707,7 +6106,7 @@ a:hover{{text-decoration:underline}}
         if _zero_state_setup_complete(cfg):
             _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
             return
-        state = load_setup_state(cfg)
+        state = _observe_setup_state(cfg)
         if not state:
             _setup_error(self, 410, "setup_expired", "The setup window expired.")
             return
@@ -5800,7 +6199,7 @@ a:hover{{text-decoration:underline}}
 
         try:
             with _setup_lock:
-                state = load_setup_state(cfg)
+                state = _observe_setup_state(cfg)
                 if not state:
                     raise SetupContractError("setup_expired", "The setup window expired.", status=410)
                 if state.get("username") != getattr(self, "_session_user", ""):
@@ -5913,7 +6312,7 @@ a:hover{{text-decoration:underline}}
         if _zero_state_setup_complete(cfg):
             _setup_error(self, 403, "setup_closed", "Browser setup is already complete.")
             return
-        state = load_setup_state(cfg)
+        state = _observe_setup_state(cfg)
         if not state:
             _setup_error(self, 410, "setup_expired", "The setup window expired.")
             return
@@ -6040,94 +6439,217 @@ a:hover{{text-decoration:underline}}
         )
 
     def _serve_setup_init_start(self):
-        """POST /api/setup/init/start — run full headless init from web setup."""
+        """Start headless init from frozen, value-only zero-state objects."""
         global _setup_init_job
         if self.command != "POST":
-            self._json_response({"error": "Setup init start requires POST"}, 405)
+            _setup_error(self, 405, "method_not_allowed", "Setup init start requires POST.")
             return
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err}, 403)
+            _setup_error(self, 403, "admin_required", err)
             return
         cfg = load_config()
-        if os.path.isfile(os.path.join(cfg.conf_dir, ".initialized")):
-            self._json_response({"error": "freq init is already complete"}, 409)
+        if _zero_state_setup_complete(cfg):
+            _setup_error(self, 409, "setup_closed", "Browser setup is already complete.")
             return
-        with _setup_init_lock:
-            if _setup_init_job and _setup_init_job.get("state") == "running":
-                self._json_response({"error": "setup init already running", "job": dict(_setup_init_job)}, 409)
-                return
+        state = _observe_setup_state(cfg)
+        if not state:
+            _setup_error(self, 410, "setup_expired", "The setup window expired.")
+            return
+        if state.get("username") != getattr(self, "_session_user", ""):
+            _setup_error(self, 403, "setup_owner_mismatch", "Setup belongs to another operator.")
+            return
         try:
             body = self._request_body()
-            job_id = uuid.uuid4().hex[:12]
-            cmd, env, secret_dir = _setup_init_command(cfg, body, job_id)
-        except ValueError as exc:
-            self._json_response({"error": str(exc)}, 400)
-            return
-        except Exception as exc:
-            self._json_response({"error": f"could not prepare setup init: {exc}"}, 500)
+            field, code = _setup_forbidden_browser_input(body)
+            if field:
+                _setup_error(
+                    self, 400, code,
+                    "Server-side paths and manual contracts are not accepted.", field=field,
+                )
+                return
+        except Exception:
+            _setup_error(self, 400, "invalid_json", "Invalid setup init request.")
             return
 
-        now = time.time()
-        with _setup_init_lock:
-            _setup_init_job = {
-                "id": job_id,
-                "state": "running",
-                "pid": None,
-                "started_at": now,
-                "updated_at": now,
-                "finished_at": None,
-                "returncode": None,
-                "initialized": False,
-                "lines": ["starting web-launched freq init --headless"],
-            }
-        threading.Thread(
+        secret_dir = ""
+        job_id = ""
+        try:
+            with _setup_lock:
+                state = _observe_setup_state(cfg)
+                contract = load_setup_contract(cfg)
+                discovery = _setup_discovery_snapshot() or {}
+                if not state:
+                    raise SetupContractError("setup_expired", "The setup window expired.", status=410)
+                if state.get("username") != getattr(self, "_session_user", ""):
+                    raise SetupContractError(
+                        "setup_owner_mismatch", "Setup belongs to another operator.", status=403
+                    )
+                if (
+                    not contract
+                    or contract.get("setup_id") != state.get("setup_id")
+                    or contract.get("contract_id") != state.get("active_contract_id")
+                ):
+                    raise SetupContractError(
+                        "stale_contract", "A current selection contract is required.", "contract_id", 409
+                    )
+                if (
+                    discovery.get("state") != "succeeded"
+                    or discovery.get("id") != state.get("active_discovery_id")
+                    or discovery.get("setup_id") != state.get("setup_id")
+                ):
+                    raise SetupContractError(
+                        "stale_discovery", "A current successful discovery is required.", "discovery_id", 409
+                    )
+                getter = _setup_contract_getter(cfg, state["setup_id"])
+                if not contract_payload(contract, getter)["ready"]:
+                    raise SetupContractError(
+                        "credentials_incomplete", "Required device credentials are incomplete.", status=422
+                    )
+                request = _setup_init_request(body, state, contract, discovery)
+                with _setup_init_lock:
+                    existing = dict(_setup_init_job) if _setup_init_job else None
+                replay = bool(
+                    existing
+                    and existing.get("setup_id") == state.get("setup_id")
+                    and existing.get("client_request_id") == request["client_request_id"]
+                )
+                if replay:
+                    self._json_response(
+                        {
+                            "ok": True,
+                            "schema": ZERO_STATE_WEB_SCHEMA,
+                            "job": _setup_init_public_job(existing, log_limit=0),
+                        },
+                        202,
+                    )
+                    return
+                if existing and existing.get("state") in {"queued", "running"}:
+                    raise SetupContractError(
+                        "init_running", "A setup init job is already running.", status=409
+                    )
+                job_id = uuid.uuid4().hex
+                cmd, env, secret_dir = _setup_init_command_from_contract(
+                    cfg, request, contract, discovery, job_id
+                )
+                now = time.time()
+                job = {
+                    "id": job_id,
+                    "setup_id": state["setup_id"],
+                    "owner": state["username"],
+                    "client_request_id": request["client_request_id"],
+                    "state": "queued",
+                    "pid": None,
+                    "started_at": now,
+                    "updated_at": now,
+                    "finished_at": None,
+                    "returncode": None,
+                    "initialized": False,
+                    "web_setup_complete": False,
+                    "progress": {
+                        "phase": 0, "phase_name": "Queued", "current": 0, "total": 12,
+                        "message": "Initialization queued.",
+                    },
+                    "lines": ["starting web-launched freq init --headless"],
+                }
+                with _setup_init_lock:
+                    _setup_init_job = job
+                update_setup_state(
+                    cfg,
+                    phase="initializing",
+                    active_init_job_id=job_id,
+                    last_error_code=None,
+                )
+        except SetupContractError as exc:
+            _setup_error(self, exc.status, exc.code, str(exc), field=exc.field, details=exc.details)
+            return
+        except Exception:
+            if secret_dir:
+                shutil.rmtree(secret_dir, ignore_errors=True)
+            with _setup_init_lock:
+                if job_id and _setup_init_job and _setup_init_job.get("id") == job_id:
+                    _setup_init_job = None
+            _setup_error(self, 500, "init_prepare_failed", "Setup init could not be prepared.")
+            return
+
+        worker = threading.Thread(
             target=_run_setup_init_job,
-            args=(job_id, cmd, env, secret_dir),
+            args=(job_id, cmd, env, secret_dir, state["setup_id"]),
             daemon=True,
             name=f"freq-setup-init-{job_id}",
-        ).start()
-        self._json_response({"ok": True, "job": _setup_init_snapshot()["job"]})
+        )
+        try:
+            worker.start()
+        except Exception:
+            shutil.rmtree(secret_dir, ignore_errors=True)
+            with _setup_init_lock:
+                if _setup_init_job and _setup_init_job.get("id") == job_id:
+                    _setup_init_job["state"] = "failed"
+                    _setup_init_job["error"] = "setup init worker could not start"
+            try:
+                update_setup_state(cfg, phase="blocked", last_error_code="init_start_failed")
+            except (OSError, ValueError):
+                pass
+            _setup_error(self, 500, "init_start_failed", "Setup init worker could not start.")
+            return
+        self._json_response(
+            {
+                "ok": True,
+                "schema": ZERO_STATE_WEB_SCHEMA,
+                "job": {"id": job_id, "state": "queued", "poll_after_ms": 1000},
+            },
+            202,
+        )
 
     def _serve_setup_init_status(self):
-        """GET /api/setup/init/status — return current web-launched init job."""
+        """Return one setup-bound init job with bounded redacted output."""
+        if self.command != "GET":
+            _setup_error(self, 405, "method_not_allowed", "Setup init status requires GET.")
+            return
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err}, 403)
+            _setup_error(self, 403, "admin_required", err)
+            return
+        cfg = load_config()
+        query = parse_qs(urlparse(self.path).query)
+        job_id = str((query.get("id") or [""])[0]).strip()
+        if not job_id:
+            _setup_error(self, 400, "required_field", "Init job id is required.", field="id")
             return
         snap = _setup_init_snapshot()
-        job = snap.get("job") or {}
-        lines = list(job.get("lines") or [])
-        state = job.get("state") or ("running" if snap.get("running") else "idle")
-        payload = {"ok": True, **snap, "state": state, "log_tail": lines}
-        if lines:
-            payload["phase"] = lines[-1]
-        if state == "succeeded":
-            payload["state"] = "complete"
-        if state == "failed":
-            payload["blocker"] = job.get("error") or (lines[-1] if lines else "setup init failed")
-        self._json_response(payload)
+        job = snap.get("job")
+        state = _observe_setup_state(cfg)
+        if not job:
+            if state.get("active_init_job_id") == job_id:
+                _setup_error(self, 410, "init_expired", "Init job state was lost.")
+            else:
+                _setup_error(self, 404, "init_not_found", "Init job was not found.")
+            return
+        if job.get("id") != job_id or job.get("owner") != getattr(self, "_session_user", ""):
+            _setup_error(self, 404, "init_not_found", "Init job was not found.")
+            return
+        self._json_response(
+            {"ok": True, "schema": ZERO_STATE_WEB_SCHEMA, "job": _setup_init_public_job(job)}
+        )
 
     def _serve_setup_init_logs(self):
         """GET /api/setup/init/logs — return current web-launched init log tail."""
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err}, 403)
+            _setup_error(self, 403, "admin_required", err)
+            return
+        query = parse_qs(urlparse(self.path).query)
+        job_id = str((query.get("id") or [""])[0]).strip()
+        if not job_id:
+            _setup_error(self, 400, "required_field", "Init job id is required.", field="id")
             return
         snap = _setup_init_snapshot()
-        job = snap.get("job") or {}
-        lines = list(job.get("lines") or [])
+        job = snap.get("job")
+        if not job or job.get("id") != job_id or job.get("owner") != getattr(self, "_session_user", ""):
+            _setup_error(self, 404, "init_not_found", "Init job was not found.")
+            return
         self._json_response(
-            {
-                "ok": True,
-                "running": snap.get("running", False),
-                "state": "complete" if job.get("state") == "succeeded" else job.get("state", "idle"),
-                "job_id": job.get("id"),
-                "lines": lines,
-                "log_tail": lines,
-                "returncode": job.get("returncode"),
-                "initialized": job.get("initialized", False),
-            }
+            {"ok": True, "schema": ZERO_STATE_WEB_SCHEMA, "job": _setup_init_public_job(job, log_limit=300)}
         )
 
     # ── Legacy + Main HTML ───────────────────────────────────────────────

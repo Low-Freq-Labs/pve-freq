@@ -1343,6 +1343,8 @@ def _load_device_credentials(cred_file):
                 cred["hosts"] = [str(h).strip() for h in hosts_value if str(h).strip()]
         if api_key:
             cred["api_key"] = api_key
+        if entry.get("browser_probe_only"):
+            cred["browser_probe_only"] = True
 
         if pw_file:
             try:
@@ -1397,18 +1399,22 @@ def _load_device_credentials(cred_file):
             if cred:
                 result[legacy_htype] = cred
 
-    # Named TrueNAS instances, for example [truenas-lab], are runtime
-    # storage targets rather than a new deployer htype. Preserve them by
-    # section name so init can seed matching vault namespaces.
+    # Preserve named instances.  Browser setup deliberately emits one section
+    # per physical resource so two devices of the same type never share or
+    # overwrite credentials at this legacy file boundary.
     for section_name, entry in data.items():
         if not isinstance(entry, dict):
             continue
-        if not str(section_name).startswith("truenas-"):
+        declared_type = str(entry.get("type") or "").strip().lower()
+        named_truenas = str(section_name).startswith("truenas-")
+        if declared_type not in DEVICE_HTYPES and not named_truenas:
             continue
         if section_name in result:
             continue
         cred = _read_entry(entry, str(section_name))
         if cred:
+            if declared_type:
+                cred["type"] = declared_type
             result[str(section_name)] = cred
 
     return result
@@ -1522,6 +1528,26 @@ def _truenas_creds_for_host(host, device_creds):
     return None, ""
 
 
+def _device_creds_for_host(host, device_creds):
+    """Resolve exact-host credentials before the legacy type fallback."""
+    if not device_creds:
+        return None, ""
+    htype = str(getattr(host, "htype", "") or "").strip().lower()
+    host_ip = str(getattr(host, "ip", "") or "").strip()
+    label = _label_key(getattr(host, "label", ""))
+    for name, cred in sorted(device_creds.items()):
+        declared = str((cred or {}).get("type") or "").strip().lower()
+        if declared and declared != htype:
+            continue
+        if host_ip and host_ip in _device_credential_hosts(cred):
+            return cred, str(name)
+        if label and _label_key((cred or {}).get("label", "")) == label:
+            return cred, str(name)
+    if htype in device_creds:
+        return device_creds[htype], htype
+    return None, ""
+
+
 def _validate_device_scoped_service_password(device_creds, svc_pass):
     """Reject service passwords that known device firmware cannot accept.
 
@@ -1529,7 +1555,11 @@ def _validate_device_scoped_service_password(device_creds, svc_pass):
     RACADM rejects overlong password values with a vague RAC947 error after
     init has already started mutating BMC state. Validate before deploy.
     """
-    if not (device_creds or {}).get("idrac"):
+    has_idrac = any(
+        name == "idrac" or str((cred or {}).get("type") or "") == "idrac"
+        for name, cred in (device_creds or {}).items()
+    )
+    if not has_idrac:
         return True
     if len(svc_pass or "") <= IDRAC_PASSWORD_MAX_LEN:
         return True
@@ -1542,7 +1572,7 @@ def _validate_device_scoped_service_password(device_creds, svc_pass):
 
 
 def _validate_truenas_deployment_credentials(device_creds):
-    """Reject TrueNAS targets that only have read-only API credentials."""
+    """Reject TrueNAS targets with no usable SSH or API credential."""
     ok = True
     for name, cred in sorted((device_creds or {}).items()):
         if name != "truenas" and not str(name).startswith("truenas-"):
@@ -1550,6 +1580,10 @@ def _validate_truenas_deployment_credentials(device_creds):
         if not _device_credential_hosts(cred):
             continue
         if _device_cred_has_ssh_material(cred):
+            continue
+        if (cred or {}).get("browser_probe_only") and (cred or {}).get("api_key"):
+            # The frozen browser contract explicitly permits API-only
+            # monitoring. CLI files do not gain that relaxation implicitly.
             continue
         fmt.step_fail(
             f"TrueNAS target [{name}] has host(s) but only API credentials. "
@@ -5012,7 +5046,15 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     for ip in _credential_hosts("truenas"):
         tn_cred = device_creds.get("truenas", {}) if isinstance(device_creds, dict) else {}
         tn_scope = _device_scope_for(ip=ip, label=tn_cred.get("label", "truenas"), key="truenas", cred=tn_cred, overrides=scope_overrides)
-        _add_staged_device(ip, "truenas", "truenas", managed=True, cred=tn_cred, scope=tn_scope, key="truenas")
+        _add_staged_device(
+            ip,
+            "truenas",
+            "truenas",
+            managed=not bool(tn_cred.get("browser_probe_only")),
+            cred=tn_cred,
+            scope=tn_scope,
+            key="truenas",
+        )
         if tn_scope == "core":
             infra_truenas = ip
         fmt.step_ok(f"TrueNAS from device credentials: {ip} [{tn_scope}]")
@@ -5170,7 +5212,10 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     label,
                     "truenas",
                     groups="lab" if scope == "lab" else "infrastructure",
-                    managed=_is_managed_auto_host(label, "truenas", source="device-credentials"),
+                    managed=(
+                        not bool(cred.get("browser_probe_only"))
+                        and _is_managed_auto_host(label, "truenas", source="device-credentials")
+                    ),
                     cred=cred,
                     scope=scope,
                     key=name,
@@ -10429,7 +10474,25 @@ def _init_headless(cfg, args):
         fmt.line(f"  {fmt.C.RED}Password too short (min 8 chars){fmt.C.RESET}")
         return 1
 
-    dashboard_user = (dashboard_user_arg or bootstrap_user or "").strip()
+    web_init_runner = os.environ.get("FREQ_WEB_INIT") == "1"
+    users_file = os.path.join(cfg.conf_dir, "users.conf")
+    preserve_dashboard_auth = False
+    existing_dashboard_user = ""
+    if web_init_runner and not dashboard_user_arg:
+        try:
+            with open(users_file) as handle:
+                for line in handle:
+                    fields = line.strip().split()
+                    if fields and not fields[0].startswith("#"):
+                        existing_dashboard_user = fields[0]
+                        preserve_dashboard_auth = True
+                        break
+        except OSError:
+            pass
+    dashboard_user = (
+        existing_dashboard_user if preserve_dashboard_auth
+        else (dashboard_user_arg or bootstrap_user or "").strip()
+    )
     if not _validate_username(dashboard_user):
         fmt.line(f"  {fmt.C.RED}Invalid --dashboard-user '{dashboard_user}'.{fmt.C.RESET}")
         return 1
@@ -10445,7 +10508,7 @@ def _init_headless(cfg, args):
         return 1
     else:
         dashboard_pass = bootstrap_pass or svc_pass
-    if len(dashboard_pass) < 8:
+    if not preserve_dashboard_auth and len(dashboard_pass) < 8:
         fmt.line(f"  {fmt.C.RED}Dashboard password too short (min 8 chars){fmt.C.RESET}")
         return 1
 
@@ -10515,12 +10578,10 @@ def _init_headless(cfg, args):
 
     # Seed dashboard auth before the long fleet phases so a partial run remains
     # recoverable instead of falling back to setup with no viable login path.
-    if not _seed_headless_dashboard_auth(
-        cfg,
-        ctx["dashboard_user"],
-        ctx["dashboard_pass"],
-        ctx["svc_name"],
-        verbose=False,
+    if preserve_dashboard_auth:
+        fmt.step_ok(f"Preserving existing dashboard operator {dashboard_user}")
+    elif not _seed_headless_dashboard_auth(
+        cfg, ctx["dashboard_user"], ctx["dashboard_pass"], ctx["svc_name"], verbose=False
     ):
         return 1
 
@@ -10555,7 +10616,7 @@ def _init_headless(cfg, args):
     # the log with misleading "Permission denied" for hosts where the
     # service account hasn't been deployed yet. Restart after Phase 12.
     _serve_was_running = False
-    _web_init_runner = os.environ.get("FREQ_WEB_INIT") == "1"
+    _web_init_runner = web_init_runner
     if _web_init_runner:
         fmt.step_warn("Dashboard remains online for web-launched init progress")
     else:
@@ -10629,12 +10690,10 @@ def _init_headless(cfg, args):
     # Re-run the same helper after the long init phases so roles.conf,
     # users.conf, and the dashboard web password converge on one
     # idempotent source of truth.
-    if not _seed_headless_dashboard_auth(
-        cfg,
-        ctx["dashboard_user"],
-        ctx["dashboard_pass"],
-        ctx["svc_name"],
-        verbose=True,
+    if preserve_dashboard_auth:
+        fmt.step_ok(f"Existing dashboard operator {dashboard_user} preserved")
+    elif not _seed_headless_dashboard_auth(
+        cfg, ctx["dashboard_user"], ctx["dashboard_pass"], ctx["svc_name"], verbose=True
     ):
         return 1
 
@@ -11087,9 +11146,16 @@ def _headless_fleet_deploy(
                     auth_pass = bootstrap_pass
                     auth_key = ""
                 auth_user = bootstrap_user
-        elif htype in DEVICE_HTYPES and htype in device_creds:
-            # Per-device credentials from --device-credentials TOML
-            dcred = device_creds[htype]
+        elif htype in DEVICE_HTYPES and _device_creds_for_host(
+            type("HostRef", (), {"ip": ip, "label": label, "htype": htype})(),
+            device_creds,
+        )[0]:
+            # Exact-host browser credentials take priority; legacy type-level
+            # sections remain the fallback for CLI callers.
+            dcred, _dcred_section = _device_creds_for_host(
+                type("HostRef", (), {"ip": ip, "label": label, "htype": htype})(),
+                device_creds,
+            )
             auth_user = dcred["user"]
             auth_pass = dcred.get("password", "")
             auth_key = dcred.get("key_path", "")
@@ -11186,7 +11252,10 @@ def _headless_fleet_deploy(
                 # TrueNAS must have explicit SSH bootstrap material; API keys
                 # alone are read-only dashboard credentials, not deploy auth.
                 if htype == "truenas" and "auth failed" in reason:
-                    if htype in device_creds:
+                    if _device_creds_for_host(
+                        type("HostRef", (), {"ip": ip, "label": label, "htype": htype})(),
+                        device_creds,
+                    )[0]:
                         reason = "auth failed (Core TrueNAS has SSH credentials under [truenas] but they were rejected — check user plus password_file/password or ssh_key_file under [truenas])"
                     else:
                         reason = "auth failed (Core TrueNAS has no SSH bootstrap credentials — add user plus password_file/password or ssh_key_file under [truenas])"

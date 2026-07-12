@@ -36,11 +36,13 @@ def _json(h):
 def test_setup_init_status_promotes_job_state_and_log_tail():
     from freq.modules.serve import FreqHandler
 
-    h = _handler("/api/setup/init/status")
+    h = _handler("/api/setup/init/status?id=abc")
+    h._session_user = "sonny"
     snap = {
         "running": False,
         "job": {
             "id": "abc",
+            "owner": "sonny",
             "state": "succeeded",
             "lines": ["phase one", "done"],
             "returncode": 0,
@@ -53,19 +55,21 @@ def test_setup_init_status_promotes_job_state_and_log_tail():
 
     assert h._status == 200
     body = _json(h)
-    assert body["state"] == "complete"
-    assert body["phase"] == "done"
-    assert body["log_tail"] == ["phase one", "done"]
+    assert body["schema"] == "zero-state-web-v1"
+    assert body["job"]["state"] == "succeeded"
+    assert body["job"]["log_tail"] == ["phase one", "done"]
 
 
 def test_setup_init_logs_route_returns_lines():
     from freq.modules.serve import FreqHandler
 
-    h = _handler("/api/setup/init/logs")
+    h = _handler("/api/setup/init/logs?id=abc")
+    h._session_user = "sonny"
     snap = {
         "running": False,
         "job": {
             "id": "abc",
+            "owner": "sonny",
             "state": "failed",
             "lines": ["starting", "failed"],
             "returncode": 1,
@@ -78,5 +82,5 @@ def test_setup_init_logs_route_returns_lines():
 
     assert h._status == 200
     body = _json(h)
-    assert body["state"] == "failed"
-    assert body["lines"] == ["starting", "failed"]
+    assert body["job"]["state"] == "failed"
+    assert body["job"]["log_tail"] == ["starting", "failed"]
