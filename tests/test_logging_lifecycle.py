@@ -6,6 +6,7 @@ during test runs and potentially leaking connections in daemon mode.
 
 Fix: Added shutdown() function + atexit registration.
 """
+import concurrent.futures
 import os
 import sys
 import tempfile
@@ -90,6 +91,18 @@ class TestMetricsDbLifecycle(unittest.TestCase):
             logger.perf(f"cycle_{i}", float(i))
             logger.shutdown()
         self.assertIsNone(logger._db_conn)
+
+    def test_parallel_perf_writes_are_serialized(self):
+        """Fleet worker threads must not concurrently drive one SQLite connection."""
+        logger.init(self.log_file)
+
+        def write_metric(index):
+            logger.perf("ssh", index / 1000, host=str(index), ok=False)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            list(pool.map(write_metric, range(1000)))
+
+        self.assertEqual(len(logger.read_perf()), 1000)
 
 
 if __name__ == "__main__":

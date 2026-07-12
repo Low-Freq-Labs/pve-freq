@@ -69,6 +69,7 @@ _LOG_FILE: str = ""
 _DB_PATH: str = ""
 _db_conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
+_db_lock = threading.RLock()
 _context: dict = {}  # Bound context — flows to all log calls
 _stderr_enabled: bool = False  # Human-readable stderr output
 
@@ -133,28 +134,30 @@ CREATE INDEX IF NOT EXISTS idx_health_ts ON health(ts);
 def _init_db(log_dir: str) -> None:
     """Initialize SQLite database for perf/health data."""
     global _DB_PATH, _db_conn
-    os.makedirs(log_dir, exist_ok=True)
-    _DB_PATH = os.path.join(log_dir, "freq.db")
-    try:
-        _db_conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
-        _db_conn.execute("PRAGMA journal_mode=WAL")
-        _db_conn.execute("PRAGMA synchronous=NORMAL")
-        _db_conn.executescript(_SCHEMA)
-        _db_conn.commit()
-    except (sqlite3.Error, OSError) as e:
-        print(f"  WARNING: Cannot initialize metrics DB: {e}", file=sys.stderr)
-        _db_conn = None
+    with _db_lock:
+        os.makedirs(log_dir, exist_ok=True)
+        _DB_PATH = os.path.join(log_dir, "freq.db")
+        try:
+            _db_conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+            _db_conn.execute("PRAGMA journal_mode=WAL")
+            _db_conn.execute("PRAGMA synchronous=NORMAL")
+            _db_conn.executescript(_SCHEMA)
+            _db_conn.commit()
+        except (sqlite3.Error, OSError) as e:
+            print(f"  WARNING: Cannot initialize metrics DB: {e}", file=sys.stderr)
+            _db_conn = None
 
 
 def _get_db() -> sqlite3.Connection | None:
     """Get the SQLite connection, reconnecting if needed."""
     global _db_conn
-    if _db_conn is None and _DB_PATH:
-        try:
-            _db_conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
-        except sqlite3.Error:
-            pass
-    return _db_conn
+    with _db_lock:
+        if _db_conn is None and _DB_PATH:
+            try:
+                _db_conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+            except sqlite3.Error:
+                pass
+        return _db_conn
 
 
 def shutdown() -> None:
@@ -164,12 +167,13 @@ def shutdown() -> None:
     Safe to call multiple times.
     """
     global _db_conn
-    if _db_conn is not None:
-        try:
-            _db_conn.close()
-        except sqlite3.Error:
-            pass
-        _db_conn = None
+    with _db_lock:
+        if _db_conn is not None:
+            try:
+                _db_conn.close()
+            except sqlite3.Error:
+                pass
+            _db_conn = None
 
 
 _atexit.register(shutdown)
@@ -249,8 +253,9 @@ def init(log_file: str, stderr: bool = False) -> None:
 
 def init_perf(log_dir: str) -> None:
     """Initialize performance tracking. Uses SQLite via init()."""
-    if not _db_conn:
-        _init_db(log_dir)
+    with _db_lock:
+        if not _db_conn:
+            _init_db(log_dir)
 
 
 # ── Core writer (thread-safe, rotating, dual-output) ─────────────────
@@ -322,93 +327,93 @@ def cmd(command: str, exit_code: int, duration: float = 0.0, **extra) -> None:
 
 def perf(op: str, duration: float, **extra) -> None:
     """Record a performance metric to SQLite."""
-    db = _get_db()
-    if not db:
-        return
-
     host = extra.pop("host", None)
     htype = extra.pop("htype", None)
     ok = extra.pop("ok", None)
     extra_json = json.dumps(extra) if extra else None
 
     ts = datetime.now(timezone.utc).isoformat()
-    try:
-        db.execute(
-            "INSERT INTO perf (ts, op, duration, host, htype, ok, extra) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (ts, op, round(duration, 4), host, htype, 1 if ok else 0 if ok is not None else None, extra_json),
-        )
-        db.commit()
-    except sqlite3.Error:
-        pass
+    with _db_lock:
+        db = _get_db()
+        if not db:
+            return
+        try:
+            db.execute(
+                "INSERT INTO perf (ts, op, duration, host, htype, ok, extra) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (ts, op, round(duration, 4), host, htype, 1 if ok else 0 if ok is not None else None, extra_json),
+            )
+            db.commit()
+        except sqlite3.Error:
+            pass
 
 
 def read_perf(path: str = "", last: int = 0) -> list:
     """Read performance entries from SQLite."""
-    db = _get_db()
-    if not db:
-        return []
-
-    try:
-        limit = f"LIMIT {last}" if last > 0 else ""
-        rows = db.execute(
-            f"SELECT ts, op, duration, host, htype, ok, extra FROM perf ORDER BY id DESC {limit}"
-        ).fetchall()
-        entries = []
-        for ts, op, duration, host, htype, ok, extra_json in reversed(rows):
-            entry = {"ts": ts, "op": op, "duration": duration}
-            if host:
-                entry["host"] = host
-            if htype:
-                entry["htype"] = htype
-            if ok is not None:
-                entry["ok"] = bool(ok)
-            if extra_json:
-                try:
-                    entry.update(json.loads(extra_json))
-                except json.JSONDecodeError:
-                    pass
-            entries.append(entry)
-        return entries
-    except sqlite3.Error:
-        return []
+    with _db_lock:
+        db = _get_db()
+        if not db:
+            return []
+        try:
+            limit = f"LIMIT {last}" if last > 0 else ""
+            rows = db.execute(
+                f"SELECT ts, op, duration, host, htype, ok, extra FROM perf ORDER BY id DESC {limit}"
+            ).fetchall()
+            entries = []
+            for ts, op, duration, host, htype, ok, extra_json in reversed(rows):
+                entry = {"ts": ts, "op": op, "duration": duration}
+                if host:
+                    entry["host"] = host
+                if htype:
+                    entry["htype"] = htype
+                if ok is not None:
+                    entry["ok"] = bool(ok)
+                if extra_json:
+                    try:
+                        entry.update(json.loads(extra_json))
+                    except json.JSONDecodeError:
+                        pass
+                entries.append(entry)
+            return entries
+        except sqlite3.Error:
+            return []
 
 
 # ── Health history (SQLite) ──────────────────────────────────────────
 
 def save_health(passed: int, failed: int, warnings: int, duration: float, checks: list = None) -> None:
     """Save a doctor run result to SQLite."""
-    db = _get_db()
-    if not db:
-        return
-
     checks_json = json.dumps(checks) if checks else None
 
     ts = datetime.now(timezone.utc).isoformat()
-    try:
-        db.execute(
-            "INSERT INTO health (ts, passed, failed, warnings, total, duration, checks) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (ts, passed, failed, warnings, passed + failed + warnings, round(duration, 2), checks_json),
-        )
-        db.execute("DELETE FROM health WHERE id NOT IN (SELECT id FROM health ORDER BY id DESC LIMIT 90)")
-        db.commit()
-    except sqlite3.Error:
-        pass
+    with _db_lock:
+        db = _get_db()
+        if not db:
+            return
+        try:
+            db.execute(
+                "INSERT INTO health (ts, passed, failed, warnings, total, duration, checks) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (ts, passed, failed, warnings, passed + failed + warnings, round(duration, 2), checks_json),
+            )
+            db.execute("DELETE FROM health WHERE id NOT IN (SELECT id FROM health ORDER BY id DESC LIMIT 90)")
+            db.commit()
+        except sqlite3.Error:
+            pass
 
 
 def read_health(last: int = 20) -> list:
     """Read health history from SQLite."""
-    db = _get_db()
-    if not db:
-        return []
-
-    try:
-        rows = db.execute(
-            "SELECT ts, passed, failed, warnings, total, duration FROM health ORDER BY id DESC LIMIT ?",
-            (last,),
-        ).fetchall()
-        return [
-            {"ts": ts, "passed": p, "failed": f, "warnings": w, "total": t, "duration": d}
-            for ts, p, f, w, t, d in reversed(rows)
-        ]
-    except sqlite3.Error:
-        return []
+    with _db_lock:
+        db = _get_db()
+        if not db:
+            return []
+        try:
+            rows = db.execute(
+                "SELECT ts, passed, failed, warnings, total, duration FROM health ORDER BY id DESC LIMIT ?",
+                (last,),
+            ).fetchall()
+            return [
+                {"ts": ts, "passed": p, "failed": f, "warnings": w, "total": t, "duration": d}
+                for ts, p, f, w, t, d in reversed(rows)
+            ]
+        except sqlite3.Error:
+            return []
