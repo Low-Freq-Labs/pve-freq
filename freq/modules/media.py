@@ -1767,8 +1767,6 @@ def _cmd_requests(cfg, args) -> int:
                 media = req.get("media", {})
                 title = media.get("title", media.get("name", "?"))[:30]
                 status_val = req.get("status", 0)
-                status_map = {1: "pending", 2: "approved", 3: "declined"}
-                status_str = status_map.get(status_val, str(status_val))
                 badge = (
                     fmt.badge("warn") if status_val == 1 else fmt.badge("ok") if status_val == 2 else fmt.badge("down")
                 )
@@ -1777,7 +1775,7 @@ def _cmd_requests(cfg, args) -> int:
                     (rid, 6),
                     (rtype, 8),
                     (title, 30),
-                    (f"{badge} {status_str}", 10),
+                    (badge, 10),
                     (f"{fmt.C.BOLD}{user}{fmt.C.RESET}", 14),
                 )
     else:
