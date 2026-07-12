@@ -4448,6 +4448,8 @@ def _inventory_only_reason(cfg, ctx, host):
     """Return the reason a host should not be treated as managed, if any."""
     label = getattr(host, "label", "")
     vmid = _resolve_existing_host_vmid(ctx, host)
+    owned_vmids = set(getattr(cfg, "_owned_vmids", set()) or set())
+    explicitly_owned = bool(vmid and vmid in owned_vmids)
     if _is_operator_auto_excluded(label):
         return "operator/product host"
 
@@ -4458,14 +4460,13 @@ def _inventory_only_reason(cfg, ctx, host):
             cat_name, _tier = fb.categorize(vmid)
         except Exception:
             cat_name = ""
-    if cat_name in {"out_of_contract", "templates"}:
+    if cat_name in {"out_of_contract", "templates"} and not explicitly_owned:
         return f"{cat_name.replace('_', '-')} VMID {vmid}"
 
     acknowledged = set(getattr(cfg, "_acknowledged_out_of_contract_vmids", set()) or set())
-    if vmid and vmid in acknowledged:
+    if vmid and vmid in acknowledged and not explicitly_owned:
         return f"acknowledged out-of-contract VMID {vmid}"
 
-    owned_vmids = set(getattr(cfg, "_owned_vmids", set()) or set())
     if owned_vmids and vmid and vmid not in owned_vmids:
         return f"outside owned VM contract (VMID {vmid})"
 
@@ -4480,21 +4481,25 @@ def _inventory_only_reason(cfg, ctx, host):
 
 
 def _reconcile_existing_managed_hosts(cfg, ctx):
-    """Downgrade stale auto-managed hosts that the current contract excludes."""
+    """Converge existing host rows on the current explicit VM contract."""
     from freq.core.config import save_hosts_toml
 
     changed = []
     for h in getattr(cfg, "hosts", []) or []:
-        if not getattr(h, "managed", True):
-            continue
         label = getattr(h, "label", "")
+        vmid = _resolve_existing_host_vmid(ctx, h)
         reason = _inventory_only_reason(cfg, ctx, h)
-        if reason:
+        is_managed = bool(getattr(h, "managed", True))
+        explicitly_owned = vmid in set(getattr(cfg, "_owned_vmids", set()) or set())
+        if is_managed and reason:
             h.managed = False
             changed.append(f"{label} ({getattr(h, 'ip', '')}) — {reason}")
+        elif not is_managed and explicitly_owned and not reason:
+            h.managed = True
+            changed.append(f"{label} ({getattr(h, 'ip', '')}) — owned VMID {vmid}")
     if changed:
         save_hosts_toml(cfg.hosts_file, cfg.hosts)
-        fmt.step_ok(f"Reconciled {len(changed)} stale managed host(s) to inventory-only")
+        fmt.step_ok(f"Reconciled management state for {len(changed)} existing host(s)")
         for item in changed[:8]:
             fmt.line(f"    {fmt.C.DIM}- {item}{fmt.C.RESET}")
     return changed

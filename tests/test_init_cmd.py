@@ -618,6 +618,64 @@ class TestPureNothingInitContract(unittest.TestCase):
         self.assertTrue(hosts[3].managed)
         mock_save.assert_called_once()
 
+    def test_reconcile_promotes_newly_owned_host_despite_stale_ooc_category(self):
+        from freq.modules.init_cmd import _reconcile_existing_managed_hosts
+
+        host = types.SimpleNamespace(
+            label="dc01-proxy",
+            ip="10.25.255.38",
+            htype="linux",
+            vmid=106,
+            managed=False,
+            all_ips=["10.25.255.38"],
+        )
+        boundaries = types.SimpleNamespace(categorize=lambda _vmid: ("out_of_contract", "probe"))
+        cfg = types.SimpleNamespace(
+            hosts=[host],
+            hosts_file="/tmp/hosts.toml",
+            pve_nodes=["10.25.255.26"],
+            fleet_boundaries=boundaries,
+            _owned_vmids={106},
+            _acknowledged_out_of_contract_vmids=set(),
+        )
+
+        with patch("freq.core.config.save_hosts_toml") as mock_save:
+            changed = _reconcile_existing_managed_hosts(cfg, {})
+
+        self.assertTrue(host.managed)
+        self.assertEqual(changed, ["dc01-proxy (10.25.255.38) — owned VMID 106"])
+        mock_save.assert_called_once_with(cfg.hosts_file, cfg.hosts)
+
+    def test_reconcile_does_not_promote_owned_operator_or_nested_pve_hosts(self):
+        from freq.modules.init_cmd import _reconcile_existing_managed_hosts
+
+        hosts = [
+            types.SimpleNamespace(
+                label="pve-freq", ip="10.25.255.50", htype="linux", vmid=100,
+                managed=False, all_ips=["10.25.255.50"],
+            ),
+            types.SimpleNamespace(
+                label="lab-pve1", ip="10.25.10.202", htype="pve", vmid=5002,
+                managed=False, all_ips=["10.25.10.202"],
+            ),
+        ]
+        cfg = types.SimpleNamespace(
+            hosts=hosts,
+            hosts_file="/tmp/hosts.toml",
+            pve_nodes=["10.25.255.26"],
+            fleet_boundaries=types.SimpleNamespace(categorize=lambda _vmid: ("production", "operator")),
+            _owned_vmids={100, 5002},
+            _acknowledged_out_of_contract_vmids=set(),
+        )
+
+        with patch("freq.core.config.save_hosts_toml") as mock_save:
+            changed = _reconcile_existing_managed_hosts(cfg, {})
+
+        self.assertEqual(changed, [])
+        self.assertFalse(hosts[0].managed)
+        self.assertFalse(hosts[1].managed)
+        mock_save.assert_not_called()
+
     def test_scan_fleet_skips_inventory_only_by_boundary_even_if_hosts_stale(self):
         src = self._src()
         scan_src = src.split("def _scan_fleet", 1)[1].split("def _init_check", 1)[0]
