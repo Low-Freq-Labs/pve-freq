@@ -31,11 +31,18 @@ existing fail-closed setup security boundary.
 - Every response sets `Cache-Control: no-store`.
 - Mutating authenticated calls require the session cookie and
   `X-Freq-CSRF`.
+- Browser-primary setup is served over the bootstrap self-signed certificate.
+  The operator performs an explicit trust-on-first-use check for the fresh
+  box; replacement with operator-owned certificate lifecycle is post-init.
+- The setup cookie is `HttpOnly; SameSite=Strict; Secure; Path=/` with a
+  3600-second idle TTL. Setup refuses to mint the cookie over cleartext HTTP.
 - `setup_id`, `discovery_id`, `contract_id`, and job IDs are opaque. The
   browser must not parse them.
 - A caller may supply `client_request_id`, a UUID generated once per user
-  action. Repeating the same action with the same ID returns the existing job
-  or result instead of starting another mutation.
+  action. For authenticated job/contract mutations, repeating the same action
+  with the same ID returns the existing job or result instead of starting
+  another mutation. `create-admin` is deliberately excluded after the first
+  user exists and returns the pinned 409/403 response below.
 - Passwords, API keys, private keys, and sudo passwords are write-only. They
   never appear in a response, progress message, log line, exception, audit
   field, URL, or process argument.
@@ -128,11 +135,22 @@ The status response retains the existing truth fields (`initialized`,
 
 For an unauthenticated `needs_operator` response, opaque IDs are `null`.
 
+### Session resume after reload
+
+The browser resumes an existing HttpOnly setup session through the existing
+authenticated `GET /api/auth/verify` endpoint. A valid response includes
+`valid`, `user`, `role`, `csrf_token`, `auth_mode`, `session_age_s`,
+`session_idle_s`, `session_ttl_s`, and `session_timeout_s`. The frontend must
+call it after reload before issuing another setup mutation and must replace its
+in-memory CSRF token with the returned value. `valid: false` returns the user
+to login/recovery; the browser never reads the HttpOnly cookie itself.
+
 ## 1. First operator
 
 ### `POST /api/setup/create-admin`
 
-This existing endpoint becomes the only unauthenticated setup mutation.
+This existing endpoint becomes the only unauthenticated setup mutation. It is
+available only while no dashboard user exists.
 
 Request:
 
@@ -163,8 +181,11 @@ cookie session:
 ```
 
 The password is hashed into the vault and verified before `users.conf` is
-changed. A partial write fails closed. A retry with the same username and
-password during the open setup window resumes the same setup session.
+changed. A partial write fails closed. Once any dashboard user exists, this
+endpoint never resumes or replaces that account: it returns
+`409 operator_exists` while the authenticated setup window is incomplete, or
+`403 setup_closed` after completion. Reload/session resume uses
+`GET /api/auth/verify`, not a repeated password submission.
 
 ## 2. Discovery
 
@@ -300,8 +321,11 @@ Device rows contain:
 ```
 
 Device `kind` is an allowlisted product type such as `pfsense`, `truenas`,
-`switch`, `idrac`, or `unknown`. Unknown devices may be acknowledged but
-cannot be owned until assigned a supported kind.
+`switch`, `idrac`, or `unknown`. In v1 an unknown device is
+acknowledged-only: the frontend disables owned placement with honest copy and
+the backend rejects an owned unknown row with `422 unsupported_device_kind`.
+Assigning or overriding a device kind is intentionally outside the frozen v1
+schema.
 
 ## 3. Contract from selections
 
@@ -548,6 +572,12 @@ On failure:
 - Stored selections and credential-presence metadata remain available for a
   bounded retry; bootstrap/device secret values never return to the browser.
 
+The setup-scoped vault namespace is deleted after successful init and browser
+marker completion. It is also deleted when the setup window is abandoned by
+session/setup TTL expiry or authenticated setup reset. A failed discovery or
+init retains it only for the bounded retry window; expiry cleanup is mandatory
+and never deletes the durable first-operator password namespace.
+
 ## Polling and retention
 
 - Discovery: begin at 1000 ms and honor each `poll_after_ms`; no faster than
@@ -557,6 +587,9 @@ On failure:
 - Only one active discovery and one active init are allowed per setup.
 - Completed job metadata and non-secret results remain available for at least
   one hour or until setup completes.
+- The setup session and its setup-scoped vault namespace expire after 3600
+  seconds of inactivity. Cleanup runs on expiry observation and periodic
+  retention; abandoned secrets must not wait for the next installation.
 - If process restart loses an in-memory job, the endpoint returns 410 rather
   than claiming idle or success. Durable `.initialized` and marker truth still
   wins in `/api/setup/status`.
