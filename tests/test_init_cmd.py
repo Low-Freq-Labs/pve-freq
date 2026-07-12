@@ -1909,6 +1909,7 @@ class TestPveUninstall(unittest.TestCase):
         self.assertEqual(reason, "not_found")
         cleanup_cmd = ssh.call_args_list[1].args[0]
         self.assertIn("sudo -n sh -c", cleanup_cmd)
+        self.assertEqual(ssh.call_args_list[1].kwargs["timeout"], 120)
         self.assertIn("systemctl disable --now freq-agent.service", cleanup_cmd)
         self.assertIn("systemctl is-active --quiet freq-agent.service", cleanup_cmd)
         self.assertIn("systemctl is-enabled --quiet freq-agent.service", cleanup_cmd)
@@ -1934,6 +1935,27 @@ class TestPveUninstall(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("POSTCHECK_ACCOUNT_PRESENT", reason)
         self.assertIn("POSTCHECK_AGENT_ACTIVE", reason)
+
+    @patch("freq.modules.init_cmd._uninstall_auth_ssh")
+    def test_truenas_bootstrap_cleanup_keeps_appliance_not_found_contract(self, mock_auth_ssh):
+        from freq.modules.init_cmd import _remove_unix_with_auth
+
+        ssh = MagicMock(side_effect=[
+            (0, "OK\n", ""),
+            (0, "NOT_FOUND\n", ""),
+        ])
+        mock_auth_ssh.return_value = ssh
+
+        ok, reason = _remove_unix_with_auth(
+            "10.25.10.201",
+            "freq-admin",
+            {"user": "freq-ops", "key_path": "/tmp/bootstrap", "password": ""},
+            htype="truenas",
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "not_found")
+        self.assertEqual(ssh.call_args_list[1].kwargs["timeout"], 30)
 
     @patch("freq.modules.init_cmd._remove_unix_with_auth")
     @patch("freq.modules.init_cmd._remove_linux")

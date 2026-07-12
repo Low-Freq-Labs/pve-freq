@@ -105,6 +105,7 @@ def _write_init_status(cfg, data):
 
 # Timeouts (seconds)
 DEFAULT_CMD_TIMEOUT = 30
+UNINSTALL_LINUX_CLEANUP_TIMEOUT = 120
 SSH_CONNECT_TIMEOUT = 5
 IDRAC_SETUP_TIMEOUT = 60
 IDRAC_VERIFY_TIMEOUT = 15
@@ -7777,10 +7778,13 @@ if [ "$post_fail" -ne 0 ]; then exit 6; fi
 if [ "$account_was_present" -eq 1 ]; then echo ACCOUNT_REMOVED; else echo NOT_FOUND; fi
 echo POSTCHECK_OK
 """
-    rc, out, err = _ssh(_sudo_shell(script), timeout=DEFAULT_CMD_TIMEOUT)
+    cleanup_timeout = (
+        UNINSTALL_LINUX_CLEANUP_TIMEOUT if htype in {"linux", "docker"} else DEFAULT_CMD_TIMEOUT
+    )
+    rc, out, err = _ssh(_sudo_shell(script), timeout=cleanup_timeout)
     if rc != 0:
         return False, (err or out or "bootstrap cleanup failed").strip()
-    if "POSTCHECK_OK" not in (out or ""):
+    if htype in {"linux", "docker"} and "POSTCHECK_OK" not in (out or ""):
         return False, (out or "bootstrap cleanup missing post-check evidence").strip()
     if "NOT_FOUND" in (out or ""):
         return True, "not_found"
