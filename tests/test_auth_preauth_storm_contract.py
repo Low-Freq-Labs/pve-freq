@@ -266,19 +266,19 @@ class TestPreAuthBootstrapIsGated(unittest.TestCase):
 
     def test_show_app_kicks_off_loaders(self):
         """_showApp must be the single entry point that starts
-        loadHome (or the deep-linked view), startSparklines, and
-        startSSE."""
+        the location-derived view, startSparklines, and startSSE."""
         src = _js()
         body = _function_body(src, "_showApp")
         self.assertIn("startSparklines()", body,
                       "_showApp must call startSparklines()")
         self.assertIn("startSSE()", body,
                       "_showApp must call startSSE()")
-        self.assertIn("loadHome()", body,
-                      "_showApp must call loadHome() as the fallback "
-                      "initial route")
-        self.assertIn("switchView", body,
-                      "_showApp must honor a deep-linked initial view")
+        self.assertIn("_viewFromLocation()", body,
+                      "_showApp must resolve the initial route from location")
+        self.assertIn("switchView(_initView,true)", body,
+                      "_showApp must activate the resolved initial view")
+        self.assertIn("_viewRouter.replaceCurrent(_initView)", body,
+                      "_showApp must synchronize canonical browser history")
 
 
 class TestNoRecursiveLogoutInAuthFetch(unittest.TestCase):

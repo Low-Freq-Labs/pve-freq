@@ -12,7 +12,9 @@ def test_device_assignment_owns_admin_mount():
     mount_idx = APP_HTML.index('id="device-admin-mount"')
     api_idx = APP_HTML.index("<h3>API</h3>")
     assert device_idx < mount_idx < api_idx
-    assert "Classify hosts and existing VMs as PROD, LAB, TEMP, or OOC." in APP_HTML
+    device_assignment = APP_HTML[device_idx:api_idx]
+    assert "Classify hosts and existing VMs as PROD, LAB, TEMP, or OOC" in device_assignment
+    assert "out of contract" in device_assignment
 
 
 def test_fleet_admin_moves_into_device_assignment_not_settings_sibling():
