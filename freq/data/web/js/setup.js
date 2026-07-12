@@ -111,6 +111,10 @@
     $('setup-health').textContent=text(data.state || data.setup_health || 'unknown').replace(/_/g,' ');
     $('setup-reason').textContent=data.setup_reason || 'Setup state received without additional detail.';
   }
+  function setLocalTruth(state,reason){
+    $('setup-health').textContent=text(state).replace(/_/g,' ');
+    $('setup-reason').textContent=reason;
+  }
   function rememberSession(data){
     model.csrf=text(data.csrf_token);
     var ttl=Number(data.session_ttl_s || 0);
@@ -178,6 +182,7 @@
       .then(function(data){
         if(!data.session_started || !data.csrf_token){throw new Error('The operator was not given an authenticated setup session.');}
         model.setupId=text(data.setup_id);rememberSession(data);
+        setLocalTruth(data.state || 'collecting','Operator session established. Cluster access has not been submitted.');
         $('operator-pass').value='';$('operator-pass2').value='';
         advance('connect');
       }).catch(function(error){
@@ -218,6 +223,7 @@
       bootstrap:{username:trim('bootstrap-user'),password:$('bootstrap-pass').value}
     },true).then(function(data){
       model.discoveryId=text(data.discovery && data.discovery.id);model.contractId='';model.contract=null;model.selections={};
+      setLocalTruth('discovering','Bounded discovery is running against the declared PVE nodes.');
       $('bootstrap-pass').value='';advance('discover');
       progress('discovery',{phase:'queued',message:'Discovery accepted and queued.'});
       scheduleDiscovery(data.discovery && data.discovery.poll_after_ms);
@@ -264,6 +270,7 @@
     var body=$('resource-rows');body.replaceChildren();model.selections={};
     rows.forEach(function(entry,index){body.appendChild(renderResourceRow(entry.item,entry.group,index));});
     $('review-surface').hidden=false;
+    setLocalTruth('selecting','Discovery succeeded. Every discovered row still requires an explicit decision.');
     progress('discovery',{phase:'complete',current:rows.length,total:rows.length,message:'Discovery complete. Review every row before freezing the contract.'});
     updateReviewCount();
   }
@@ -308,7 +315,7 @@
   function saveContract(){
     setError('');var button=$('save-contract');if(button.disabled){return;}setBusy(button,true,'Freezing contract…');
     postJson(API.contract,{schema:SCHEMA,setup_id:model.setupId,discovery_id:model.discoveryId,client_request_id:uuid(),selections:Object.keys(model.selections).map(function(id){return model.selections[id];})},true)
-      .then(function(data){model.contract=data.contract || {};model.contractId=text(model.contract.id);renderContractSummary();renderCredentials();})
+      .then(function(data){model.contract=data.contract || {};model.contractId=text(model.contract.id);setLocalTruth(model.contract.ready?'ready':'credentials',model.contract.ready?'The frozen contract is ready for init.':'The frozen contract still requires owned-device credentials.');renderContractSummary();renderCredentials();})
       .catch(function(error){setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
   }
   function deviceFor(id){
@@ -358,7 +365,7 @@
     if(!requirements.length){renderContractSummary();advance('launch');return;}
     var button=$('save-credentials');setBusy(button,true,'Storing in vault…');
     postJson(API.credentials,{schema:SCHEMA,setup_id:model.setupId,contract_id:model.contractId,client_request_id:uuid(),credentials:collectCredentials()},true)
-      .then(function(data){clearCredentialInputs();if(!data.ready){throw new Error('Required device credentials are still incomplete. Stored values were not returned.');}model.contract.ready=true;renderContractSummary();advance('launch');})
+      .then(function(data){clearCredentialInputs();if(!data.ready){throw new Error('Required device credentials are still incomplete. Stored values were not returned.');}model.contract.ready=true;setLocalTruth('ready','Contract and required credential presence are complete. Init may start.');renderContractSummary();advance('launch');})
       .catch(function(error){clearCredentialInputs();setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
   }
   function renderContractSummary(){
@@ -375,7 +382,7 @@
     event.preventDefault();setError('');var invalid=validateLaunch();if(invalid){setError(invalid);return;}
     var button=$('start-init');setBusy(button,true,'Starting init…');
     postJson(API.initStart,{schema:SCHEMA,setup_id:model.setupId,discovery_id:model.discoveryId,contract_id:model.contractId,client_request_id:uuid(),service_account:{username:trim('service-account'),password:$('service-pass').value},options:{ssh_mode:'sudo',pdm:{mode:'skip'},ssl:{mode:'defer'}}},true)
-      .then(function(data){$('service-pass').value='';$('service-pass2').value='';model.initJobId=text(data.job && data.job.id);model.handoffRetried=false;advance('progress');progress('progress',{phase:'queued',message:'Init accepted and queued.'});scheduleInit(data.job && data.job.poll_after_ms);})
+      .then(function(data){$('service-pass').value='';$('service-pass2').value='';model.initJobId=text(data.job && data.job.id);model.handoffRetried=false;setLocalTruth('initializing','Browser-launched init is running. Completion has not been assumed.');advance('progress');progress('progress',{phase:'queued',message:'Init accepted and queued.'});scheduleInit(data.job && data.job.poll_after_ms);})
       .catch(function(error){$('service-pass').value='';$('service-pass2').value='';setError(error.message,error.field);}).finally(function(){setBusy(button,false);});
   }
   function scheduleInit(delay){window.clearTimeout(model.initTimer);model.initTimer=window.setTimeout(pollInit,clampPoll(delay,1000));}

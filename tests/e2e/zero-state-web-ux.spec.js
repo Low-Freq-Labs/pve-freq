@@ -132,6 +132,7 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
   await page.locator('#discovery-form').evaluate(form => form.requestSubmit());
 
   await expect(page.locator('#resource-rows tr')).toHaveCount(3);
+  await expect(page.locator('#setup-health')).toHaveText('selecting');
   await expect(page.locator('#review-count')).toHaveText('0 of 3 decided');
   const vm = page.locator('tr[data-resource-id="pve:pve01:qemu:100"]');
   await vm.locator('input[value="owned"]').check();
@@ -167,4 +168,3 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
     if (mutation.path !== '/api/setup/create-admin') expect(mutation.csrf).toBe(CSRF);
   }
 });
-
