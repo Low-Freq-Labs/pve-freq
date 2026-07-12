@@ -148,6 +148,22 @@ detect_service_account() {
   printf '%s\n' "$svc_user"
 }
 
+detect_setup_account() {
+  # The first-run HTTPS listener must use an identity that exists before
+  # browser init creates the final service account. Prefer the sudo caller,
+  # then the canonical bootstrap account, with root only as a direct-root
+  # installation fallback.
+  local setup_user="${SUDO_USER:-}"
+  if [[ -z "$setup_user" || "$setup_user" == "root" ]] || ! id "$setup_user" &>/dev/null; then
+    if id freq-ops &>/dev/null; then
+      setup_user="freq-ops"
+    else
+      setup_user="root"
+    fi
+  fi
+  printf '%s\n' "$setup_user"
+}
+
 banner() {
   echo ""
   local title="PVE FREQ v${FREQ_VERSION} Installer"
@@ -533,7 +549,75 @@ post_install() {
     # Detect service account (match what init creates)
     local svc_user
     svc_user=$(detect_service_account)
-    if ! PYTHONPATH="${INSTALL_DIR}" python3 - "${svc_user}" "${INSTALL_DIR}" > /etc/systemd/system/freq-serve.service <<'PY'
+    if [[ ! -e "$INSTALL_DIR/data/.initialized" ]]; then
+      local setup_user setup_group bootstrap_tls_dir bootstrap_cert bootstrap_key
+      setup_user=$(detect_setup_account)
+      setup_group=$(id -gn "$setup_user")
+      bootstrap_tls_dir="$INSTALL_DIR/tls/bootstrap"
+      bootstrap_cert="$bootstrap_tls_dir/freq-bootstrap.crt"
+      bootstrap_key="$bootstrap_tls_dir/freq-bootstrap.key"
+
+      install -d -o "$setup_user" -g "$setup_group" -m 0700 "$bootstrap_tls_dir"
+      if [[ ! -f "$bootstrap_cert" || ! -f "$bootstrap_key" ]]; then
+        rm -f "$bootstrap_cert" "$bootstrap_key"
+        if ! openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
+          -subj "/CN=freq-bootstrap/O=PVE FREQ" \
+          -keyout "$bootstrap_key" -out "$bootstrap_cert" >/dev/null 2>&1; then
+          fail "Could not generate first-run HTTPS certificate"
+          exit 1
+        fi
+      fi
+      chown "$setup_user:$setup_group" "$bootstrap_cert" "$bootstrap_key"
+      chmod 0644 "$bootstrap_cert"
+      chmod 0600 "$bootstrap_key"
+
+      if ! PYTHONPATH="${INSTALL_DIR}" python3 - \
+        "$INSTALL_DIR/conf/freq.toml" "$bootstrap_cert" "$bootstrap_key" <<'PY'
+import os
+import sys
+
+from freq.modules.init_cmd import _update_toml_value
+
+path, cert, key = sys.argv[1:]
+with open(path, encoding="utf-8") as fh:
+    content = fh.read()
+content = _update_toml_value(content, "tls_cert", cert)
+content = _update_toml_value(content, "tls_key", key)
+tmp = path + ".bootstrap-tmp"
+with open(tmp, "w", encoding="utf-8") as fh:
+    fh.write(content)
+os.replace(tmp, path)
+PY
+      then
+        fail "Could not configure first-run HTTPS certificate"
+        exit 1
+      fi
+
+      # Only mutable setup state is delegated to the bootstrap identity.
+      # Product code remains root-owned; init later transfers runtime state
+      # to the final service account.
+      chown -R "$setup_user:$setup_group" "$INSTALL_DIR/conf" "$INSTALL_DIR/data" "$bootstrap_tls_dir"
+      chmod 0700 "$INSTALL_DIR/data/vault" "$INSTALL_DIR/data/keys" "$bootstrap_tls_dir"
+
+      if ! PYTHONPATH="${INSTALL_DIR}" python3 - \
+        "$setup_user" "$setup_group" "$INSTALL_DIR" > /etc/systemd/system/pve-freq-setup.service <<'PY'
+import sys
+from freq.core.service_units import setup_dashboard_service_unit
+
+sys.stdout.write(setup_dashboard_service_unit(sys.argv[1], sys.argv[2], sys.argv[3]))
+PY
+      then
+        fail "Could not render pve-freq-setup.service"
+        exit 1
+      fi
+      systemctl disable --now freq-serve.service freq-watchdog.service >/dev/null 2>&1 || true
+      systemctl daemon-reload
+      systemctl enable --now pve-freq-setup.service
+      ok "First-run HTTPS unit started (pve-freq-setup.service)"
+      info " User=${setup_user}, FREQ_DIR=${INSTALL_DIR}"
+      info "Open https://$(hostname -I 2>/dev/null | awk '{print $1}'):8888 to finish setup"
+      echo ""
+    elif ! PYTHONPATH="${INSTALL_DIR}" python3 - "${svc_user}" "${INSTALL_DIR}" > /etc/systemd/system/freq-serve.service <<'PY'
 import sys
 from freq.core.service_units import dashboard_service_unit
 
@@ -542,8 +626,9 @@ PY
     then
       fail "Could not render canonical freq-serve.service"
       exit 1
-    fi
-    if getent group "${svc_user}" >/dev/null 2>&1; then
+    else
+      rm -f /etc/systemd/system/pve-freq-setup.service
+      if getent group "${svc_user}" >/dev/null 2>&1; then
       if ! id -u freq-watch >/dev/null 2>&1; then
         useradd --system --no-create-home --shell /usr/sbin/nologin --gid "${svc_user}" freq-watch
       else
@@ -556,8 +641,8 @@ PY
       fi
       install -d -o freq-watch -g freq-watch -m 0755 /var/lib/freq-watchdog
       warn "Service-account group ${svc_user} does not exist yet; freq init will finalize watchdog group ownership."
-    fi
-    cat > /etc/systemd/system/freq-watchdog.service << UNIT
+      fi
+      cat > /etc/systemd/system/freq-watchdog.service << UNIT
 [Unit]
 Description=PVE FREQ Watchdog
 After=network-online.target freq-serve.service
@@ -594,15 +679,16 @@ SyslogIdentifier=freq-watchdog
 [Install]
 WantedBy=multi-user.target
 UNIT
-    systemctl daemon-reload
-    systemctl enable freq-serve
-    systemctl enable freq-watchdog
-    ok "Systemd unit installed (freq-serve.service)"
-    ok "Systemd unit installed (freq-watchdog.service)"
-    info " User=${svc_user}, FREQ_DIR=${INSTALL_DIR}"
-    info "Start with: systemctl start freq-serve"
-    info "Watchdog starts with: systemctl start freq-watchdog"
-    echo ""
+      systemctl daemon-reload
+      systemctl enable freq-serve
+      systemctl enable freq-watchdog
+      ok "Systemd unit installed (freq-serve.service)"
+      ok "Systemd unit installed (freq-watchdog.service)"
+      info " User=${svc_user}, FREQ_DIR=${INSTALL_DIR}"
+      info "Start with: systemctl start freq-serve"
+      info "Watchdog starts with: systemctl start freq-watchdog"
+      echo ""
+    fi
   fi
 
   # Next steps
@@ -612,7 +698,7 @@ UNIT
   echo -e "  1. Run ${C_CYAN}sudo freq init${C_RESET} — discovers your cluster and deploys fleet access"
   echo -e "  2. Run ${C_CYAN}freq doctor${C_RESET} to verify everything is healthy"
   if [[ "$WITH_SYSTEMD" == true ]]; then
-    echo -e "  3. Run ${C_CYAN}systemctl start freq-serve${C_RESET} to start the dashboard"
+    echo -e "  3. Open the first-run HTTPS URL shown above to finish setup"
   else
     echo -e "  3. Run ${C_CYAN}freq serve${C_RESET} to start the dashboard"
   fi
@@ -679,6 +765,12 @@ do_uninstall() {
     rm -f /etc/systemd/system/freq-serve.service
     systemctl daemon-reload
     ok "Removed freq-serve.service"
+  fi
+  if [[ -f /etc/systemd/system/pve-freq-setup.service ]]; then
+    systemctl disable --now pve-freq-setup.service >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/pve-freq-setup.service
+    systemctl daemon-reload
+    ok "Removed pve-freq-setup.service"
   fi
   if [[ -f /etc/systemd/system/freq-watchdog.service ]]; then
     systemctl disable --now freq-watchdog.service >/dev/null 2>&1 || true

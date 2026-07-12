@@ -63,6 +63,21 @@ class TestInstallerPreservesGeneratedTls(unittest.TestCase):
         local_copy = src.split("rsync -a --delete", 1)[1].split('"$SOURCE/" "$INSTALL_DIR/"', 1)[0]
         self.assertIn("--exclude='tls/'", local_copy)
 
+    def test_fresh_systemd_install_creates_distinct_bootstrap_tls(self):
+        src = (FREQ_ROOT / "install.sh").read_text()
+        self.assertIn("freq-bootstrap.crt", src)
+        self.assertIn("freq-bootstrap.key", src)
+        self.assertIn("pve-freq-setup.service", src)
+        self.assertIn("setup_dashboard_service_unit", src)
+        self.assertIn("systemctl enable --now pve-freq-setup.service", src)
+        self.assertNotEqual(src.find("freq-bootstrap.crt"), -1)
+
+    def test_bootstrap_identity_is_not_final_service_identity(self):
+        src = (FREQ_ROOT / "install.sh").read_text()
+        self.assertIn("detect_setup_account", src)
+        self.assertIn('${SUDO_USER:-}', src)
+        self.assertIn("Data ownership deferred until init creates runtime account", src)
+
 
 if __name__ == "__main__":
     unittest.main()

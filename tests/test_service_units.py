@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from freq.core.service_units import dashboard_service_unit
+from freq.core.service_units import dashboard_service_unit, setup_dashboard_service_unit
 
 
 def test_dashboard_unit_contains_complete_host_lifecycle_contract():
@@ -62,3 +62,22 @@ def test_real_consumers_use_renderer_and_contrib_definition_is_absent():
     assert not Path("contrib/freq-serve.service").exists()
     assert "Description=PVE FREQ Dashboard" not in installer
     assert "Description=PVE FREQ Dashboard" not in init_source
+
+
+def test_setup_unit_uses_existing_identity_and_stops_at_initialized_marker():
+    unit = setup_dashboard_service_unit("freq-ops", "freq-ops", "/opt/pve-freq")
+
+    assert "Description=PVE FREQ First-Run HTTPS Setup" in unit
+    assert "User=freq-ops" in unit
+    assert "Group=freq-ops" in unit
+    assert "ConditionPathExists=!/opt/pve-freq/data/.initialized" in unit
+    assert 'ExecStart="/usr/local/bin/freq" serve' in unit
+    assert "Restart=on-failure" in unit
+
+
+@pytest.mark.parametrize("value", ["", "bad value", "bad\nvalue", "UPPER"])
+def test_setup_unit_rejects_invalid_identity(value):
+    with pytest.raises(ValueError):
+        setup_dashboard_service_unit(value, "freq-ops", "/opt/pve-freq")
+    with pytest.raises(ValueError):
+        setup_dashboard_service_unit("freq-ops", value, "/opt/pve-freq")

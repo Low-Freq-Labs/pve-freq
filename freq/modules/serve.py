@@ -3984,7 +3984,10 @@ def _schedule_setup_runtime_handoff(cfg):
     if os.geteuid() != 0:
         prefix = ["sudo", "-n"]
     script = (
-        " ".join(shlex.quote(part) for part in prefix + ["systemctl", "stop", "pve-freq-setup.service"])
+        " ".join(
+            shlex.quote(part)
+            for part in prefix + ["systemctl", "disable", "--now", "pve-freq-setup.service"]
+        )
         + " >/dev/null 2>&1 || true; "
         + f"kill -TERM {current_pid} >/dev/null 2>&1 || true; "
         + "sleep 2; "

@@ -9,8 +9,8 @@ Proves:
 6. Response includes initialized field for partial-init distinction
 """
 
-import os
 import json
+import os
 import tempfile
 import types
 import unittest
@@ -201,6 +201,7 @@ class TestWebInitRuntimeHandoff(unittest.TestCase):
         helper = src.split("def _schedule_setup_runtime_handoff", 1)[1].split("\ndef _run_setup_init_job", 1)[0]
         self.assertIn("systemd-run", helper)
         self.assertIn("pve-freq-setup.service", helper)
+        self.assertIn('"disable", "--now"', helper)
         self.assertIn("freq-serve.service", helper)
         self.assertIn("kill -TERM", helper)
 

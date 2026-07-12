@@ -64,3 +64,51 @@ SyslogIdentifier=freq-serve
 [Install]
 WantedBy=multi-user.target
 """
+
+
+def setup_dashboard_service_unit(
+    setup_user: str,
+    setup_group: str,
+    install_dir: str,
+    *,
+    freq_bin: str = "/usr/local/bin/freq",
+) -> str:
+    """Render the temporary pre-init HTTPS listener.
+
+    The managed dashboard cannot run as its final service account until init
+    creates that account.  This unit deliberately uses an existing bootstrap
+    identity and is disabled by the web-init runtime handoff.
+    """
+    if not _SERVICE_USER_RE.fullmatch(str(setup_user or "")):
+        raise ValueError(f"invalid setup account: {setup_user!r}")
+    if not _SERVICE_USER_RE.fullmatch(str(setup_group or "")):
+        raise ValueError(f"invalid setup group: {setup_group!r}")
+    if not str(install_dir or "").startswith("/"):
+        raise ValueError("install_dir must be an absolute path")
+    if not str(freq_bin or "").startswith("/"):
+        raise ValueError("freq_bin must be an absolute path")
+
+    return f"""[Unit]
+Description=PVE FREQ First-Run HTTPS Setup
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!{_unit_path(install_dir)}/data/.initialized
+
+[Service]
+Type=simple
+User={setup_user}
+Group={setup_group}
+WorkingDirectory={_unit_path(install_dir)}
+Environment={_unit_quote(f"FREQ_DIR={install_dir}")}
+ExecStart={_unit_quote(freq_bin)} serve
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+KillMode=mixed
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pve-freq-setup
+
+[Install]
+WantedBy=multi-user.target
+"""
