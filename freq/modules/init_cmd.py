@@ -7796,6 +7796,11 @@ if getent passwd "$svc" >/dev/null 2>&1; then
   svc_uid=$(id -u "$svc")
   account_was_present=1
 fi
+# The management host is also part of the explicit fleet target map. Its
+# dashboard/watchdog run as the managed account and can recreate cache files
+# while the UID sweep is in progress. Stop and disable them before deleting
+# any account-owned residue. On ordinary fleet hosts these units are absent.
+systemctl disable --now freq-serve.service freq-watchdog.service >/dev/null 2>&1 || true
 systemctl disable --now freq-agent.service >/dev/null 2>&1 || true
 rm -f /etc/systemd/system/freq-agent.service /etc/sudoers.d/freq-$svc /usr/local/etc/sudoers.d/freq-$svc 2>/dev/null || true
 rm -rf {shlex.quote(AGENT_REMOTE_DIR)} 2>/dev/null || true
@@ -7847,6 +7852,10 @@ if systemctl is-active --quiet freq-agent.service; then echo POSTCHECK_AGENT_ACT
 if systemctl is-enabled --quiet freq-agent.service; then echo POSTCHECK_AGENT_ENABLED; post_fail=1; fi
 if [ -e /etc/systemd/system/freq-agent.service ]; then echo POSTCHECK_AGENT_UNIT_PRESENT; post_fail=1; fi
 if [ -e {shlex.quote(AGENT_REMOTE_DIR)} ]; then echo POSTCHECK_AGENT_DIR_PRESENT; post_fail=1; fi
+if systemctl is-active --quiet freq-serve.service; then echo POSTCHECK_DASHBOARD_ACTIVE; post_fail=1; fi
+if systemctl is-enabled --quiet freq-serve.service; then echo POSTCHECK_DASHBOARD_ENABLED; post_fail=1; fi
+if systemctl is-active --quiet freq-watchdog.service; then echo POSTCHECK_WATCHDOG_ACTIVE; post_fail=1; fi
+if systemctl is-enabled --quiet freq-watchdog.service; then echo POSTCHECK_WATCHDOG_ENABLED; post_fail=1; fi
 if [ -n "$svc_uid" ] && find / -xdev -uid "$svc_uid" -print -quit 2>/dev/null | grep -q .; then
   echo POSTCHECK_ORPHAN_UID_PRESENT
   post_fail=1

@@ -1968,9 +1968,21 @@ class TestPveUninstall(unittest.TestCase):
         cleanup_cmd = ssh.call_args_list[1].args[0]
         self.assertIn("sudo -n sh -c", cleanup_cmd)
         self.assertEqual(ssh.call_args_list[1].kwargs["timeout"], 120)
+        self.assertIn(
+            "systemctl disable --now freq-serve.service freq-watchdog.service",
+            cleanup_cmd,
+        )
         self.assertIn("systemctl disable --now freq-agent.service", cleanup_cmd)
+        self.assertLess(
+            cleanup_cmd.index("systemctl disable --now freq-serve.service"),
+            cleanup_cmd.index("find / -xdev -uid"),
+        )
         self.assertIn("systemctl is-active --quiet freq-agent.service", cleanup_cmd)
         self.assertIn("systemctl is-enabled --quiet freq-agent.service", cleanup_cmd)
+        self.assertIn("POSTCHECK_DASHBOARD_ACTIVE", cleanup_cmd)
+        self.assertIn("POSTCHECK_DASHBOARD_ENABLED", cleanup_cmd)
+        self.assertIn("POSTCHECK_WATCHDOG_ACTIVE", cleanup_cmd)
+        self.assertIn("POSTCHECK_WATCHDOG_ENABLED", cleanup_cmd)
         self.assertIn("find / -xdev -uid", cleanup_cmd)
         self.assertIn("POSTCHECK_OK", cleanup_cmd)
 
