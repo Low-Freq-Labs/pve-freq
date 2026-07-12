@@ -465,9 +465,17 @@
   function loadContract(){
     return getJson(API.contract).then(function(data){model.contract=data.contract || {};model.contractId=text(model.contract.id || model.contractId);renderContractSummary();return model.contract;});
   }
+  function statusVerifiedComplete(status){
+    return status && status.state==='complete' && status.initialized===true && status.web_setup_complete===true;
+  }
   function resumeFromStatus(status){
     var state=status.state || 'collecting';
-    if(state==='complete'){model.unlocked=5;advance('progress');$('completion-card').hidden=false;$('progress-state').textContent='complete';return;}
+    $('completion-card').hidden=true;
+    if(state==='complete'){
+      model.unlocked=5;advance('progress');
+      if(!statusVerifiedComplete(status)){setError('Setup state claimed complete without both durable completion markers. No completion was assumed.');return;}
+      $('completion-card').hidden=false;$('progress-state').textContent='complete';return;
+    }
     if(state==='collecting'){advance('connect');return;}
     if(state==='discovering'){model.discoveryId=text(status.active_discovery_id);advance('discover');scheduleDiscovery(0);return;}
     if(state==='selecting'){model.discoveryId=text(status.active_discovery_id);advance('discover');loadDiscovery();return;}

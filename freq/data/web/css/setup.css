@@ -5,6 +5,7 @@
   --green:#70e09b;--amber:#ffc86b;--black:#050608;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{min-height:100%;background:var(--bg);scroll-behavior:smooth}
 body{min-height:100vh;margin:0;background:radial-gradient(circle at 15% -10%,rgba(123,47,190,.2),transparent 34rem),linear-gradient(180deg,rgba(255,255,255,.025),transparent 12rem),var(--bg);color:var(--text);font-family:Inter,Segoe UI,system-ui,-apple-system,sans-serif}
 button,input,select,textarea{font:inherit}

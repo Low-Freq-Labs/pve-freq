@@ -41,6 +41,7 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
   let setupState = 'needs_operator';
   let contractAttempts = 0;
   let credentialAttempts = 0;
+  let initPolls = 0;
   const mutations = [];
 
   await page.route('**/api/setup/status', route => {
@@ -128,6 +129,10 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
     return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true, schema: 'zero-state-web-v1', job: { id: 'init-opaque', state: 'queued', poll_after_ms: 500 } }) });
   });
   await page.route('**/api/setup/init/status?id=init-opaque', route => {
+    initPolls += 1;
+    if (initPolls === 1) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, schema: 'zero-state-web-v1', job: { id: 'init-opaque', state: 'running', returncode: null, initialized: false, web_setup_complete: false, poll_after_ms: 1000, progress: { phase: 6, phase_name: 'Fleet deployment', current: 18, total: 39, message: 'Init is still running.' }, log_tail: ['[18/39] deployment in progress'] } }) });
+    }
     setupState = 'complete';
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, schema: 'zero-state-web-v1', job: { id: 'init-opaque', state: 'succeeded', returncode: 0, initialized: true, web_setup_complete: true, poll_after_ms: 0, progress: { phase: 12, phase_name: 'Verification', current: 39, total: 39, message: 'All verification checks passed.' }, log_tail: ['[39/39] verification passed'] } }) });
   });
@@ -190,6 +195,8 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
   await page.locator('#service-pass2').fill('service-password');
   await page.locator('#launch-form').evaluate(form => form.requestSubmit());
 
+  await expect(page.locator('#step-progress')).toBeVisible();
+  await expect(page.locator('#completion-card')).toBeHidden();
   await expect(page.locator('#completion-card')).toBeVisible();
   await expect(page.locator('#progress-state')).toHaveText('complete');
   await expect(page.locator('#phase-log')).toContainText('verification passed');
@@ -200,6 +207,22 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
     expect(forbiddenKey(mutation.body), `${mutation.path} emitted a forbidden browser key`).toBe('');
     if (mutation.path !== '/api/setup/create-admin') expect(mutation.csrf).toBe(CSRF);
   }
+});
+
+test('complete state without both durable markers never reveals completion', async ({ page }) => {
+  await page.route('**/api/setup/status', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ ...completeStatus('complete'), initialized: false, web_setup_complete: false })
+  }));
+  await page.route('**/api/auth/verify', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ valid: true, user: 'admin', role: 'admin', csrf_token: CSRF, auth_mode: 'cookie', session_ttl_s: 3600 })
+  }));
+
+  await page.goto('/setup');
+  await expect(page.locator('#step-progress')).toBeVisible();
+  await expect(page.locator('#completion-card')).toBeHidden();
+  await expect(page.locator('#form-error')).toContainText('without both durable completion markers');
 });
 
 test('successful empty discovery can freeze an explicit empty contract', async ({ page }) => {

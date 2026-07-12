@@ -213,6 +213,7 @@ class TestSetupJsCopy(unittest.TestCase):
         src = self._src()
         self.assertIn("!job.initialized || !job.web_setup_complete", src)
         self.assertIn("status.state!=='complete'", src)
+        self.assertIn("statusVerifiedComplete(status)", src)
         self.assertIn("No completion was assumed", src)
 
     def test_incremental_credential_success_merges_presence(self):
