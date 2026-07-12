@@ -67,6 +67,11 @@ from freq.core.health_state import (
     mark_stale,
 )
 from freq.core.host_scope import managed_probe_hosts
+from freq.core.setup_discovery import (
+    DiscoveryInputError,
+    run_setup_discovery,
+    validate_discovery_request,
+)
 from freq.core.setup_state import (
     SCHEMA as ZERO_STATE_WEB_SCHEMA,
 )
@@ -75,6 +80,7 @@ from freq.core.setup_state import (
     ensure_setup_state,
     load_setup_state,
     touch_setup_state,
+    update_setup_state,
 )
 from freq.core.ssh import run as ssh_single
 from freq.core.validate import (
@@ -85,7 +91,7 @@ from freq.jarvis.notify import notify as jarvis_notify
 from freq.jarvis.risk import _load_kill_chain
 from freq.modules.pve import _find_reachable_node, _pve_cmd
 from freq.modules.users import _load_users, _save_users_error
-from freq.modules.vault import vault_get, vault_init, vault_set
+from freq.modules.vault import vault_delete, vault_get, vault_init, vault_set
 
 IDRAC_READ_CONNECT_TIMEOUT = 10
 IDRAC_READ_COMMAND_TIMEOUT = 30
@@ -439,6 +445,8 @@ NODE_DISCOVERY_INTERVAL = 300  # 5 min — discover PVE cluster nodes
 VM_TAGS_INTERVAL = 300  # 5 min — refresh PVE VM tags
 _bg_lock = threading.Lock()
 _setup_lock = threading.Lock()
+_setup_discovery_lock = threading.Lock()
+_setup_discovery_job = None
 _setup_init_lock = threading.Lock()
 _setup_init_job = None
 _shutdown_flag = threading.Event()  # Set on SIGTERM to stop background loops
@@ -3194,14 +3202,33 @@ def _setup_forbidden_browser_input(body):
         "acknowledged_out_of_contract_vmids",
         "core_devices",
         "lab_devices",
+        "subnet",
+        "subnets",
         "toml",
     }
-    for key in body:
-        normalized = str(key or "").strip().lower()
-        if normalized in manual_fields:
-            return str(key), "manual_contract_not_allowed"
-        if normalized.endswith("_file") or normalized.endswith("_path"):
-            return str(key), "path_input_not_allowed"
+
+    def walk(value, prefix=""):
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                normalized = str(key or "").strip().lower()
+                field = f"{prefix}.{key}" if prefix else str(key)
+                if normalized in manual_fields:
+                    return field, "manual_contract_not_allowed"
+                if normalized.endswith("_file") or normalized.endswith("_path"):
+                    return field, "path_input_not_allowed"
+                found = walk(nested, field)
+                if found != ("", ""):
+                    return found
+        elif isinstance(value, list):
+            for index, nested in enumerate(value):
+                found = walk(nested, f"{prefix}[{index}]")
+                if found != ("", ""):
+                    return found
+        return "", ""
+
+    field, code = walk(body)
+    if field:
+        return field, code
     return "", ""
 
 
@@ -3212,6 +3239,127 @@ def _setup_init_snapshot():
         job = dict(_setup_init_job)
         job["lines"] = list(_setup_init_job.get("lines", []))[-300:]
         return {"running": job.get("state") == "running", "job": job}
+
+
+def _setup_discovery_snapshot():
+    with _setup_discovery_lock:
+        if not _setup_discovery_job:
+            return None
+        return json.loads(json.dumps(_setup_discovery_job))
+
+
+def _setup_discovery_payload(job):
+    payload = {
+        "id": job.get("id"),
+        "state": job.get("state", "queued"),
+        "started_at": job.get("started_at"),
+        "updated_at": job.get("updated_at"),
+        "finished_at": job.get("finished_at"),
+        "poll_after_ms": job.get("poll_after_ms", 1000),
+        "progress": dict(job.get("progress") or {}),
+    }
+    if job.get("state") == "succeeded":
+        payload["results"] = json.loads(json.dumps(job.get("results") or {}))
+    if job.get("state") == "failed":
+        payload["error"] = dict(job.get("error") or {})
+    return payload
+
+
+def _setup_discovery_progress(job_id, phase, current, total, message):
+    with _setup_discovery_lock:
+        if not _setup_discovery_job or _setup_discovery_job.get("id") != job_id:
+            return
+        _setup_discovery_job["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        _setup_discovery_job["progress"] = {
+            "phase": phase,
+            "current": int(current or 0),
+            "total": int(total or 0),
+            "message": str(message or "")[:240],
+        }
+
+
+def _run_setup_discovery_job(cfg, job_id):
+    password_file = ""
+    known_hosts_file = ""
+    try:
+        with _setup_discovery_lock:
+            if not _setup_discovery_job or _setup_discovery_job.get("id") != job_id:
+                return
+            setup_id = _setup_discovery_job["setup_id"]
+            cluster = json.loads(json.dumps(_setup_discovery_job["cluster"]))
+            username = _setup_discovery_job["bootstrap_username"]
+        password = vault_get(cfg, f"setup:{setup_id}", "bootstrap_password")
+        if not password:
+            raise RuntimeError("bootstrap_secret_missing")
+        fd, password_file = tempfile.mkstemp(prefix="freq-setup-discovery-")
+        try:
+            os.write(fd, password.encode())
+        finally:
+            os.close(fd)
+        os.chmod(password_file, 0o600)
+        known_hosts_file = f"{password_file}.known-hosts"
+        password = ""
+
+        results = run_setup_discovery(
+            cluster,
+            username,
+            password_file,
+            progress=lambda phase, current, total, message: _setup_discovery_progress(
+                job_id, phase, current, total, message
+            ),
+        )
+        finished = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        resource_count = len(results.get("resources") or []) + len(results.get("devices") or [])
+        with _setup_discovery_lock:
+            if _setup_discovery_job and _setup_discovery_job.get("id") == job_id:
+                _setup_discovery_job.update(
+                    {
+                        "state": "succeeded",
+                        "updated_at": finished,
+                        "finished_at": finished,
+                        "poll_after_ms": 0,
+                        "progress": {
+                            "phase": "complete",
+                            "current": resource_count,
+                            "total": resource_count,
+                            "message": (
+                                f"Discovered {len(results.get('resources') or [])} virtual resources "
+                                f"and {len(results.get('devices') or [])} devices."
+                            ),
+                        },
+                        "results": results,
+                    }
+                )
+        update_setup_state(cfg, phase="selecting", active_discovery_id=job_id, active_contract_id=None)
+    except Exception as exc:
+        code = str(exc) if str(exc) in {"pve_bootstrap_failed", "bootstrap_secret_missing"} else "discovery_failed"
+        finished = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with _setup_discovery_lock:
+            if _setup_discovery_job and _setup_discovery_job.get("id") == job_id:
+                _setup_discovery_job.update(
+                    {
+                        "state": "failed",
+                        "updated_at": finished,
+                        "finished_at": finished,
+                        "poll_after_ms": 0,
+                        "error": {
+                            "code": code,
+                            "message": "Discovery could not complete from the declared PVE bootstrap targets.",
+                            "retryable": True,
+                        },
+                    }
+                )
+        try:
+            update_setup_state(cfg, phase="blocked", last_error_code=code)
+        except (OSError, ValueError):
+            pass
+    finally:
+        for path in (password_file, known_hosts_file):
+            if path:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
 
 
 def _setup_secret_dir(cfg, job_id):
@@ -3958,6 +4106,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/generate-key": "_serve_setup_generate_key",
         "/api/setup/complete": "_serve_setup_complete",
         "/api/setup/test-ssh": "_serve_setup_test_ssh",
+        "/api/setup/discovery/start": "_serve_setup_discovery_start",
+        "/api/setup/discovery/status": "_serve_setup_discovery_status",
         "/api/setup/init/start": "_serve_setup_init_start",
         "/api/setup/init/status": "_serve_setup_init_status",
         "/api/setup/init/logs": "_serve_setup_init_logs",
@@ -5303,6 +5453,208 @@ a:hover{{text-decoration:underline}}
             self._json_response({"ok": True, "message": "Setup wizard re-enabled (note: freq init state is unchanged — re-run freq init if needed)"})
         except OSError as e:
             self._json_response({"error": f"Failed to reset setup: {e}"}, 500)
+
+    def _serve_setup_discovery_start(self):
+        """Start bounded PVE and derived-network discovery."""
+        global _setup_discovery_job
+        if self.command != "POST":
+            _setup_error(self, 405, "method_not_allowed", "Discovery start requires POST.")
+            return
+        role, err = _check_session_role(self, "admin")
+        if err:
+            _setup_error(self, 403, "admin_required", err)
+            return
+        cfg = load_config()
+        try:
+            body = self._request_body()
+            field, code = _setup_forbidden_browser_input(body)
+            if field:
+                _setup_error(
+                    self,
+                    400,
+                    code,
+                    "Server-side paths, manual contracts, and caller scan scopes are not accepted.",
+                    field=field,
+                )
+                return
+            request = validate_discovery_request(body, ZERO_STATE_WEB_SCHEMA)
+        except DiscoveryInputError as exc:
+            _setup_error(self, exc.status, exc.code, str(exc), field=exc.field)
+            return
+        except Exception:
+            _setup_error(self, 400, "invalid_json", "Invalid discovery request.")
+            return
+
+        state = load_setup_state(cfg)
+        if not state:
+            _setup_error(self, 410, "setup_expired", "The setup window expired; reload setup status.")
+            return
+        if request["setup_id"] != state.get("setup_id"):
+            _setup_error(self, 410, "setup_expired", "The setup identity is stale; reload setup status.")
+            return
+        session_user = getattr(self, "_session_user", "")
+        if state.get("username") != session_user:
+            _setup_error(self, 403, "setup_owner_mismatch", "Setup belongs to another operator.")
+            return
+
+        job_id = uuid.uuid4().hex
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        job = {
+            "id": job_id,
+            "setup_id": state["setup_id"],
+            "client_request_id": request.get("client_request_id", ""),
+            "state": "queued",
+            "started_at": now,
+            "updated_at": now,
+            "finished_at": None,
+            "poll_after_ms": 1000,
+            "progress": {
+                "phase": "queued",
+                "current": 0,
+                "total": len(request["cluster"]["nodes"]),
+                "message": "Discovery queued.",
+            },
+            "cluster": request["cluster"],
+            "bootstrap_username": request["bootstrap"]["username"],
+            "results": None,
+            "error": None,
+        }
+        with _setup_discovery_lock:
+            existing = json.loads(json.dumps(_setup_discovery_job)) if _setup_discovery_job else None
+            replay = bool(
+                existing
+                and existing.get("setup_id") == state.get("setup_id")
+                and request.get("client_request_id")
+                and existing.get("client_request_id") == request.get("client_request_id")
+            )
+            conflict = bool(existing and existing.get("state") in {"queued", "running"} and not replay)
+            if not replay and not conflict:
+                _setup_discovery_job = job
+        if replay:
+            self._json_response(
+                {
+                    "ok": True,
+                    "schema": ZERO_STATE_WEB_SCHEMA,
+                    "setup_id": state["setup_id"],
+                    "discovery": _setup_discovery_payload(existing),
+                },
+                202,
+            )
+            return
+        if conflict:
+            _setup_error(self, 409, "discovery_running", "A discovery job is already running.", retryable=True)
+            return
+
+        setup_vault_host = f"setup:{state['setup_id']}"
+        password = request["bootstrap"].pop("password")
+        try:
+            with _setup_lock:
+                if not os.path.exists(cfg.vault_file) and not vault_init(cfg):
+                    raise OSError("vault initialization failed")
+                if not vault_set(cfg, setup_vault_host, "bootstrap_password", password):
+                    raise OSError("vault write failed")
+                if vault_get(cfg, setup_vault_host, "bootstrap_password") != password:
+                    raise OSError("vault verification failed")
+        except Exception:
+            with _setup_discovery_lock:
+                if _setup_discovery_job and _setup_discovery_job.get("id") == job_id:
+                    _setup_discovery_job = None
+            _setup_error(self, 500, "bootstrap_secret_store_failed", "Bootstrap secret storage failed.")
+            return
+        finally:
+            password = ""
+
+        try:
+            update_setup_state(
+                cfg,
+                phase="discovering",
+                active_discovery_id=job_id,
+                active_contract_id=None,
+                last_error_code=None,
+            )
+        except (OSError, ValueError):
+            vault_delete(cfg, setup_vault_host, "bootstrap_password")
+            with _setup_discovery_lock:
+                if _setup_discovery_job and _setup_discovery_job.get("id") == job_id:
+                    _setup_discovery_job = None
+            _setup_error(self, 500, "setup_state_write_failed", "Discovery state could not be persisted.")
+            return
+        with _setup_discovery_lock:
+            if _setup_discovery_job and _setup_discovery_job.get("id") == job_id:
+                _setup_discovery_job["state"] = "running"
+        worker = threading.Thread(
+            target=_run_setup_discovery_job,
+            args=(cfg, job_id),
+            daemon=True,
+            name=f"freq-setup-discovery-{job_id[:12]}",
+        )
+        try:
+            worker.start()
+        except Exception:
+            vault_delete(cfg, setup_vault_host, "bootstrap_password")
+            with _setup_discovery_lock:
+                if _setup_discovery_job and _setup_discovery_job.get("id") == job_id:
+                    _setup_discovery_job = None
+            try:
+                update_setup_state(
+                    cfg,
+                    phase="blocked",
+                    active_discovery_id=None,
+                    last_error_code="discovery_start_failed",
+                )
+            except (OSError, ValueError):
+                pass
+            _setup_error(self, 500, "discovery_start_failed", "Discovery worker could not start.")
+            return
+        self._json_response(
+            {
+                "ok": True,
+                "schema": ZERO_STATE_WEB_SCHEMA,
+                "setup_id": state["setup_id"],
+                "discovery": _setup_discovery_payload(_setup_discovery_snapshot()),
+            },
+            202,
+        )
+
+    def _serve_setup_discovery_status(self):
+        """Return one setup-bound discovery job without secret material."""
+        if self.command != "GET":
+            _setup_error(self, 405, "method_not_allowed", "Discovery status requires GET.")
+            return
+        role, err = _check_session_role(self, "admin")
+        if err:
+            _setup_error(self, 403, "admin_required", err)
+            return
+        cfg = load_config()
+        state = load_setup_state(cfg)
+        if not state:
+            _setup_error(self, 410, "setup_expired", "The setup window expired.")
+            return
+        if state.get("username") != getattr(self, "_session_user", ""):
+            _setup_error(self, 403, "setup_owner_mismatch", "Setup belongs to another operator.")
+            return
+        query = parse_qs(urlparse(self.path).query)
+        job_id = str((query.get("id") or [""])[0]).strip()
+        if not job_id:
+            _setup_error(self, 400, "required_field", "Discovery id is required.", field="id")
+            return
+        job = _setup_discovery_snapshot()
+        if not job:
+            if state.get("active_discovery_id") == job_id:
+                _setup_error(self, 410, "discovery_expired", "Discovery state was lost; start discovery again.")
+            else:
+                _setup_error(self, 404, "discovery_not_found", "Discovery job was not found.")
+            return
+        if job.get("id") != job_id or job.get("setup_id") != state.get("setup_id"):
+            _setup_error(self, 404, "discovery_not_found", "Discovery job was not found.")
+            return
+        self._json_response(
+            {
+                "ok": True,
+                "schema": ZERO_STATE_WEB_SCHEMA,
+                "discovery": _setup_discovery_payload(job),
+            }
+        )
 
     def _serve_setup_init_start(self):
         """POST /api/setup/init/start — run full headless init from web setup."""
