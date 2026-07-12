@@ -81,7 +81,7 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
             { id: 'device:truenas:10.25.255.10', kind: 'truenas', label: 'storage-01', host: '10.25.255.10', reachable: true, credential_fields: ['username', 'password'], suggested_disposition: 'owned', suggested_placement: 'production' },
             { id: 'device:unknown:10.25.255.99', kind: 'unknown', label: 'unidentified-01', host: '10.25.255.99', reachable: true, credential_fields: [], suggested_disposition: 'acknowledged' }
           ],
-          warnings: []
+          warnings: [{ code: 'pve_bootstrap_failed', resource_id: 'pve-node:10.25.255.27' }]
         }
       }
     }) });
@@ -133,6 +133,8 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
 
   await expect(page.locator('#resource-rows tr')).toHaveCount(3);
   await expect(page.locator('#setup-health')).toHaveText('selecting');
+  await expect(page.locator('#discovery-warnings')).toContainText('pve bootstrap failed · pve-node:10.25.255.27');
+  await expect(page.locator('#discovery-warnings')).not.toContainText('[object Object]');
   await expect(page.locator('#review-count')).toHaveText('0 of 3 decided');
   const vm = page.locator('tr[data-resource-id="pve:pve01:qemu:100"]');
   await vm.locator('input[value="owned"]').check();
@@ -167,4 +169,39 @@ test('browser-only wizard builds an explicit fleet contract and verifies complet
     expect(forbiddenKey(mutation.body), `${mutation.path} emitted a forbidden browser key`).toBe('');
     if (mutation.path !== '/api/setup/create-admin') expect(mutation.csrf).toBe(CSRF);
   }
+});
+
+test('successful empty discovery can freeze an explicit empty contract', async ({ page }) => {
+  let frozenSelections = null;
+  await page.route('**/api/setup/status', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ ...completeStatus('selecting'), active_contract_id: null, active_init_job_id: null, initialized: false, web_setup_complete: false })
+  }));
+  await page.route('**/api/auth/verify', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ valid: true, user: 'admin', role: 'admin', csrf_token: CSRF, auth_mode: 'cookie', session_ttl_s: 3600 })
+  }));
+  await page.route('**/api/setup/discovery/status?id=discovery-opaque', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ ok: true, schema: 'zero-state-web-v1', discovery: {
+      id: 'discovery-opaque', state: 'succeeded', updated_at: '2026-07-12T06:05:00Z', poll_after_ms: 0,
+      progress: { phase: 'complete', current: 0, total: 0, message: 'Declared cluster reached; no selectable resources found.' },
+      results: { pve_nodes: [{ id: 'pve:pve01', host: '10.25.255.26', name: 'pve01', reachable: true, version: '8.4' }], resources: [], devices: [], warnings: [] }
+    } })
+  }));
+  await page.route('**/api/setup/contract', async route => {
+    frozenSelections = route.request().postDataJSON().selections;
+    expect(route.request().headers()['x-freq-csrf']).toBe(CSRF);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, schema: 'zero-state-web-v1', contract: { id: 'contract-empty', discovery_id: 'discovery-opaque', revision: 1, sha256: 'empty-hash', counts: { owned_virtual: 0, templates: 0, acknowledged_virtual: 0, owned_devices: 0, acknowledged_devices: 0 }, credential_requirements: [], ready: true } }) });
+  });
+
+  await page.goto('/setup');
+  await expect(page.locator('#step-discover')).toBeVisible();
+  await expect(page.locator('#resource-rows tr[data-resource-id]')).toHaveCount(0);
+  await expect(page.locator('.empty-resource-row')).toContainText('found no selectable resources or devices');
+  await expect(page.locator('#review-count')).toHaveText('0 of 0 decided');
+  await expect(page.locator('#save-contract')).toBeEnabled();
+  await page.locator('#save-contract').click();
+  await expect(page.locator('#step-credentials')).toBeVisible();
+  expect(frozenSelections).toEqual([]);
 });

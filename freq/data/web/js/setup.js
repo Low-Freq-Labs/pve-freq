@@ -250,6 +250,14 @@
     if(isDevice){return [item.kind,item.host,item.reachable===false?'unreachable':'reachable'].filter(Boolean).join(' · ');}
     return [item.kind,item.vmid!=null?'VMID '+item.vmid:'',item.node,item.status].filter(Boolean).join(' · ');
   }
+  function discoveryWarningText(warning){
+    if(typeof warning === 'string'){return warning;}
+    if(!warning || typeof warning !== 'object'){return 'Discovery warning';}
+    if(typeof warning.message === 'string' && warning.message.trim()){return warning.message.trim();}
+    var code=text(warning.code || 'discovery_warning').replace(/_/g,' ');
+    var resource=typeof warning.resource_id === 'string' ? warning.resource_id.trim() : '';
+    return code+(resource ? ' · '+resource : '');
+  }
   function renderNodeTruth(nodes){
     var root=$('node-truth');root.replaceChildren();
     (nodes || []).forEach(function(node){
@@ -265,10 +273,13 @@
     (results.devices || []).forEach(function(item){rows.push({item:item,group:'device'});});
     renderNodeTruth(results.pve_nodes || []);
     var warnings=$('discovery-warnings');warnings.replaceChildren();
-    (results.warnings || []).forEach(function(warning){warnings.appendChild(el('p','',warning.message || warning));});
+    (results.warnings || []).forEach(function(warning){warnings.appendChild(el('p','',discoveryWarningText(warning)));});
     warnings.hidden=!warnings.children.length;
     var body=$('resource-rows');body.replaceChildren();model.selections={};
     rows.forEach(function(entry,index){body.appendChild(renderResourceRow(entry.item,entry.group,index));});
+    if(!rows.length){
+      var emptyRow=el('tr','empty-resource-row');var emptyCell=el('td','','Discovery reached the declared PVE cluster and found no selectable resources or devices. Freeze the empty contract to continue.');emptyCell.colSpan=4;emptyRow.appendChild(emptyCell);body.appendChild(emptyRow);
+    }
     $('review-surface').hidden=false;
     setLocalTruth('selecting','Discovery succeeded. Every discovered row still requires an explicit decision.');
     progress('discovery',{phase:'complete',current:rows.length,total:rows.length,message:'Discovery complete. Review every row before freezing the contract.'});
@@ -304,13 +315,13 @@
     updateReviewCount();
   }
   function updateReviewCount(){
-    var rows=Array.prototype.slice.call(document.querySelectorAll('#resource-rows tr'));
+    var rows=Array.prototype.slice.call(document.querySelectorAll('#resource-rows tr[data-resource-id]'));
     var complete=rows.filter(function(row){var choice=model.selections[row.dataset.resourceId];return choice && (choice.disposition==='acknowledged' || (choice.disposition==='owned' && choice.placement));}).length;
-    $('review-count').textContent=complete+' of '+rows.length+' decided';$('save-contract').disabled=!rows.length || complete!==rows.length;
+    $('review-count').textContent=complete+' of '+rows.length+' decided';$('save-contract').disabled=!model.discovery || complete!==rows.length;
   }
   function filterRows(filter){
     document.querySelectorAll('.filter-btn').forEach(function(button){var active=button.dataset.filter===filter;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',text(active));});
-    document.querySelectorAll('#resource-rows tr').forEach(function(row){row.hidden=!(filter==='all' || row.dataset.group===filter || (filter==='undecided' && row.dataset.decided!=='true'));});
+    document.querySelectorAll('#resource-rows tr[data-resource-id]').forEach(function(row){row.hidden=!(filter==='all' || row.dataset.group===filter || (filter==='undecided' && row.dataset.decided!=='true'));});
   }
   function saveContract(){
     setError('');var button=$('save-contract');if(button.disabled){return;}setBusy(button,true,'Freezing contract…');
