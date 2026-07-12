@@ -3,22 +3,19 @@
 Proves:
 - _is_first_run() three-marker logic cannot lie
 - /api/setup/status fields match on-disk reality
-- /api/setup/complete finalization is atomic and idempotent
+- /api/setup/complete cannot claim success; init owns completion markers
 - /api/setup/create-admin rejects duplicate users
 - /api/info version matches freq.__version__ (not stale)
 - Setup endpoints gate on _is_first_run() (post-setup = 403)
 """
-import datetime
 import io
 import json
 import os
 import sys
 import tempfile
-import threading
-import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -236,102 +233,56 @@ class TestSetupStatusAccuracy(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# /api/setup/complete — finalization, atomicity, idempotency
+# /api/setup/complete — retired; successful web init owns finalization
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestSetupCompleteFinalization(unittest.TestCase):
-    """/api/setup/complete must write markers and gate subsequent requests."""
+    """Only a successful web-launched init may write completion markers."""
 
-    def test_complete_creates_marker_file(self):
-        """setup/complete must create data/setup-complete marker."""
-        from freq.modules.serve import _is_first_run
+    def test_legacy_complete_endpoint_is_disabled(self):
+        """The legacy endpoint cannot claim setup success."""
+        h = _make_handler("/api/setup/complete", method="POST")
+        h._serve_setup_complete()
+        self.assertEqual(h._status, 409)
+        self.assertEqual(_get_json(h)["error"]["code"], "legacy_endpoint_disabled")
+
+    def test_successful_init_marker_writer_records_web_setup(self):
+        """The init success path writes both web markers, not .initialized."""
+        from freq.modules.serve import _write_web_setup_markers
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
-            os.makedirs(cfg.data_dir, exist_ok=True)
-            os.makedirs(cfg.conf_dir, exist_ok=True)
+            _write_web_setup_markers(cfg)
 
-            h = _make_handler("/api/setup/complete", method="POST")
-
-            # First call: _is_first_run must return True, then complete
-            with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
-                h._serve_setup_complete()
-
-            self.assertEqual(h._status, 200)
-            marker = os.path.join(cfg.data_dir, "setup-complete")
-            self.assertTrue(os.path.isfile(marker),
-                            "setup/complete must create setup-complete marker file")
-
-    def test_complete_writes_web_setup_marker_not_initialized(self):
-        """setup/complete must write .web-setup-complete, NOT .initialized."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cfg = _mock_cfg(tmpdir)
-            os.makedirs(cfg.data_dir, exist_ok=True)
-            os.makedirs(cfg.conf_dir, exist_ok=True)
-
-            h = _make_handler("/api/setup/complete", method="POST")
-            with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
-                h._serve_setup_complete()
-
+            self.assertTrue(os.path.isfile(os.path.join(cfg.data_dir, "setup-complete")))
             web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
             init_marker = os.path.join(cfg.conf_dir, ".initialized")
-            self.assertTrue(os.path.isfile(web_marker),
-                            "setup/complete must write .web-setup-complete")
+            self.assertTrue(os.path.isfile(web_marker))
             self.assertFalse(os.path.isfile(init_marker),
-                             "setup/complete must NOT write .initialized — only freq init writes that")
+                             "only freq init may write .initialized")
 
-    def test_second_complete_returns_403(self):
-        """After completion, second call must return 403 'already used'."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cfg = _mock_cfg(tmpdir)
-            os.makedirs(cfg.data_dir, exist_ok=True)
-            os.makedirs(cfg.conf_dir, exist_ok=True)
-
-            # First complete
-            h1 = _make_handler("/api/setup/complete", method="POST")
-            with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
-                h1._serve_setup_complete()
-            self.assertEqual(h1._status, 200)
-
-            # Second complete — markers now exist + users exist, _is_first_run() returns False
-            users = [{"username": "admin", "role": "admin"}]
-            h2 = _make_handler("/api/setup/complete", method="POST")
-            with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=users):
-                h2._serve_setup_complete()
-            self.assertEqual(h2._status, 403, "Second complete must return 403")
-            data = _get_json(h2)
-            self.assertIn("already used", data["error"].lower())
-
-    def test_is_first_run_false_after_complete(self):
-        """_is_first_run() must return False after setup/complete + user exists."""
-        from freq.modules.serve import _is_first_run
+    def test_marker_writer_is_idempotent(self):
+        """A repeated init-success callback must preserve completed state."""
+        from freq.modules.serve import _write_web_setup_markers
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
-            os.makedirs(cfg.data_dir, exist_ok=True)
-            os.makedirs(cfg.conf_dir, exist_ok=True)
+            _write_web_setup_markers(cfg)
+            _write_web_setup_markers(cfg)
+            self.assertTrue(os.path.isfile(os.path.join(cfg.data_dir, "setup-complete")))
+            self.assertTrue(os.path.isfile(os.path.join(cfg.conf_dir, ".web-setup-complete")))
 
-            # Before: first run (no users, no markers)
-            with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
-                self.assertTrue(_is_first_run())
+    def test_is_first_run_false_after_init_success_marker(self):
+        """The successful-init marker closes first-run when an operator exists."""
+        from freq.modules.serve import _is_first_run, _write_web_setup_markers
 
-            # Complete setup (creates .web-setup-complete marker)
-            h = _make_handler("/api/setup/complete", method="POST")
-            with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
-                h._serve_setup_complete()
-
-            # After: not first run (user created during wizard + marker exists)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = _mock_cfg(tmpdir)
+            _write_web_setup_markers(cfg)
             users = [{"username": "admin", "role": "admin"}]
             with patch("freq.modules.serve.load_config", return_value=cfg), \
                  patch("freq.modules.serve._load_users", return_value=users):
-                self.assertFalse(_is_first_run(),
-                                 "_is_first_run() must be False after setup/complete with user")
+                self.assertFalse(_is_first_run())
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -339,7 +290,12 @@ class TestSetupCompleteFinalization(unittest.TestCase):
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
-    """create-admin must reject duplicate usernames with 409."""
+    """create-admin is HTTPS-only, single-use, and accepts no path inputs."""
+
+    def setUp(self):
+        self._https = patch("freq.modules.serve._request_is_https", return_value=True)
+        self._https.start()
+        self.addCleanup(self._https.stop)
 
     def _setup_handler(self, body_str):
         """Create a handler with proper Content-Length for body parsing."""
@@ -366,7 +322,7 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
 
             self.assertEqual(h._status, 409)
             data = _get_json(h)
-            self.assertIn("already exists", data["error"])
+            self.assertEqual(data["error"]["code"], "operator_exists")
 
     def test_short_password_rejected(self):
         """Password under 8 chars must be rejected."""
@@ -379,7 +335,7 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
                 h._serve_setup_create_admin()
             self.assertEqual(h._status, 400)
             data = _get_json(h)
-            self.assertIn("8 characters", data["error"])
+            self.assertEqual(data["error"]["code"], "invalid_password")
 
     def test_invalid_username_rejected(self):
         """Username with invalid chars must be rejected."""
@@ -392,27 +348,24 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
                 h._serve_setup_create_admin()
             self.assertEqual(h._status, 400)
             data = _get_json(h)
-            self.assertIn("Invalid username", data["error"])
+            self.assertEqual(data["error"]["code"], "invalid_username")
 
-    def test_password_file_read_failure_is_not_masked_as_blank_password(self):
-        """create-admin must surface unreadable setup password files directly."""
+    def test_password_file_is_rejected_without_reading_server_path(self):
+        """Browser setup must reject every server-side credential path."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
             body = '{"username":"newadmin","password_file":"/freq-init-inputs/missing"}'
             h = self._setup_handler(body)
 
             with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._is_first_run", return_value=True), \
-                 patch(
-                     "freq.modules.serve._read_setup_secret_file",
-                     side_effect=PermissionError("operator password file is not readable"),
-                 ):
+                 patch("builtins.open") as mock_open:
                 h._serve_setup_create_admin()
 
             self.assertEqual(h._status, 400)
             data = _get_json(h)
-            self.assertIn("Could not read setup admin password file", data["error"])
-            self.assertNotIn("Username and password required", data["error"])
+            self.assertEqual(data["error"]["code"], "path_input_not_allowed")
+            self.assertEqual(data["error"]["field"], "password_file")
+            mock_open.assert_not_called()
 
     def test_create_admin_creates_missing_conf_dir(self):
         """Zero-state create-admin must create conf_dir before users.conf."""
@@ -431,8 +384,8 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
             self.assertEqual(h._status, 200)
             self.assertTrue(os.path.isfile(os.path.join(cfg.conf_dir, "users.conf")))
 
-    def test_create_admin_resumes_no_marker_setup_window(self):
-        """Retrying create-admin during partial setup must refresh admin session."""
+    def test_create_admin_existing_operator_requires_normal_auth(self):
+        """An existing operator cannot be resumed through credential creation."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
             os.makedirs(cfg.conf_dir, exist_ok=True)
@@ -441,20 +394,18 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
             h = self._setup_handler(body)
 
             with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._is_first_run", return_value=False), \
                  patch("freq.modules.serve._load_users", return_value=existing_users), \
-                 patch("freq.modules.serve.vault_get", return_value="stored-hash"), \
-                 patch("freq.modules.serve._verify_password", return_value=True), \
-                 patch("freq.api.auth.establish_session") as mock_session:
+                 patch("freq.modules.serve._setup_marker_exists", return_value=False), \
+                 patch("freq.modules.serve._setup_store_admin_password") as mock_store:
                 h._serve_setup_create_admin()
 
-            self.assertEqual(h._status, 200)
+            self.assertEqual(h._status, 409)
             data = _get_json(h)
-            self.assertTrue(data["resumed"])
-            mock_session.assert_called_once_with(h, "admin", "admin")
+            self.assertEqual(data["error"]["code"], "operator_exists")
+            mock_store.assert_not_called()
 
-    def test_create_admin_repairs_passwordless_partial_setup_window(self):
-        """Partial setup with users.conf but no password hash must be repairable."""
+    def test_create_admin_closed_after_completion_marker(self):
+        """Completed setup cannot be reopened through create-admin."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
             os.makedirs(cfg.conf_dir, exist_ok=True)
@@ -463,62 +414,13 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
             h = self._setup_handler(body)
 
             with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._is_first_run", return_value=False), \
                  patch("freq.modules.serve._load_users", return_value=existing_users), \
-                 patch("freq.modules.serve.vault_get", return_value=""), \
-                 patch("freq.modules.serve._setup_store_admin_password", return_value="") as mock_store, \
-                 patch("freq.modules.serve._setup_session_payload", return_value={
-                     "ok": True,
-                     "user": "admin",
-                     "role": "admin",
-                     "session_started": True,
-                     "csrf_token": "csrf",
-                     "auth_mode": "cookie",
-                     "resumed": True,
-                     "repaired": True,
-                 }):
+                 patch("freq.modules.serve._setup_marker_exists", return_value=True):
                 h._serve_setup_create_admin()
 
-            self.assertEqual(h._status, 200)
+            self.assertEqual(h._status, 403)
             data = _get_json(h)
-            self.assertTrue(data["repaired"])
-            mock_store.assert_called_once_with(cfg, "admin", "validpass123")
-
-    def test_create_admin_can_replace_passwordless_partial_admin_row(self):
-        """Retry with corrected username can recover a passwordless partial row."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cfg = _mock_cfg(tmpdir)
-            os.makedirs(cfg.conf_dir, exist_ok=True)
-            existing_users = [{"username": "oldadmin", "role": "admin", "groups": ""}]
-            body = '{"username":"newadmin","password":"validpass123"}'
-            h = self._setup_handler(body)
-
-            with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._is_first_run", return_value=False), \
-                 patch("freq.modules.serve._load_users", return_value=existing_users), \
-                 patch("freq.modules.serve.vault_get", return_value=""), \
-                 patch("freq.modules.serve._setup_store_admin_password", return_value="") as mock_store, \
-                 patch("freq.modules.serve._save_users_error", return_value="") as mock_save, \
-                 patch("freq.modules.serve._setup_session_payload", return_value={
-                     "ok": True,
-                     "user": "newadmin",
-                     "role": "admin",
-                     "session_started": True,
-                     "csrf_token": "csrf",
-                     "auth_mode": "cookie",
-                     "resumed": True,
-                     "repaired": True,
-                     "replaced_passwordless_user": True,
-                 }):
-                h._serve_setup_create_admin()
-
-            self.assertEqual(h._status, 200)
-            data = _get_json(h)
-            self.assertTrue(data["replaced_passwordless_user"])
-            mock_store.assert_called_once_with(cfg, "newadmin", "validpass123")
-            mock_save.assert_called_once_with(
-                cfg, [{"username": "newadmin", "role": "admin", "groups": ""}]
-            )
+            self.assertEqual(data["error"]["code"], "setup_closed")
 
     def test_create_admin_does_not_write_user_when_password_store_fails(self):
         """create-admin must not leave a passwordless admin row on vault failure."""
@@ -535,7 +437,8 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
 
             self.assertEqual(h._status, 500)
             data = _get_json(h)
-            self.assertIn("Failed to store password", data["error"])
+            self.assertEqual(data["error"]["code"], "operator_password_store_failed")
+            self.assertIn("Failed to store password", data["error"]["message"])
             self.assertFalse(os.path.exists(os.path.join(cfg.conf_dir, "users.conf")))
 
     def test_save_failure_returns_filesystem_reason(self):
@@ -554,7 +457,8 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
 
             self.assertEqual(h._status, 500)
             data = _get_json(h)
-            self.assertIn("Permission denied", data["error"])
+            self.assertEqual(data["error"]["code"], "operator_write_failed")
+            self.assertIn("Permission denied", data["error"]["message"])
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -565,12 +469,9 @@ class TestSetupGatingPostCompletion(unittest.TestCase):
     """After setup is complete, all setup endpoints must return 403."""
 
     SETUP_ENDPOINTS = [
-        ("_serve_setup_create_admin", "POST",
-         '{"username":"admin","password":"testpass123"}'),
         ("_serve_setup_configure", "POST",
          '{"cluster_name":"c","timezone":"UTC","pve_nodes":["1.2.3.4"]}'),
         ("_serve_setup_generate_key", "POST", None),
-        ("_serve_setup_complete", "POST", None),
     ]
 
     def test_all_setup_endpoints_return_403_after_completion(self):

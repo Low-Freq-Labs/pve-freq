@@ -105,9 +105,10 @@ class TestUsersConfOwnership(unittest.TestCase):
             src = f.read()
         # Setup handler creates admin user
         setup_section = src.split("def _serve_setup_create_admin")[1].split("def _serve_")[0]
-        # Should write to users.conf in a compatible way
-        self.assertIn("users.conf", setup_section,
-                       "Setup must write to users.conf")
+        self.assertIn("_save_users_error(cfg, users)", setup_section,
+                      "Setup must use the shared users.conf saver")
+        self.assertNotIn("open(", setup_section,
+                         "Setup must not write users.conf directly")
 
 
 class TestFleetBoundariesOwnership(unittest.TestCase):

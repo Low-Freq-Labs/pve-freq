@@ -708,38 +708,30 @@ class TestDestructiveEndpointSafety(unittest.TestCase):
 class TestSetupTrustBoundaries(unittest.TestCase):
     """Setup endpoints must not leak or mutate state after setup is complete."""
 
-    def test_all_setup_endpoints_check_first_run(self):
-        """Every write-capable setup endpoint must check _is_first_run()."""
+    def test_setup_mutations_have_closed_state_guards(self):
+        """Every live setup mutation must gate against durable setup state."""
         import inspect
         from freq.modules.serve import FreqHandler
-        write_handlers = [
-            "_serve_setup_create_admin",
+        first_run_handlers = [
             "_serve_setup_configure",
             "_serve_setup_generate_key",
-            "_serve_setup_complete",
         ]
-        for name in write_handlers:
+        for name in first_run_handlers:
             src = inspect.getsource(getattr(FreqHandler, name))
             self.assertIn("_is_first_run", src,
                           f"{name} must check _is_first_run()")
 
-    def test_setup_complete_has_lock(self):
-        """setup_complete must use a lock to prevent race conditions."""
-        import inspect
-        from freq.modules.serve import FreqHandler
-        src = inspect.getsource(FreqHandler._serve_setup_complete)
-        self.assertIn("_setup_lock", src,
-                       "setup_complete must use _setup_lock")
+        create_src = inspect.getsource(FreqHandler._serve_setup_create_admin)
+        self.assertGreaterEqual(create_src.count("_load_users(cfg)"), 2)
+        self.assertIn("_setup_marker_exists(cfg)", create_src)
 
-    def test_setup_complete_double_checks_after_lock(self):
-        """setup_complete must re-check _is_first_run() after acquiring lock."""
+    def test_setup_complete_is_disabled(self):
+        """The legacy endpoint cannot mutate or report completion."""
         import inspect
         from freq.modules.serve import FreqHandler
         src = inspect.getsource(FreqHandler._serve_setup_complete)
-        # Should have at least 2 _is_first_run calls (before lock + after lock)
-        count = src.count("_is_first_run()")
-        self.assertGreaterEqual(count, 2,
-                                "setup_complete must double-check _is_first_run() after lock")
+        self.assertIn("legacy_endpoint_disabled", src)
+        self.assertNotIn("_write_web_setup_markers", src)
 
     def test_setup_reset_requires_admin(self):
         """setup_reset must require admin auth, not just _is_first_run()."""

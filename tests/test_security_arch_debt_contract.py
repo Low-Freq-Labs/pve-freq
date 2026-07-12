@@ -218,7 +218,7 @@ class TestT7SourcePins(unittest.TestCase):
 
 class TestT8SetupCreateAdminLock(unittest.TestCase):
     """create-admin must wrap the mutation in _setup_lock with a
-    double-checked _is_first_run guard."""
+    double-checked operator-state guard."""
 
     def test_source_pins_lock_and_double_check(self):
         src = SERVE_PY.read_text()
@@ -229,14 +229,14 @@ class TestT8SetupCreateAdminLock(unittest.TestCase):
         # Lock acquire with non-blocking.
         self.assertIn("_setup_lock.acquire(blocking=False)", window)
         # Double-check after acquire.
-        self.assertIn("Setup already in progress", window)
+        self.assertIn('"setup_busy"', window)
         # Release in finally.
         self.assertIn("_setup_lock.release()", window)
-        # _is_first_run is checked at least twice in the handler — once
-        # as the fast-path reject, once inside the lock.
+        # Operator state is checked before and after lock acquisition so a
+        # concurrent request cannot create a second first operator.
         self.assertGreaterEqual(
-            window.count("if not _is_first_run():"), 2,
-            "double-checked locking must re-verify _is_first_run inside the lock",
+            window.count("_load_users(cfg)"), 2,
+            "double-checked locking must re-read operator state inside the lock",
         )
 
 
