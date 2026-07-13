@@ -11259,7 +11259,12 @@ def _headless_fleet_deploy(
             if not getattr(h, "managed", True):
                 continue
             if h.ip not in seen_ips:
-                vmid = getattr(h, "vmid", 0) or ctx.get("ip_vmid_map", {}).get(h.ip, 0)
+                # Use the same identity resolver as management-state
+                # reconciliation.  A preserved host row may not carry a VMID
+                # and its primary address may differ from the address returned
+                # by the guest agent; all_ips and the normalized label still
+                # tie it to the explicitly-owned PVE guest.
+                vmid = _resolve_existing_host_vmid(ctx, h)
                 targets.append({
                     "ip": h.ip, "label": h.label, "htype": h.htype,
                     "vmid": vmid,
@@ -11443,15 +11448,36 @@ def _headless_fleet_deploy(
                 vmid = t.get("vmid", 0)
                 vmid_node_map = ctx.get("vmid_node_map", {})
                 ga_node_ip = vmid_node_map.get(vmid) if vmid else None
+                explicitly_owned = vmid in set(
+                    getattr(cfg, "_owned_vmids", set()) or set()
+                )
                 if ga_node_ip and htype in ("linux", "docker", "truenas"):
                     fmt.step_warn(f"{label} ({ip}) — {reason} — trying guest agent fallback")
                     if _deploy_via_guest_agent(cfg, ctx, vmid, ga_node_ip, ip, label, htype):
                         ok += 1
                         deployed_ips.add(ip)
                         continue
-                    # Guest agent also failed — mark unmanaged
+                    if explicitly_owned:
+                        fmt.step_fail(
+                            f"{label} ({ip}) is explicitly owned as VMID {vmid}, "
+                            "but SSH and guest-agent deployment both failed"
+                        )
+                        fail += 1
+                        failed_ips.add(ip)
+                        continue
+                    # Guest agent also failed for a non-owned target — keep it
+                    # out of the managed verification contract.
                     _mark_host_unmanaged(cfg, ip)
                     skip += 1
+                    continue
+
+                if explicitly_owned:
+                    fmt.step_fail(
+                        f"{label} ({ip}) is explicitly owned as VMID {vmid}, "
+                        f"but SSH deployment failed and no guest-agent path is available: {reason}"
+                    )
+                    fail += 1
+                    failed_ips.add(ip)
                     continue
 
                 if _is_skip_error(err) or rc == 5:
