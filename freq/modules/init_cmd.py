@@ -11155,14 +11155,27 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
             f"usermod -aG docker {svc_name} || true\n"
         )
 
+    password_setup = (
+        # TrueNAS SCALE owns password state through middleware.  A privileged
+        # QGA repair must not let the generic chpasswd path abort before it
+        # repairs an existing account's SSH ownership chain.  Key auth plus
+        # the generated sudoers rule is sufficient for the managed account.
+        "echo TRUENAS_QGA_KEY_ONLY\n"
+        if htype == "truenas"
+        else (
+            f"_p=$(echo {pass_b64} | base64 -d)\n"
+            f'printf "%s:%s\\n" {svc_name} "$_p" | chpasswd 2>/dev/null '
+            f"|| echo CHPASSWD_FAIL\n"
+            f"unset _p\n"
+        )
+    )
+
     deploy_script = (
         f"#!/bin/bash\n"
         f"set -e\n"
         f"id {svc_name} >/dev/null 2>&1 || useradd -m -s /bin/bash {svc_name}\n"
         f"{docker_line}"
-        f"_p=$(echo {pass_b64} | base64 -d)\n"
-        f'printf "%s:%s\\n" {svc_name} "$_p" | chpasswd 2>/dev/null\n'
-        f"unset _p\n"
+        f"{password_setup}"
         f'echo "{svc_name} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/freq-{svc_name}\n'
         f"chmod 440 /etc/sudoers.d/freq-{svc_name}\n"
         f"_h=$(getent passwd {svc_name} | cut -d: -f6)\n"
@@ -11233,6 +11246,10 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
                         f"{label}: guest deploy did not prove SSH ownership/modes"
                     )
                     return False
+                if "CHPASSWD_FAIL" in out_data:
+                    fmt.step_warn(
+                        f"{label}: password update failed; SSH key auth configured"
+                    )
                 fmt.step_ok(f"Deployed via guest agent (VM {vmid} on {node_ip})")
                 return True
             err_data = result.get("err-data", "")
@@ -11244,6 +11261,10 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
             if "DEPLOY_OK" in out and (
                 not pubkey or "SSH_OWNERSHIP_OK" in out
             ):
+                if "CHPASSWD_FAIL" in out:
+                    fmt.step_warn(
+                        f"{label}: password update failed; SSH key auth configured"
+                    )
                 fmt.step_ok(f"Deployed via guest agent (VM {vmid} on {node_ip})")
                 return True
         return False

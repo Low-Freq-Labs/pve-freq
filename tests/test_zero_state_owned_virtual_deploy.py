@@ -99,6 +99,51 @@ class TestOwnedVirtualApplianceDeploy(unittest.TestCase):
             )
         )
 
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_linux_guest_agent_password_failure_keeps_key_repair_nonfatal(
+        self, fmt, run
+    ):
+        commands = []
+
+        def fake_run(command, timeout=None):
+            commands.append(command)
+            return (
+                0,
+                json.dumps({
+                    "exitcode": 0,
+                    "out-data": (
+                        "CHPASSWD_FAIL\nSSH_OWNERSHIP_OK\nDEPLOY_OK\n"
+                    ),
+                }),
+                "",
+            )
+
+        run.side_effect = fake_run
+        cfg = types.SimpleNamespace(ssh_key_path="/tmp/fleet-key")
+
+        self.assertTrue(
+            init_cmd._deploy_via_guest_agent(
+                cfg,
+                _deploy_ctx(),
+                5001,
+                "10.25.255.26",
+                "192.168.255.25",
+                "owned-linux",
+                "linux",
+            )
+        )
+        match = re.search(
+            r"echo ([A-Za-z0-9+/=]+) \| base64 -d", commands[0][-1]
+        )
+        self.assertIsNotNone(match)
+        script = base64.b64decode(match.group(1)).decode()
+        self.assertIn("chpasswd 2>/dev/null || echo CHPASSWD_FAIL", script)
+        self.assertIn("SSH_OWNERSHIP_OK", script)
+        fmt.step_warn.assert_called_once_with(
+            "owned-linux: password update failed; SSH key auth configured"
+        )
+
     @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
     @patch("freq.modules.init_cmd._deploy_via_guest_agent", return_value=True)
     @patch(
@@ -230,6 +275,9 @@ class TestOwnedVirtualApplianceDeploy(unittest.TestCase):
                 account_ready = (
                     ctx["pubkey"] in guest_script
                     and "authorized_keys" in guest_script
+                    and "TRUENAS_QGA_KEY_ONLY" in guest_script
+                    and "chpasswd" not in guest_script
+                    and "/etc/sudoers.d/freq-freq-admin" in guest_script
                     and 'chown freq-admin:$(id -gn freq-admin) "$_h"' in guest_script
                     and "chown -R freq-admin:$(id -gn freq-admin)" in guest_script
                     and "_home_unsafe" in guest_script
@@ -250,7 +298,7 @@ class TestOwnedVirtualApplianceDeploy(unittest.TestCase):
                 init_cmd._headless_fleet_deploy(
                     cfg,
                     ctx,
-                    bootstrap_key="/tmp/bootstrap-key",
+                    bootstrap_key="",
                     bootstrap_user="freq-ops",
                 )
                 cfg.pve_nodes = ["10.25.255.26"]
