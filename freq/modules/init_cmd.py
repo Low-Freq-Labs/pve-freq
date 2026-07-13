@@ -11125,6 +11125,118 @@ def _mark_host_unmanaged(cfg, ip):
     save_hosts_toml(cfg.hosts_file, cfg.hosts)
 
 
+def _truenas_qga_deploy_script(svc_name, svc_pass, pubkey):
+    """Build the middleware-native TrueNAS SCALE QGA account repair."""
+    name_b64 = base64.b64encode(svc_name.encode()).decode()
+    pass_b64 = base64.b64encode(svc_pass.encode()).decode()
+    pubkey_b64 = base64.b64encode(pubkey.encode()).decode()
+    return f"""#!/bin/bash
+set -e
+command -v midclt >/dev/null 2>&1 || {{ echo MIDCLT_MISSING; exit 1; }}
+export FREQ_USER_B64='{name_b64}'
+export FREQ_PASS_B64='{pass_b64}'
+export FREQ_PUBKEY_B64='{pubkey_b64}'
+python3 - <<'PY'
+import base64
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+
+def midclt(method, *args):
+    command = ["midclt", "call", method]
+    command.extend(json.dumps(arg) for arg in args)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()[:240]
+        raise RuntimeError(f"{{method}} failed: {{detail}}")
+    return json.loads(result.stdout or "null")
+
+
+svc_name = base64.b64decode(os.environ["FREQ_USER_B64"]).decode()
+svc_pass = base64.b64decode(os.environ["FREQ_PASS_B64"]).decode()
+pubkey = base64.b64decode(os.environ["FREQ_PUBKEY_B64"]).decode().strip()
+if not svc_name or not pubkey:
+    raise RuntimeError("TrueNAS middleware deployment requires a user and SSH public key")
+
+users = midclt("user.query", [["username", "=", svc_name]])
+payload = {{
+    "full_name": "FREQ Service Account",
+    "shell": "/usr/bin/bash",
+    "smb": False,
+    "ssh_password_enabled": False,
+    "password_disabled": False,
+    "sshpubkey": pubkey,
+    "sudo_commands_nopasswd": ["ALL"],
+}}
+if users:
+    midclt("user.update", users[0]["id"], payload)
+else:
+    pools = midclt("pool.query") or []
+    pool_path = next((pool.get("path") for pool in pools if pool.get("path")), "")
+    if not pool_path:
+        raise RuntimeError("No data-pool path is available for the TrueNAS SSH home")
+    home_parent = Path(pool_path) / ".freq-home"
+    home_parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    payload.update({{
+        "username": svc_name,
+        "password": svc_pass,
+        "group_create": True,
+        "home": str(home_parent),
+        "home_create": True,
+    }})
+    midclt("user.create", payload)
+
+# user.create is authoritative even when an older FREQ release left a raw
+# passwd/group account behind: TrueNAS regenerates NSS from middleware state.
+users = midclt("user.query", [["username", "=", svc_name]])
+if len(users) != 1:
+    raise RuntimeError("TrueNAS middleware account was not durably registered")
+user = users[0]
+if "ALL" not in (user.get("sudo_commands_nopasswd") or []):
+    raise RuntimeError("TrueNAS middleware did not grant passwordless sudo")
+if (user.get("sshpubkey") or "").strip() != pubkey:
+    raise RuntimeError("TrueNAS middleware did not persist the SSH public key")
+print("TRUENAS_MIDDLEWARE_OK")
+PY
+_svc=$(printf %s "$FREQ_USER_B64" | base64 -d)
+_h=$(getent passwd "$_svc" | cut -d: -f6)
+test -n "$_h" || {{ echo ACCOUNT_MISSING; exit 1; }}
+test -f "$_h/.ssh/authorized_keys" || {{ echo SSH_KEY_MISSING; exit 1; }}
+_uid=$(id -u "$_svc")
+_gid=$(id -g "$_svc")
+chown "$_svc":$(id -gn "$_svc") "$_h"
+chown -R "$_svc":$(id -gn "$_svc") "$_h/.ssh"
+chmod 700 "$_h/.ssh"
+chmod 600 "$_h/.ssh/authorized_keys"
+_home_uid=$(stat -c %u "$_h")
+_home_gid=$(stat -c %g "$_h")
+_home_unsafe=$(python3 -c 'import os,sys; print(int(bool(os.stat(sys.argv[1]).st_mode & 0o022)))' "$_h")
+_ssh_uid=$(stat -c %u "$_h/.ssh")
+_ssh_gid=$(stat -c %g "$_h/.ssh")
+_key_uid=$(stat -c %u "$_h/.ssh/authorized_keys")
+_key_gid=$(stat -c %g "$_h/.ssh/authorized_keys")
+_ssh_mode=$(stat -c %a "$_h/.ssh")
+_key_mode=$(stat -c %a "$_h/.ssh/authorized_keys")
+test "$_home_uid:$_home_gid:$_home_unsafe" = "$_uid:$_gid:0" \
+    && test "$_ssh_uid:$_ssh_gid:$_ssh_mode" = "$_uid:$_gid:700" \
+    && test "$_key_uid:$_key_gid:$_key_mode" = "$_uid:$_gid:600" \
+    || {{ echo SSH_OWNERSHIP_FAIL; exit 1; }}
+echo SSH_OWNERSHIP_OK
+su -s /bin/bash -c 'sudo -n true' "$_svc" \
+    || {{ echo SUDO_NOPASSWD_FAIL; exit 1; }}
+echo SUDO_NOPASSWD_OK
+echo DEPLOY_OK
+"""
+
+
 def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
     """Deploy service account inside a VM via PVE QEMU guest agent.
 
@@ -11146,69 +11258,64 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
     if not vmid or not node_ip:
         return False
 
-    pass_b64 = base64.b64encode(svc_pass.encode()).decode()
+    if htype == "truenas":
+        deploy_script = _truenas_qga_deploy_script(svc_name, svc_pass, pubkey)
+    else:
+        pass_b64 = base64.b64encode(svc_pass.encode()).decode()
 
-    docker_line = ""
-    if htype == "docker":
-        docker_line = (
-            f"getent group docker >/dev/null 2>&1 && "
-            f"usermod -aG docker {svc_name} || true\n"
-        )
+        docker_line = ""
+        if htype == "docker":
+            docker_line = (
+                f"getent group docker >/dev/null 2>&1 && "
+                f"usermod -aG docker {svc_name} || true\n"
+            )
 
-    password_setup = (
-        # TrueNAS SCALE owns password state through middleware.  A privileged
-        # QGA repair must not let the generic chpasswd path abort before it
-        # repairs an existing account's SSH ownership chain.  Key auth plus
-        # the generated sudoers rule is sufficient for the managed account.
-        "echo TRUENAS_QGA_KEY_ONLY\n"
-        if htype == "truenas"
-        else (
+        password_setup = (
             f"_p=$(echo {pass_b64} | base64 -d)\n"
             f'printf "%s:%s\\n" {svc_name} "$_p" | chpasswd 2>/dev/null '
             f"|| echo CHPASSWD_FAIL\n"
             f"unset _p\n"
         )
-    )
 
-    deploy_script = (
-        f"#!/bin/bash\n"
-        f"set -e\n"
-        f"id {svc_name} >/dev/null 2>&1 || useradd -m -s /bin/bash {svc_name}\n"
-        f"{docker_line}"
-        f"{password_setup}"
-        f'echo "{svc_name} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/freq-{svc_name}\n'
-        f"chmod 440 /etc/sudoers.d/freq-{svc_name}\n"
-        f"_h=$(getent passwd {svc_name} | cut -d: -f6)\n"
-        f'mkdir -p "$_h/.ssh"\n'
-        f'chmod 700 "$_h/.ssh"\n'
-    )
-    if pubkey:
-        deploy_script += (
-            f'grep -qF "{pubkey}" "$_h/.ssh/authorized_keys" 2>/dev/null '
-            f'|| echo "{pubkey}" >> "$_h/.ssh/authorized_keys"\n'
-            f'_uid=$(id -u {svc_name})\n'
-            f'_gid=$(id -g {svc_name})\n'
-            f'chown {svc_name}:$(id -gn {svc_name}) "$_h"\n'
-            f'chown -R {svc_name}:$(id -gn {svc_name}) "$_h/.ssh"\n'
+        deploy_script = (
+            f"#!/bin/bash\n"
+            f"set -e\n"
+            f"id {svc_name} >/dev/null 2>&1 || useradd -m -s /bin/bash {svc_name}\n"
+            f"{docker_line}"
+            f"{password_setup}"
+            f'echo "{svc_name} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/freq-{svc_name}\n'
+            f"chmod 440 /etc/sudoers.d/freq-{svc_name}\n"
+            f"_h=$(getent passwd {svc_name} | cut -d: -f6)\n"
+            f'mkdir -p "$_h/.ssh"\n'
             f'chmod 700 "$_h/.ssh"\n'
-            f'chmod 600 "$_h/.ssh/authorized_keys"\n'
-            f'_home_uid=$(stat -c %u "$_h")\n'
-            f'_home_gid=$(stat -c %g "$_h")\n'
-            f'_home_mode=$(stat -c %a "$_h")\n'
-            f"_home_unsafe=$(python3 -c 'import os,sys; print(int(bool(os.stat(sys.argv[1]).st_mode & 0o022)))' \"$_h\")\n"
-            f'_ssh_uid=$(stat -c %u "$_h/.ssh")\n'
-            f'_ssh_gid=$(stat -c %g "$_h/.ssh")\n'
-            f'_key_uid=$(stat -c %u "$_h/.ssh/authorized_keys")\n'
-            f'_key_gid=$(stat -c %g "$_h/.ssh/authorized_keys")\n'
-            f'_ssh_mode=$(stat -c %a "$_h/.ssh")\n'
-            f'_key_mode=$(stat -c %a "$_h/.ssh/authorized_keys")\n'
-            f'test "$_home_uid:$_home_gid:$_home_unsafe" = "$_uid:$_gid:0" '
-            f'&& test "$_ssh_uid:$_ssh_gid:$_ssh_mode" = "$_uid:$_gid:700" '
-            f'&& test "$_key_uid:$_key_gid:$_key_mode" = "$_uid:$_gid:600" '
-            f'|| {{ echo SSH_OWNERSHIP_FAIL; exit 1; }}\n'
-            f'echo SSH_OWNERSHIP_OK\n'
         )
-    deploy_script += "echo DEPLOY_OK\n"
+        if pubkey:
+            deploy_script += (
+                f'grep -qF "{pubkey}" "$_h/.ssh/authorized_keys" 2>/dev/null '
+                f'|| echo "{pubkey}" >> "$_h/.ssh/authorized_keys"\n'
+                f'_uid=$(id -u {svc_name})\n'
+                f'_gid=$(id -g {svc_name})\n'
+                f'chown {svc_name}:$(id -gn {svc_name}) "$_h"\n'
+                f'chown -R {svc_name}:$(id -gn {svc_name}) "$_h/.ssh"\n'
+                f'chmod 700 "$_h/.ssh"\n'
+                f'chmod 600 "$_h/.ssh/authorized_keys"\n'
+                f'_home_uid=$(stat -c %u "$_h")\n'
+                f'_home_gid=$(stat -c %g "$_h")\n'
+                f'_home_mode=$(stat -c %a "$_h")\n'
+                f"_home_unsafe=$(python3 -c 'import os,sys; print(int(bool(os.stat(sys.argv[1]).st_mode & 0o022)))' \"$_h\")\n"
+                f'_ssh_uid=$(stat -c %u "$_h/.ssh")\n'
+                f'_ssh_gid=$(stat -c %g "$_h/.ssh")\n'
+                f'_key_uid=$(stat -c %u "$_h/.ssh/authorized_keys")\n'
+                f'_key_gid=$(stat -c %g "$_h/.ssh/authorized_keys")\n'
+                f'_ssh_mode=$(stat -c %a "$_h/.ssh")\n'
+                f'_key_mode=$(stat -c %a "$_h/.ssh/authorized_keys")\n'
+                f'test "$_home_uid:$_home_gid:$_home_unsafe" = "$_uid:$_gid:0" '
+                f'&& test "$_ssh_uid:$_ssh_gid:$_ssh_mode" = "$_uid:$_gid:700" '
+                f'&& test "$_key_uid:$_key_gid:$_key_mode" = "$_uid:$_gid:600" '
+                f'|| {{ echo SSH_OWNERSHIP_FAIL; exit 1; }}\n'
+                f'echo SSH_OWNERSHIP_OK\n'
+            )
+        deploy_script += "echo DEPLOY_OK\n"
 
     script_b64 = base64.b64encode(deploy_script.encode()).decode()
 
@@ -11241,6 +11348,14 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
             out_data = result.get("out-data", "")
             exit_code = result.get("exitcode", -1)
             if exit_code == 0 and "DEPLOY_OK" in out_data:
+                if htype == "truenas" and not {
+                    "TRUENAS_MIDDLEWARE_OK",
+                    "SUDO_NOPASSWD_OK",
+                }.issubset(out_data.splitlines()):
+                    fmt.step_warn(
+                        f"{label}: TrueNAS middleware/sudo proof was incomplete"
+                    )
+                    return False
                 if pubkey and "SSH_OWNERSHIP_OK" not in out_data:
                     fmt.step_warn(
                         f"{label}: guest deploy did not prove SSH ownership/modes"

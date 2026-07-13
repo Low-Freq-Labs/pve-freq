@@ -81,7 +81,39 @@ class TestOwnedVirtualApplianceDeploy(unittest.TestCase):
     def test_guest_agent_rejects_deploy_without_owner_proof(self, _fmt, run):
         run.return_value = (
             0,
-            json.dumps({"exitcode": 0, "out-data": "DEPLOY_OK\n"}),
+            json.dumps({
+                "exitcode": 0,
+                "out-data": (
+                    "TRUENAS_MIDDLEWARE_OK\nSUDO_NOPASSWD_OK\nDEPLOY_OK\n"
+                ),
+            }),
+            "",
+        )
+        cfg = types.SimpleNamespace(ssh_key_path="/tmp/fleet-key")
+
+        self.assertFalse(
+            init_cmd._deploy_via_guest_agent(
+                cfg,
+                _deploy_ctx(),
+                5001,
+                "10.25.255.26",
+                "192.168.255.25",
+                "truenas-lab",
+                "truenas",
+            )
+        )
+
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_truenas_guest_agent_rejects_linux_style_success_proof(
+        self, fmt, run
+    ):
+        run.return_value = (
+            0,
+            json.dumps({
+                "exitcode": 0,
+                "out-data": "SSH_OWNERSHIP_OK\nDEPLOY_OK\n",
+            }),
             "",
         )
         cfg = types.SimpleNamespace(ssh_key_path="/tmp/fleet-key")
@@ -97,6 +129,9 @@ class TestOwnedVirtualApplianceDeploy(unittest.TestCase):
                 "truenas-lab",
                 "truenas",
             )
+        )
+        fmt.step_warn.assert_called_once_with(
+            "truenas-lab: TrueNAS middleware/sudo proof was incomplete"
         )
 
     @patch("freq.modules.init_cmd._run")
@@ -273,20 +308,31 @@ class TestOwnedVirtualApplianceDeploy(unittest.TestCase):
                 self.assertIsNotNone(match)
                 guest_script = base64.b64decode(match.group(1)).decode()
                 account_ready = (
-                    ctx["pubkey"] in guest_script
-                    and "authorized_keys" in guest_script
-                    and "TRUENAS_QGA_KEY_ONLY" in guest_script
+                    "user.query" in guest_script
+                    and "user.create" in guest_script
+                    and "user.update" in guest_script
+                    and '"sudo_commands_nopasswd": ["ALL"]' in guest_script
+                    and "TRUENAS_MIDDLEWARE_OK" in guest_script
                     and "chpasswd" not in guest_script
-                    and "/etc/sudoers.d/freq-freq-admin" in guest_script
-                    and 'chown freq-admin:$(id -gn freq-admin) "$_h"' in guest_script
-                    and "chown -R freq-admin:$(id -gn freq-admin)" in guest_script
+                    and "/etc/sudoers.d" not in guest_script
+                    and "useradd" not in guest_script
+                    and 'chown "$_svc":$(id -gn "$_svc") "$_h"' in guest_script
+                    and 'chown -R "$_svc":$(id -gn "$_svc")' in guest_script
                     and "_home_unsafe" in guest_script
                     and "SSH_OWNERSHIP_FAIL" in guest_script
                     and "SSH_OWNERSHIP_OK" in guest_script
+                    and "sudo -n true" in guest_script
+                    and "SUDO_NOPASSWD_FAIL" in guest_script
+                    and "SUDO_NOPASSWD_OK" in guest_script
                 )
                 return 0, json.dumps({
                     "exitcode": 0,
-                    "out-data": "SSH_OWNERSHIP_OK\nDEPLOY_OK\n",
+                    "out-data": (
+                        "TRUENAS_MIDDLEWARE_OK\n"
+                        "SSH_OWNERSHIP_OK\n"
+                        "SUDO_NOPASSWD_OK\n"
+                        "DEPLOY_OK\n"
+                    ),
                 }), ""
 
             with (
