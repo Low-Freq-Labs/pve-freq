@@ -138,28 +138,44 @@ else
     unset _pass
 fi
 
-if [ "$VARIANT" != "scale" ]; then
-    id '%(svc_name)s' >/dev/null 2>&1 || { echo ACCOUNT_MISSING; exit 1; }
-fi
+id '%(svc_name)s' >/dev/null 2>&1 || { echo ACCOUNT_MISSING; exit 1; }
 
-if [ "$VARIANT" != "scale" ]; then
-    svc_home=""
-    if command -v getent >/dev/null 2>&1; then
-        svc_home=$(getent passwd '%(svc_name)s' | cut -d: -f6 2>/dev/null)
-    fi
-    if [ -z "$svc_home" ] && command -v pw >/dev/null 2>&1; then
-        svc_home=$(pw usershow '%(svc_name)s' | cut -d: -f9 2>/dev/null)
-    fi
-    if [ -z "$svc_home" ]; then
-        svc_home="/home/%(svc_name)s"
-    fi
-    mkdir -p "$svc_home/.ssh"
+svc_home=""
+if command -v getent >/dev/null 2>&1; then
+    svc_home=$(getent passwd '%(svc_name)s' | cut -d: -f6 2>/dev/null)
+fi
+if [ -z "$svc_home" ] && command -v pw >/dev/null 2>&1; then
+    svc_home=$(pw usershow '%(svc_name)s' | cut -d: -f9 2>/dev/null)
+fi
+if [ -z "$svc_home" ]; then
+    svc_home="/home/%(svc_name)s"
+fi
+mkdir -p "$svc_home/.ssh"
+if [ -n '%(pubkey)s' ]; then
+    grep -qF '%(pubkey)s' "$svc_home/.ssh/authorized_keys" 2>/dev/null || echo '%(pubkey)s' >> "$svc_home/.ssh/authorized_keys"
+    expected_uid=$(id -u '%(svc_name)s')
+    expected_gid=$(id -g '%(svc_name)s')
+    chown '%(svc_name)s':$(id -gn '%(svc_name)s') "$svc_home"
+    chown -R '%(svc_name)s':$(id -gn '%(svc_name)s') "$svc_home/.ssh"
     chmod 700 "$svc_home/.ssh"
-    if [ -n '%(pubkey)s' ]; then
-        grep -qF '%(pubkey)s' "$svc_home/.ssh/authorized_keys" 2>/dev/null || echo '%(pubkey)s' >> "$svc_home/.ssh/authorized_keys"
-        chmod 600 "$svc_home/.ssh/authorized_keys"
-        chown -R '%(svc_name)s' "$svc_home/.ssh"
+    chmod 600 "$svc_home/.ssh/authorized_keys"
+    if [ "$VARIANT" != "core" ]; then
+        home_uid=$(stat -c %%u "$svc_home")
+        home_gid=$(stat -c %%g "$svc_home")
+        home_mode=$(stat -c %%a "$svc_home")
+        ssh_uid=$(stat -c %%u "$svc_home/.ssh")
+        ssh_gid=$(stat -c %%g "$svc_home/.ssh")
+        key_uid=$(stat -c %%u "$svc_home/.ssh/authorized_keys")
+        key_gid=$(stat -c %%g "$svc_home/.ssh/authorized_keys")
+        ssh_mode=$(stat -c %%a "$svc_home/.ssh")
+        key_mode=$(stat -c %%a "$svc_home/.ssh/authorized_keys")
+        home_unsafe=$(python3 -c 'import os,sys; print(int(bool(os.stat(sys.argv[1]).st_mode & 0o022)))' "$svc_home")
+        test "$home_uid:$home_gid:$home_unsafe" = "$expected_uid:$expected_gid:0" && \
+            test "$ssh_uid:$ssh_gid:$ssh_mode" = "$expected_uid:$expected_gid:700" && \
+            test "$key_uid:$key_gid:$key_mode" = "$expected_uid:$expected_gid:600" || \
+            { echo "SSH_OWNERSHIP_FAIL home=$home_uid:$home_gid/$home_mode .ssh=$ssh_uid:$ssh_gid/$ssh_mode key=$key_uid:$key_gid/$key_mode expected=$expected_uid:$expected_gid"; exit 1; }
     fi
+    echo SSH_OWNERSHIP_OK
 fi
 
 if [ "$VARIANT" = "core" ] && [ -d /usr/local/etc/sudoers.d ]; then
@@ -181,6 +197,9 @@ echo DEPLOY_OK
         return False
     elif MARKER_DEPLOY_OK not in out:
         fmt.step_fail(f"Deploy script failed ({(err or out)[:80]})")
+        return False
+    elif pubkey and "SSH_OWNERSHIP_OK" not in out:
+        fmt.step_fail("TrueNAS SSH ownership/mode verification failed")
         return False
 
     if "CHPASSWD_FAIL" in out:

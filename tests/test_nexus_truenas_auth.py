@@ -15,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -112,12 +113,67 @@ class TestTruenasDeployerTemplateTruth(unittest.TestCase):
         remove_section = src.split("def remove(", 1)[1]
         self.assertNotIn("%(svc_name)s", remove_section)
 
+    def test_scale_deploy_enforces_effective_ssh_ownership_every_run(self):
+        from freq.deployers.nas import truenas
+
+        commands = []
+
+        def fake_ssh(command, **_kwargs):
+            commands.append(command)
+            if command == "echo OK":
+                return 0, "OK\n", ""
+            return 0, "ACCOUNT_OK\nSSH_OWNERSHIP_OK\nDEPLOY_OK\n", ""
+
+        ctx = {
+            "svc_name": "freq-admin",
+            "svc_pass": "test-password",
+            "pubkey": "ssh-ed25519 AAAA-test freq-admin@dc01-fleet",
+            "key_path": "",
+        }
+        with patch("freq.modules.init_cmd._init_ssh", return_value=fake_ssh):
+            self.assertTrue(
+                truenas.deploy("192.168.255.25", ctx, "bootstrap", "", "freq-ops")
+            )
+
+        deploy_script = commands[1]
+        self.assertIn('if [ "$VARIANT" = "scale" ]', deploy_script)
+        self.assertIn("midclt\", \"call\", \"user.update", deploy_script)
+        self.assertIn(
+            "chown 'freq-admin':$(id -gn 'freq-admin') \"$svc_home\"",
+            deploy_script,
+        )
+        self.assertIn("chown -R 'freq-admin':$(id -gn 'freq-admin')", deploy_script)
+        self.assertIn('home_uid=$(stat -c %u "$svc_home")', deploy_script)
+        self.assertIn("home_unsafe", deploy_script)
+        self.assertIn('stat -c %u "$svc_home/.ssh"', deploy_script)
+        self.assertIn('stat -c %a "$svc_home/.ssh/authorized_keys"', deploy_script)
+        self.assertIn("SSH_OWNERSHIP_FAIL", deploy_script)
+        self.assertIn("SSH_OWNERSHIP_OK", deploy_script)
+
+    def test_scale_deploy_rejects_content_only_success_without_owner_proof(self):
+        from freq.deployers.nas import truenas
+
+        def fake_ssh(command, **_kwargs):
+            if command == "echo OK":
+                return 0, "OK\n", ""
+            return 0, "ACCOUNT_OK\nDEPLOY_OK\n", ""
+
+        ctx = {
+            "svc_name": "freq-admin",
+            "svc_pass": "test-password",
+            "pubkey": "ssh-ed25519 AAAA-test freq-admin@dc01-fleet",
+            "key_path": "",
+        }
+        with patch("freq.modules.init_cmd._init_ssh", return_value=fake_ssh):
+            self.assertFalse(
+                truenas.deploy("192.168.255.25", ctx, "bootstrap", "", "freq-ops")
+            )
+
 
 class TestTruenasRemove(unittest.TestCase):
     """TrueNAS uninstall script should interpolate safely and report success."""
 
     def test_remove_uses_env_based_script(self):
-        from unittest.mock import patch
         from freq.deployers.nas import truenas
 
         with patch("freq.core.ssh.run") as mock_run:

@@ -8588,6 +8588,8 @@ def _skip_reason(err):
     operators distinguish routing/firewall/host-down cases.
     """
     err_l = err.lower()
+    if "strictmodes ownership/mode mismatch:" in err_l:
+        return err[err_l.index("strictmodes ownership/mode mismatch:"):].strip()
     if "no route to host" in err_l:
         return "no route to host (check VLAN/routing)"
     if "network is unreachable" in err_l:
@@ -8893,6 +8895,14 @@ def _phase_verify(cfg, ctx):
                 return (h, None, None, None)
             try:
                 ok, err = _verify_host(h.ip, h.htype, svc_name, verify_key, rsa_file, cfg=cfg)
+                if not ok and "auth failed" in _skip_reason(err):
+                    vmid = _resolve_existing_host_vmid(ctx, h)
+                    node_ip = (ctx.get("vmid_node_map", {}) or {}).get(vmid)
+                    ownership = _guest_agent_ssh_ownership_diagnosis(
+                        cfg, ctx, vmid, node_ip, svc_name
+                    )
+                    if ownership:
+                        err = f"{err}; {ownership}"
                 return (h, label, ok, err)
             except Exception as e:
                 return (h, label, False, str(e))
@@ -11163,8 +11173,27 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
         deploy_script += (
             f'grep -qF "{pubkey}" "$_h/.ssh/authorized_keys" 2>/dev/null '
             f'|| echo "{pubkey}" >> "$_h/.ssh/authorized_keys"\n'
+            f'_uid=$(id -u {svc_name})\n'
+            f'_gid=$(id -g {svc_name})\n'
+            f'chown {svc_name}:$(id -gn {svc_name}) "$_h"\n'
+            f'chown -R {svc_name}:$(id -gn {svc_name}) "$_h/.ssh"\n'
+            f'chmod 700 "$_h/.ssh"\n'
             f'chmod 600 "$_h/.ssh/authorized_keys"\n'
-            f'chown -R {svc_name}:{svc_name} "$_h/.ssh"\n'
+            f'_home_uid=$(stat -c %u "$_h")\n'
+            f'_home_gid=$(stat -c %g "$_h")\n'
+            f'_home_mode=$(stat -c %a "$_h")\n'
+            f"_home_unsafe=$(python3 -c 'import os,sys; print(int(bool(os.stat(sys.argv[1]).st_mode & 0o022)))' \"$_h\")\n"
+            f'_ssh_uid=$(stat -c %u "$_h/.ssh")\n'
+            f'_ssh_gid=$(stat -c %g "$_h/.ssh")\n'
+            f'_key_uid=$(stat -c %u "$_h/.ssh/authorized_keys")\n'
+            f'_key_gid=$(stat -c %g "$_h/.ssh/authorized_keys")\n'
+            f'_ssh_mode=$(stat -c %a "$_h/.ssh")\n'
+            f'_key_mode=$(stat -c %a "$_h/.ssh/authorized_keys")\n'
+            f'test "$_home_uid:$_home_gid:$_home_unsafe" = "$_uid:$_gid:0" '
+            f'&& test "$_ssh_uid:$_ssh_gid:$_ssh_mode" = "$_uid:$_gid:700" '
+            f'&& test "$_key_uid:$_key_gid:$_key_mode" = "$_uid:$_gid:600" '
+            f'|| {{ echo SSH_OWNERSHIP_FAIL; exit 1; }}\n'
+            f'echo SSH_OWNERSHIP_OK\n'
         )
     deploy_script += "echo DEPLOY_OK\n"
 
@@ -11199,6 +11228,11 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
             out_data = result.get("out-data", "")
             exit_code = result.get("exitcode", -1)
             if exit_code == 0 and "DEPLOY_OK" in out_data:
+                if pubkey and "SSH_OWNERSHIP_OK" not in out_data:
+                    fmt.step_warn(
+                        f"{label}: guest deploy did not prove SSH ownership/modes"
+                    )
+                    return False
                 fmt.step_ok(f"Deployed via guest agent (VM {vmid} on {node_ip})")
                 return True
             err_data = result.get("err-data", "")
@@ -11207,7 +11241,9 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
                 f"{(err_data or out_data).strip()[:80]}"
             )
         except (_json.JSONDecodeError, ValueError):
-            if "DEPLOY_OK" in out:
+            if "DEPLOY_OK" in out and (
+                not pubkey or "SSH_OWNERSHIP_OK" in out
+            ):
                 fmt.step_ok(f"Deployed via guest agent (VM {vmid} on {node_ip})")
                 return True
         return False
@@ -11218,6 +11254,88 @@ def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
         host=ip, vmid=vmid, node=node_ip, rc=rc, err=combined[:120],
     )
     return False
+
+
+def _guest_agent_ssh_ownership_diagnosis(cfg, ctx, vmid, node_ip, svc_name):
+    """Return a StrictModes ownership mismatch found through read-only QGA."""
+    if not vmid or not node_ip:
+        return ""
+    key_path = ctx.get("key_path", "") or cfg.ssh_key_path
+    probe = (
+        f'_u={svc_name}; _h=$(getent passwd "$_u" | cut -d: -f6); '
+        'test -n "$_h" || exit 2; '
+        '_uid=$(id -u "$_u"); _gid=$(id -g "$_u"); '
+        'test -d "$_h/.ssh" || exit 3; '
+        'test -f "$_h/.ssh/authorized_keys" || exit 4; '
+        'printf "SSH_OWNER %s %s %s %s %s %s %s %s\\n" '
+        '"$_uid" "$_gid" '
+        '"$(stat -c %u "$_h")" "$(stat -c %g "$_h")" '
+        '"$(stat -c %u "$_h/.ssh")" "$(stat -c %g "$_h/.ssh")" '
+        '"$(stat -c %u "$_h/.ssh/authorized_keys")" '
+        '"$(stat -c %g "$_h/.ssh/authorized_keys")"; '
+        'printf "SSH_MODE %s %s %s\\n" '
+        '"$(stat -c %a "$_h")" '
+        '"$(stat -c %a "$_h/.ssh")" '
+        '"$(stat -c %a "$_h/.ssh/authorized_keys")"'
+    )
+    script_b64 = base64.b64encode(probe.encode()).decode()
+    command = [
+        "ssh", "-n", "-i", key_path,
+        "-o", "ConnectTimeout=5",
+        "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+        f"{svc_name}@{node_ip}",
+        f'sudo qm guest exec {vmid} -- sh -c "echo {script_b64} | base64 -d | sh"',
+    ]
+    rc, out, _err = _run(command, timeout=30)
+    if rc != 0:
+        return ""
+    try:
+        result = json.loads(out)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return ""
+    if int(result.get("exitcode", -1)) != 0:
+        return ""
+    out_data = str(result.get("out-data") or "")
+    owner_match = re.search(
+        r"SSH_OWNER\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+"
+        r"(\d+)\s+(\d+)\s+(\d+)\s+(\d+)",
+        out_data,
+    )
+    mode_match = re.search(r"SSH_MODE\s+(\d+)\s+(\d+)\s+(\d+)", out_data)
+    if not owner_match or not mode_match:
+        return ""
+    (
+        expected_uid,
+        expected_gid,
+        home_uid,
+        home_gid,
+        ssh_uid,
+        ssh_gid,
+        key_uid,
+        key_gid,
+    ) = owner_match.groups()
+    home_mode, ssh_mode, key_mode = mode_match.groups()
+    home_unsafe = int(home_mode, 8) & 0o022
+    if (
+        home_uid == expected_uid
+        and home_gid == expected_gid
+        and home_unsafe == 0
+        and ssh_uid == expected_uid
+        and ssh_gid == expected_gid
+        and key_uid == expected_uid
+        and key_gid == expected_gid
+        and ssh_mode == "700"
+        and key_mode == "600"
+    ):
+        return ""
+    return (
+        "StrictModes ownership/mode mismatch: "
+        f"account={expected_uid}:{expected_gid}, "
+        f"home={home_uid}:{home_gid}/{home_mode}, "
+        f".ssh={ssh_uid}:{ssh_gid}/{ssh_mode}, "
+        f"authorized_keys={key_uid}:{key_gid}/{key_mode}"
+    )
 
 
 def _headless_fleet_deploy(

@@ -46,6 +46,59 @@ def _deploy_ctx():
 
 
 class TestOwnedVirtualApplianceDeploy(unittest.TestCase):
+    @patch("freq.modules.init_cmd._run")
+    def test_phase12_qga_diagnosis_names_strictmodes_owner_mismatch(self, run):
+        run.return_value = (
+            0,
+            json.dumps({
+                "exitcode": 0,
+                "out-data": (
+                    "SSH_OWNER 3008 3008 3005 3005 3005 3005 3005 3005\n"
+                    "SSH_MODE 755 700 600\n"
+                ),
+            }),
+            "",
+        )
+        cfg = types.SimpleNamespace(ssh_key_path="/tmp/fleet-key")
+        reason = init_cmd._guest_agent_ssh_ownership_diagnosis(
+            cfg,
+            {"key_path": "/tmp/fleet-key"},
+            5001,
+            "10.25.255.26",
+            "freq-admin",
+        )
+
+        self.assertEqual(
+            reason,
+            "StrictModes ownership/mode mismatch: account=3008:3008, "
+            "home=3005:3005/755, .ssh=3005:3005/700, "
+            "authorized_keys=3005:3005/600",
+        )
+        self.assertEqual(init_cmd._skip_reason(f"Permission denied; {reason}"), reason)
+
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_guest_agent_rejects_deploy_without_owner_proof(self, _fmt, run):
+        run.return_value = (
+            0,
+            json.dumps({"exitcode": 0, "out-data": "DEPLOY_OK\n"}),
+            "",
+        )
+        cfg = types.SimpleNamespace(ssh_key_path="/tmp/fleet-key")
+        ctx = _deploy_ctx()
+
+        self.assertFalse(
+            init_cmd._deploy_via_guest_agent(
+                cfg,
+                ctx,
+                5001,
+                "10.25.255.26",
+                "192.168.255.25",
+                "truenas-lab",
+                "truenas",
+            )
+        )
+
     @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
     @patch("freq.modules.init_cmd._deploy_via_guest_agent", return_value=True)
     @patch(
@@ -177,9 +230,16 @@ class TestOwnedVirtualApplianceDeploy(unittest.TestCase):
                 account_ready = (
                     ctx["pubkey"] in guest_script
                     and "authorized_keys" in guest_script
-                    and "chown -R freq-admin:freq-admin" in guest_script
+                    and 'chown freq-admin:$(id -gn freq-admin) "$_h"' in guest_script
+                    and "chown -R freq-admin:$(id -gn freq-admin)" in guest_script
+                    and "_home_unsafe" in guest_script
+                    and "SSH_OWNERSHIP_FAIL" in guest_script
+                    and "SSH_OWNERSHIP_OK" in guest_script
                 )
-                return 0, json.dumps({"exitcode": 0, "out-data": "DEPLOY_OK\n"}), ""
+                return 0, json.dumps({
+                    "exitcode": 0,
+                    "out-data": "SSH_OWNERSHIP_OK\nDEPLOY_OK\n",
+                }), ""
 
             with (
                 patch("freq.modules.init_cmd._run", side_effect=run_deploy),
