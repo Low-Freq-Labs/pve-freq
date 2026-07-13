@@ -630,9 +630,10 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             ip = dev.ip
             if ip in existing:
                 e = existing[ip]
+                # Existing managed state may encode the browser-frozen
+                # acknowledged-device boundary. Sync may refresh identity,
+                # but it is not authoritative enough to promote that row.
                 managed = e.get("managed", True)
-                if dev.device_type == "truenas" and dev.scope != "lab":
-                    managed = True
                 discovered[ip] = {
                     "label": e["label"],
                     "htype": e["htype"],

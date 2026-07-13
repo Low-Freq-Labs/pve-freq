@@ -242,8 +242,8 @@ class TestHostsSync(unittest.TestCase):
         self.assertIn("switch", content)
 
     @patch("freq.core.ssh.run")
-    def test_core_truenas_boundary_repairs_stale_unmanaged_host(self, mock_ssh):
-        """A core TrueNAS physical device must not stay hidden as unmanaged."""
+    def test_core_truenas_boundary_preserves_explicit_unmanaged_host(self, mock_ssh):
+        """Background sync must preserve an acknowledged TrueNAS boundary."""
         existing = [
             Host(
                 ip="192.168.255.25",
@@ -263,6 +263,15 @@ class TestHostsSync(unittest.TestCase):
                 groups="infrastructure",
                 scope="core",
             ),
+            # Force the sync writer path instead of merely reloading the
+            # unchanged input registry.
+            "switch": PhysicalDevice(
+                key="switch",
+                ip="192.168.255.5",
+                label="switch",
+                device_type="switch",
+                scope="core",
+            ),
         }
         cfg = _make_cfg(self.tmpdir, hosts=existing, fleet_boundaries=fb, pve_nodes=[], pve_node_names=[])
 
@@ -273,8 +282,67 @@ class TestHostsSync(unittest.TestCase):
 
         content = self._read_hosts_conf_raw(cfg)
         block = content.split('label = "truenas"', 1)[1].split("[[host]]", 1)[0]
-        self.assertNotIn("managed = false", block)
-        self.assertTrue(cfg.hosts[0].managed)
+        self.assertIn("managed = false", block)
+        self.assertFalse(cfg.hosts[0].managed)
+
+        from freq.core.config import load_hosts_toml
+
+        reloaded = load_hosts_toml(cfg.hosts_file)
+        reloaded_by_ip = {host.ip: host for host in reloaded}
+        self.assertFalse(reloaded_by_ip["192.168.255.25"].managed)
+
+    @patch("freq.core.ssh.run")
+    def test_physical_sync_never_promotes_existing_unmanaged_devices(self, mock_ssh):
+        """Every acknowledged physical type keeps explicit unmanaged state."""
+        devices = (
+            ("truenas", "192.168.255.25"),
+            ("idrac", "192.168.255.10"),
+            ("switch", "192.168.255.5"),
+            ("pfsense", "192.168.255.1"),
+        )
+        existing = [
+            Host(ip=ip, label=kind, htype=kind, managed=False)
+            for kind, ip in devices
+        ]
+        fb = FleetBoundaries()
+        fb.physical = {
+            kind: PhysicalDevice(
+                key=kind,
+                ip=ip,
+                label=kind,
+                device_type=kind,
+                scope="core",
+            )
+            for kind, ip in devices
+        }
+        # Force a write/reload cycle while the four existing boundaries are
+        # carried through the same physical-device merge.
+        fb.physical["new-idrac"] = PhysicalDevice(
+            key="new-idrac",
+            ip="192.168.255.12",
+            label="new-idrac",
+            device_type="idrac",
+            scope="core",
+        )
+        cfg = _make_cfg(
+            self.tmpdir,
+            hosts=existing,
+            fleet_boundaries=fb,
+            pve_nodes=[],
+            pve_node_names=[],
+        )
+        mock_ssh.return_value = _fake_ssh_result(stdout="[]")
+
+        from freq.modules.hosts import _hosts_sync
+
+        _hosts_sync(cfg)
+
+        from freq.core.config import load_hosts_toml
+
+        reloaded = {host.ip: host for host in load_hosts_toml(cfg.hosts_file)}
+        for _kind, ip in devices:
+            with self.subTest(ip=ip):
+                self.assertFalse(reloaded[ip].managed)
 
     @patch("freq.core.ssh.run")
     def test_label_sanitization_spaces_to_hyphens(self, mock_ssh):
