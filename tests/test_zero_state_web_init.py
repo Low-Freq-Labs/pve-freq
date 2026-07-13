@@ -3,6 +3,7 @@
 import inspect
 import os
 import stat
+import subprocess
 import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -46,6 +47,14 @@ def _objects():
         "owned_vmids": [100, 101],
         "template_vmids": [9000],
         "acknowledged_out_of_contract_vmids": [777],
+        "acknowledged_devices": [
+            {
+                "resource_id": "device:unknown:10.25.0.99",
+                "kind": "unknown",
+                "host": "10.25.0.99",
+                "label": "unknown-99",
+            }
+        ],
         "owned_devices": [
             {
                 "resource_id": resource,
@@ -147,8 +156,128 @@ def test_contract_adapter_vm_toml_drives_cli_contract_semantics(tmp_path):
     assert "owned_vmids = [100, 101]" in text
     assert "template_vmids = [9000]" in text
     assert "acknowledged_out_of_contract_vmids = [777]" in text
+    assert 'acknowledged_device_hosts = ["10.25.0.99"]' in text
     assert "--pve-nodes" in cmd and "10.25.0.11,10.25.0.12" in cmd
     assert "--pve-node-names" in cmd and "pve01,pve02" in cmd
+
+
+def test_acknowledged_device_remains_unmanaged_after_known_type_fingerprint(tmp_path):
+    from freq.modules.init_cmd import (
+        _apply_acknowledged_device_contract,
+        _apply_operator_vm_contract_args,
+        _reconcile_existing_managed_hosts,
+    )
+
+    contract_path = tmp_path / "contract.toml"
+    contract_path.write_text(
+        '[fleet]\nacknowledged_device_hosts = ["10.25.0.99"]\n',
+        encoding="utf-8",
+    )
+    cfg = SimpleNamespace(
+        hosts=[],
+        hosts_file=str(tmp_path / "hosts.toml"),
+        pve_nodes=[],
+        fleet_boundaries=None,
+    )
+    args = SimpleNamespace(
+        vm_contract=str(contract_path),
+        owned_vmids=None,
+        template_vmids=None,
+        acknowledged_out_of_contract_vmids=None,
+    )
+    _apply_operator_vm_contract_args(cfg, args)
+    discovered = {
+        "10.25.0.99": {
+            "label": "truenas",
+            "htype": "truenas",
+            "managed": True,
+            "all_ips": ["10.25.0.99"],
+        }
+    }
+    _apply_acknowledged_device_contract(cfg, discovered)
+    assert discovered["10.25.0.99"]["managed"] is False
+    host = SimpleNamespace(
+        ip="10.25.0.99",
+        all_ips=["10.25.0.99"],
+        label="truenas",
+        htype="truenas",
+        vmid=0,
+        managed=True,
+    )
+    cfg.hosts = [host]
+    with patch("freq.core.config.save_hosts_toml") as save:
+        changed = _reconcile_existing_managed_hosts(cfg, {})
+
+    assert host.managed is False
+    assert changed == ["truenas (10.25.0.99) — browser-acknowledged device 10.25.0.99"]
+    save.assert_called_once_with(cfg.hosts_file, cfg.hosts)
+
+
+def test_web_init_finalizer_switches_managed_tls_then_runtime_ownership(tmp_path):
+    from freq.modules import init_cmd
+
+    conf = tmp_path / "conf"
+    tls = tmp_path / "tls"
+    conf.mkdir()
+    tls.mkdir()
+    (conf / "freq.toml").write_text(
+        '[services]\ntls_cert = "/bootstrap.crt"\ntls_key = "/bootstrap.key"\n',
+        encoding="utf-8",
+    )
+    (tls / "freq.crt").write_text("cert", encoding="utf-8")
+    (tls / "freq.key").write_text("key", encoding="utf-8")
+    cfg = SimpleNamespace(
+        conf_dir=str(conf),
+        data_dir=str(tmp_path / "data"),
+        key_dir=str(tmp_path / "data" / "keys"),
+        vault_file=str(tmp_path / "data" / "vault" / "vault.enc"),
+        log_dir=str(tmp_path / "data" / "log"),
+        credentials_dir=str(tmp_path / "credentials"),
+    )
+    with patch.object(
+        init_cmd, "_ensure_post_init_runtime_state_ownership", return_value=True
+    ) as ownership, patch.object(init_cmd, "_chown", return_value=True) as chown:
+        assert init_cmd._finalize_web_init_runtime_ownership(cfg, "freq-admin") is True
+
+    content = (conf / "freq.toml").read_text(encoding="utf-8")
+    assert f'tls_cert = "{tls / "freq.crt"}"' in content
+    assert f'tls_key = "{tls / "freq.key"}"' in content
+    ownership.assert_called_once_with(cfg, "freq-admin")
+    chown.assert_any_call("freq-admin:freq-admin", str(tls), recursive=True)
+
+
+def test_web_init_runtime_owner_stays_setup_user_until_success_handoff():
+    from freq.modules import init_cmd
+
+    result = SimpleNamespace(returncode=0, stdout="freq-ops\n")
+    with patch.dict(os.environ, {"FREQ_WEB_INIT": "1"}), patch.object(
+        init_cmd.subprocess, "run", return_value=result
+    ) as run:
+        assert init_cmd._post_init_runtime_owner("freq-admin") == "freq-ops"
+
+    assert run.call_args.args[0][2] == "pve-freq-setup.service"
+
+
+def test_success_handoff_shell_is_valid_and_finalizes_before_setup_removal(tmp_path):
+    from freq.modules import serve
+
+    cfg = SimpleNamespace(
+        install_dir=str(tmp_path),
+        ssh_service_account="freq-admin",
+    )
+    accepted = SimpleNamespace(returncode=0)
+    with patch.object(serve.subprocess, "run", return_value=accepted) as run:
+        assert serve._schedule_setup_runtime_handoff(cfg) is True
+
+    handoff_cmd = run.call_args_list[-1].args[0]
+    script = handoff_cmd[-1]
+    assert script.index("_finalize_web_init_runtime_ownership") < script.index(
+        "disable --now pve-freq-setup.service"
+    )
+    parsed = subprocess.run(
+        ["/bin/sh", "-n", "-c", script], capture_output=True, text=True, check=False
+    )
+    assert parsed.returncode == 0, parsed.stderr
 
 
 class _Proc:

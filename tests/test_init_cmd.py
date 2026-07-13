@@ -405,12 +405,13 @@ class TestPureNothingInitContract(unittest.TestCase):
         self.assertIn("os.chmod(creds_path, 0o640)", block)
         self.assertIn("_chown(_credential_owner(svc_name), creds_path)", block)
 
-    def test_web_init_runtime_owner_prefers_managed_service_user(self):
+    def test_web_init_runtime_owner_prefers_setup_user_until_handoff(self):
         src = self._src()
         helper = src.split("def _post_init_runtime_owner", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('"pve-freq-setup.service"', helper)
         self.assertIn('"freq-serve.service"', helper)
         self.assertIn('"-p", "User"', helper)
-        self.assertIn("return service_user", helper)
+        self.assertIn("return setup_user", helper)
         self.assertIn("if _is_container_runtime():", helper)
 
     def test_init_heals_stale_known_hosts_during_trust_establishment(self):
@@ -442,7 +443,8 @@ class TestPureNothingInitContract(unittest.TestCase):
         src = self._src()
         block = src.split("Fix ownership for dashboard")[1].split("logger.info(\"init_phase_complete: Phase 9")[0]
         self.assertIn("cred_dir = _credentials_dir(cfg)", block)
-        self.assertIn("_chown(_credential_owner(svc_name), cred_dir, recursive=False)", block)
+        self.assertIn("runtime_owner = _post_init_runtime_owner(svc_name)", block)
+        self.assertIn("_chown(_credential_owner(runtime_owner), cred_dir, recursive=False)", block)
         self.assertNotIn('"credentials"', block.split("for subdir in", 1)[1].split("]:", 1)[0])
 
     def test_dry_run_plan_honors_cli_service_account_and_pve_nodes(self):

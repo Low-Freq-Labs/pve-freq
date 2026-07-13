@@ -15,6 +15,7 @@ Contract:
 """
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -82,6 +83,24 @@ class TestResolvedKeyIsLive(unittest.TestCase):
             # If ed25519 doesn't exist, resolved key should NOT point to it
             self.assertNotEqual(cfg.ssh_key_path, ed25519_path,
                                 "Resolved key must not point to non-existent ed25519")
+
+
+class TestUnreadableSetupStateFailsClosed(unittest.TestCase):
+    def test_permission_error_is_not_converted_into_cleanup_mutation(self):
+        from types import SimpleNamespace
+
+        from freq.core.setup_state import ensure_setup_state, load_setup_state
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = SimpleNamespace(data_dir=td)
+            ensure_setup_state(cfg, "sonny")
+            setup_dir = os.path.join(td, "setup")
+            os.chmod(setup_dir, 0)
+            try:
+                with self.assertRaises(PermissionError):
+                    load_setup_state(cfg)
+            finally:
+                os.chmod(setup_dir, 0o700)
 
 
 if __name__ == "__main__":

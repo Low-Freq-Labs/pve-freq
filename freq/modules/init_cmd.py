@@ -209,6 +209,17 @@ def _parse_vmid_set(value):
     return vmids
 
 
+def _parse_device_host_set(value):
+    """Parse exact IP/host values from an internal fleet contract."""
+    from freq.core import validate
+
+    hosts = set()
+    for token in _split_csv(value):
+        if validate.ip(token):
+            hosts.add(token)
+    return hosts
+
+
 def _infer_target_htype(label, section=""):
     text = f"{label or ''} {section or ''}".lower()
     if "pfsense" in text or "firewall" in text:
@@ -300,9 +311,9 @@ def _load_uninstall_target_map(path):
 
 
 def _load_vm_contract_file(path):
-    """Load operator-declared VM ownership/template contract from TOML."""
+    """Load operator-declared VM and acknowledged-device contract."""
     if not path:
-        return set(), set(), set()
+        return set(), set(), set(), set()
     try:
         with open(path, "rb") as f:
             data = tomllib.load(f)
@@ -310,7 +321,7 @@ def _load_vm_contract_file(path):
         fmt.step_fail(f"Could not load --vm-contract {path}: {e}")
         raise
     if not isinstance(data, dict):
-        return set(), set(), set()
+        return set(), set(), set(), set()
     scope = data.get("fleet") if isinstance(data.get("fleet"), dict) else data
     owned = scope.get("owned_vmids") or scope.get("owned") or []
     templates = scope.get("template_vmids") or scope.get("templates") or []
@@ -321,7 +332,17 @@ def _load_vm_contract_file(path):
         or scope.get("known_extras")
         or []
     )
-    return _parse_vmid_set(owned), _parse_vmid_set(templates), _parse_vmid_set(acknowledged)
+    acknowledged_device_hosts = (
+        scope.get("acknowledged_device_hosts")
+        or scope.get("acknowledged_devices")
+        or []
+    )
+    return (
+        _parse_vmid_set(owned),
+        _parse_vmid_set(templates),
+        _parse_vmid_set(acknowledged),
+        _parse_device_host_set(acknowledged_device_hosts),
+    )
 
 
 def _apply_operator_vm_contract_args(cfg, args):
@@ -331,12 +352,16 @@ def _apply_operator_vm_contract_args(cfg, args):
     owned_vmids = set()
     template_vmids = set()
     acknowledged_out_of_contract_vmids = set()
+    acknowledged_device_hosts = set()
     contract_path = getattr(args, "vm_contract", None)
     if contract_path:
-        file_owned, file_templates, file_acknowledged = _load_vm_contract_file(contract_path)
+        file_owned, file_templates, file_acknowledged, file_acknowledged_devices = (
+            _load_vm_contract_file(contract_path)
+        )
         owned_vmids.update(file_owned)
         template_vmids.update(file_templates)
         acknowledged_out_of_contract_vmids.update(file_acknowledged)
+        acknowledged_device_hosts.update(file_acknowledged_devices)
     owned_vmids.update(_parse_vmid_set(getattr(args, "owned_vmids", None)))
     template_vmids.update(_parse_vmid_set(getattr(args, "template_vmids", None)))
     acknowledged_out_of_contract_vmids.update(
@@ -345,6 +370,7 @@ def _apply_operator_vm_contract_args(cfg, args):
     cfg._owned_vmids = owned_vmids
     cfg._contract_template_vmids = template_vmids
     cfg._acknowledged_out_of_contract_vmids = acknowledged_out_of_contract_vmids
+    cfg._acknowledged_device_hosts = acknowledged_device_hosts
 
 
 def _pve_nodes_from_args_or_config(cfg, args):
@@ -922,10 +948,10 @@ POST_INIT_DATA_SUBDIRS = (
 def _post_init_runtime_owner(svc_name):
     """Return the local user that must own runtime state after init.
 
-    Bare-metal installs usually run the dashboard as the managed service
-    account. Web Init does not change that on bare metal: setup may launch
-    init through a bootstrap account, but the final systemd service still
-    serves as cfg.ssh_service_account.
+    Bare-metal installs normally run the dashboard as the managed service
+    account. During Web Init, however, the temporary setup listener must keep
+    ownership until it records terminal truth and cleans setup secrets. The
+    success handoff then transfers state to cfg.ssh_service_account.
 
     Container Web Init is different: the dashboard runs as the image's non-root
     runtime user, then sudo launches init as root to create the fleet service
@@ -933,6 +959,22 @@ def _post_init_runtime_owner(svc_name):
     dashboard runtime user or the freshly-seeded vault becomes unusable.
     """
     if os.environ.get("FREQ_WEB_INIT") == "1":
+        # Bare-metal Web Init is still being served by the temporary setup
+        # identity until the parent worker has recorded terminal truth and
+        # cleaned its setup namespace. Keep state readable by that listener;
+        # the success handoff applies final service-account ownership.
+        try:
+            r = subprocess.run(
+                ["systemctl", "show", "pve-freq-setup.service", "-p", "User", "--value"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            setup_user = (r.stdout or "").strip()
+            if r.returncode == 0 and setup_user:
+                return setup_user
+        except (OSError, subprocess.SubprocessError):
+            pass
         try:
             r = subprocess.run(
                 ["systemctl", "show", "freq-serve.service", "-p", "User", "--value"],
@@ -1049,6 +1091,62 @@ def _ensure_post_init_runtime_state_ownership(cfg, svc_name):
         if d_path and os.path.exists(d_path):
             ok = _chown(f"{owner_name}:{owner_name}", d_path, recursive=True) and ok
     return ok
+
+
+def _finalize_web_init_runtime_ownership(cfg, svc_name):
+    """Switch staged Web Init state and TLS to the managed runtime owner."""
+    cert_dir = os.path.join(os.path.dirname(cfg.conf_dir), "tls")
+    cert_path = os.path.join(cert_dir, "freq.crt")
+    key_path = os.path.join(cert_dir, "freq.key")
+    toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+    if not all(os.path.isfile(path) for path in (cert_path, key_path, toml_path)):
+        return False
+    tmp = f"{toml_path}.web-init-handoff"
+    try:
+        with open(toml_path, encoding="utf-8") as handle:
+            content = handle.read()
+        content = _update_toml_value(content, "tls_cert", cert_path)
+        content = _update_toml_value(content, "tls_key", key_path)
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(content)
+    except OSError:
+        return False
+    if not _ensure_post_init_runtime_state_ownership(cfg, svc_name):
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+    if not _chown(f"{svc_name}:{svc_name}", cert_dir, recursive=True):
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+    cred_dir = _credentials_dir(cfg)
+    if os.path.isdir(cred_dir) and not _chown(
+        _credential_owner(svc_name), cred_dir, recursive=True
+    ):
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+    if not _chown(f"{svc_name}:{svc_name}", tmp):
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+    try:
+        os.replace(tmp, toml_path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+    return True
 
 
 def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
@@ -4487,6 +4585,18 @@ def _inventory_only_reason(cfg, ctx, host):
     if _is_operator_auto_excluded(label):
         return "operator/product host"
 
+    acknowledged_device_hosts = set(
+        getattr(cfg, "_acknowledged_device_hosts", set()) or set()
+    )
+    host_ips = {
+        str(ip).strip()
+        for ip in [getattr(host, "ip", "")] + list(getattr(host, "all_ips", []) or [])
+        if str(ip).strip()
+    }
+    matched_acknowledged = sorted(host_ips.intersection(acknowledged_device_hosts))
+    if matched_acknowledged:
+        return f"browser-acknowledged device {matched_acknowledged[0]}"
+
     fb = getattr(cfg, "fleet_boundaries", None)
     cat_name = ""
     if vmid and fb and hasattr(fb, "categorize"):
@@ -4537,6 +4647,17 @@ def _reconcile_existing_managed_hosts(cfg, ctx):
         for item in changed[:8]:
             fmt.line(f"    {fmt.C.DIM}- {item}{fmt.C.RESET}")
     return changed
+
+
+def _apply_acknowledged_device_contract(cfg, discovered):
+    """Keep browser-acknowledged devices inventory-only after fingerprinting."""
+    acknowledged = set(getattr(cfg, "_acknowledged_device_hosts", set()) or set())
+    for ip, row in (discovered or {}).items():
+        row_ips = {ip, *(row.get("all_ips") or [])}
+        if row_ips.intersection(acknowledged):
+            row["managed"] = False
+            row["contract_reason"] = "browser-acknowledged device"
+    return acknowledged
 
 
 def _phase_fleet_discover(cfg, ctx, args=None):
@@ -5259,6 +5380,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     fmt.line(f"  {fmt.C.BOLD}Step 4: Fleet Registration{fmt.C.RESET}")
     fmt.blank()
 
+    acknowledged_device_hosts = _apply_acknowledged_device_contract(cfg, discovered)
+
     _reconcile_existing_managed_hosts(cfg, ctx)
 
     if not discovered:
@@ -5299,10 +5422,21 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 # from seeded template files or repeated runs
                 from freq.core.config import save_hosts_toml
                 skipped_inventory_only = 0
+                registered_managed = 0
+                registered_acknowledged = 0
                 for ip, d in discovered.items():
-                    if not d.get("managed", False):
+                    is_acknowledged_device = bool(
+                        {ip, *(d.get("all_ips") or [])}.intersection(
+                            acknowledged_device_hosts
+                        )
+                    )
+                    if not d.get("managed", False) and not is_acknowledged_device:
                         skipped_inventory_only += 1
                         continue
+                    if is_acknowledged_device:
+                        registered_acknowledged += 1
+                    else:
+                        registered_managed += 1
                     host = Host(
                         ip=ip,
                         label=d["label"],
@@ -5314,14 +5448,18 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     )
                     cfg.hosts.append(host)
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
-                registered = len(discovered) - skipped_inventory_only
-                if skipped_inventory_only:
-                    fmt.step_ok(
-                        f"Auto-registered {registered} managed host(s); "
-                        f"{skipped_inventory_only} inventory-only guest(s) left out of hosts.toml"
+                summary = f"Auto-registered {registered_managed} managed host(s)"
+                if registered_acknowledged:
+                    summary += (
+                        f"; retained {registered_acknowledged} browser-acknowledged "
+                        "inventory-only device(s)"
                     )
-                else:
-                    fmt.step_ok(f"Auto-registered {registered} managed host(s)")
+                if skipped_inventory_only:
+                    summary += (
+                        f"; {skipped_inventory_only} other inventory-only guest(s) "
+                        "left out of hosts.toml"
+                    )
+                fmt.step_ok(summary)
         else:
             # Interactive: confirm registration
             _prompt_discovered_physical_scopes(discovered)
@@ -6584,6 +6722,7 @@ def _phase_fleet_configure(cfg, ctx):
     # cert existed from a prior init but freq.toml had been reset/re-seeded,
     # the dashboard would run HTTP instead of HTTPS.
     tls_config_changed = False
+    web_init_handoff = os.environ.get("FREQ_WEB_INIT") == "1"
     if os.path.isfile(cert_path) and os.path.isfile(key_path_tls):
         try:
             with open(toml_path) as f:
@@ -6595,7 +6734,9 @@ def _phase_fleet_configure(cfg, ctx):
                 or f'tls_cert = "{cert_path}"' not in content
                 or f'tls_key = "{key_path_tls}"' not in content
             )
-            if needs_update:
+            if needs_update and web_init_handoff:
+                fmt.step_ok("Managed TLS certificate staged for Web Init handoff")
+            elif needs_update:
                 content = _update_toml_value(content, "tls_cert", cert_path)
                 content = _update_toml_value(content, "tls_key", key_path_tls)
                 with open(toml_path, "w") as f:
@@ -6622,16 +6763,17 @@ def _phase_fleet_configure(cfg, ctx):
     # Dashboard runs as the service account. Init runs as root.
     # Every directory the dashboard needs must be owned by svc_name.
     install_dir = os.path.dirname(cfg.conf_dir)
+    runtime_owner = _post_init_runtime_owner(svc_name)
     for subdir in ["data/keys", "data/log", "data/vault", "data/cache", "tls"]:
         target = os.path.join(install_dir, subdir)
         if os.path.isdir(target):
-            _chown(f"{svc_name}:{svc_name}", target, recursive=True)
+            _chown(f"{runtime_owner}:{runtime_owner}", target, recursive=True)
     cred_dir = _credentials_dir(cfg)
     if os.path.isdir(cred_dir):
-        _chown(_credential_owner(svc_name), cred_dir, recursive=False)
+        _chown(_credential_owner(runtime_owner), cred_dir, recursive=False)
     # conf/ must be readable by dashboard (freq.toml, hosts.toml, etc.)
-    _chown(f"{svc_name}:{svc_name}", cfg.conf_dir, recursive=True)
-    fmt.step_ok(f"Dashboard data directories owned by {svc_name}")
+    _chown(f"{runtime_owner}:{runtime_owner}", cfg.conf_dir, recursive=True)
+    fmt.step_ok(f"Dashboard data directories owned by {runtime_owner}")
     logger.info("init_phase_complete: Phase 9 - fleet_configure", phase=9)
 
 

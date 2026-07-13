@@ -205,8 +205,20 @@ class TestWebInitRuntimeHandoff(unittest.TestCase):
         self.assertIn('"rm", "-f", setup_unit', helper)
         self.assertIn('"rm", "-rf", bootstrap_tls_dir', helper)
         self.assertIn('"systemctl", "daemon-reload"', helper)
+        self.assertIn("_finalize_web_init_runtime_ownership", helper)
+        self.assertLess(
+            helper.index("_finalize_web_init_runtime_ownership"),
+            helper.index('"disable", "--now"'),
+        )
         self.assertIn("freq-serve.service", helper)
-        self.assertIn("kill -TERM", helper)
+
+    def test_setup_status_turns_state_read_failure_into_blocked_truth(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        status = src.split("def _serve_setup_status", 1)[1].split("\n    def ", 1)[0]
+        self.assertIn("setup_state_unreadable", status)
+        self.assertIn('zero_state = "blocked"', status)
+        self.assertIn('"code": "setup_state_unreadable"', status)
 
     def test_web_init_does_not_start_managed_service_before_handoff(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:

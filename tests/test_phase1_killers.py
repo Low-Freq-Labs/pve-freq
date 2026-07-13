@@ -489,11 +489,18 @@ class TestFleetInventoryContracts(unittest.TestCase):
     def test_headless_registration_skips_inventory_only_guests(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
             src = f.read()
-        registration = src.split("Auto-register only managed targets in headless mode.")[1].split("else:", 1)[0]
+        registration = src.split("Auto-register only managed targets in headless mode.")[1].split(
+            "# Offer to add non-discoverable devices manually", 1
+        )[0]
 
-        self.assertIn('if not d.get("managed", False):', registration)
+        self.assertIn(
+            'if not d.get("managed", False) and not is_acknowledged_device:',
+            registration,
+        )
         self.assertIn("skipped_inventory_only += 1", registration)
-        self.assertIn("inventory-only guest(s) left out of hosts.toml", registration)
+        self.assertIn("registered_acknowledged += 1", registration)
+        self.assertIn("browser-acknowledged", registration)
+        self.assertIn("other inventory-only guest(s)", registration)
 
     def test_init_summary_counts_managed_hosts_not_inventory_only_hosts(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:

@@ -60,6 +60,11 @@ def load_setup_state(cfg, *, now: float | None = None) -> dict:
             state = json.load(handle)
     except FileNotFoundError:
         return {}
+    except PermissionError:
+        # Callers must surface unreadable state as fail-closed blocked truth;
+        # attempting cleanup here would turn a read failure into a second,
+        # uncaught unlink failure.
+        raise
     except (OSError, ValueError, TypeError):
         clear_setup_state(cfg)
         return {}

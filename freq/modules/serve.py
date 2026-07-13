@@ -3824,6 +3824,16 @@ def _write_setup_vm_contract(secret_dir, contract):
         f"template_vmids = {_toml_scalar(contract.get('template_vmids') or [])}",
         "acknowledged_out_of_contract_vmids = "
         + _toml_scalar(contract.get("acknowledged_out_of_contract_vmids") or []),
+        "acknowledged_device_hosts = "
+        + _toml_scalar(
+            sorted(
+                {
+                    str(device.get("host") or "").strip()
+                    for device in contract.get("acknowledged_devices") or []
+                    if str(device.get("host") or "").strip()
+                }
+            )
+        ),
         "",
     ]
     with open(path, "w", encoding="utf-8") as handle:
@@ -3985,25 +3995,44 @@ def _schedule_setup_runtime_handoff(cfg):
         prefix = ["sudo", "-n"]
     setup_unit = "/etc/systemd/system/pve-freq-setup.service"
     bootstrap_tls_dir = os.path.join(cfg.install_dir, "tls", "bootstrap")
-    script = (
-        " ".join(
+    finalize_code = (
+        "from freq.core.config import load_config; "
+        "from freq.modules.init_cmd import _finalize_web_init_runtime_ownership; "
+        "cfg=load_config(force=True); "
+        "raise SystemExit(0 if _finalize_web_init_runtime_ownership("
+        "cfg, cfg.ssh_service_account) else 1)"
+    )
+    finalize_cmd = prefix + [
+        "env",
+        f"FREQ_DIR={cfg.install_dir}",
+        f"PYTHONPATH={cfg.install_dir}",
+        sys.executable,
+        "-c",
+        finalize_code,
+    ]
+    prepare_switch = (
+        " ".join(shlex.quote(part) for part in finalize_cmd)
+        + " && "
+        + " ".join(
             shlex.quote(part)
             for part in prefix + ["systemctl", "disable", "--now", "pve-freq-setup.service"]
         )
-        + " >/dev/null 2>&1 || true; "
+        + " >/dev/null 2>&1 && "
         + " ".join(shlex.quote(part) for part in prefix + ["rm", "-f", setup_unit])
-        + "; "
+        + " && "
         + " ".join(shlex.quote(part) for part in prefix + ["rm", "-rf", bootstrap_tls_dir])
-        + "; "
+        + " && "
         + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "daemon-reload"])
-        + " >/dev/null 2>&1 || true; "
-        + f"kill -TERM {current_pid} >/dev/null 2>&1 || true; "
-        + "sleep 2; "
+        + " >/dev/null 2>&1"
+    )
+    start_managed = (
+        "sleep 2; "
         + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "restart", "freq-serve.service"])
         + " >/dev/null 2>&1 || "
         + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "start", "freq-serve.service"])
-        + " >/dev/null 2>&1 || true"
+        + " >/dev/null 2>&1"
     )
+    script = f"if {prepare_switch}; then {start_managed}; else exit 1; fi"
     run_cmd = prefix + [
         "systemd-run",
         "--quiet",
@@ -4027,15 +4056,7 @@ def _schedule_setup_runtime_handoff(cfg):
     except (OSError, subprocess.SubprocessError):
         pass
 
-    fallback_script = (
-        "sleep 5; "
-        + f"kill -TERM {current_pid} >/dev/null 2>&1 || true; "
-        + "sleep 2; "
-        + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "restart", "freq-serve.service"])
-        + " >/dev/null 2>&1 || "
-        + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "start", "freq-serve.service"])
-        + " >/dev/null 2>&1 || true"
-    )
+    fallback_script = "sleep 5; " + script
     try:
         subprocess.Popen(
             ["/bin/sh", "-c", fallback_script],
@@ -5360,7 +5381,13 @@ a:hover{{text-decoration:underline}}
             is_authed = authed_err is None
         except Exception:
             is_authed = False
-        setup_record = _observe_setup_state(cfg)
+        setup_state_unreadable = False
+        try:
+            setup_record = _observe_setup_state(cfg)
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warn(f"setup_status_state_unreadable: {exc}")
+            setup_record = {}
+            setup_state_unreadable = True
         if dashboard_accounts_configured and is_authed and not (is_initialized and is_web_setup_complete):
             setup_user = getattr(self, "_session_user", "") or (
                 dashboard_users[0].get("username", "") if dashboard_users else ""
@@ -5377,6 +5404,8 @@ a:hover{{text-decoration:underline}}
             zero_state = "complete"
         elif job_state == "running":
             zero_state = "initializing"
+        elif setup_state_unreadable:
+            zero_state = "blocked"
         elif job_state == "failed" or is_initialized or is_web_setup_complete:
             zero_state = "blocked"
         elif not dashboard_accounts_configured:
@@ -5426,6 +5455,12 @@ a:hover{{text-decoration:underline}}
             "next": next_actions[zero_state],
             "checked_at": time.time(),
         }
+        if setup_state_unreadable:
+            payload["blocker"] = {
+                "code": "setup_state_unreadable",
+                "message": "Setup state is temporarily unreadable.",
+                "retryable": True,
+            }
         if is_authed:
             payload["version"] = __version__
             payload["ssh_key_path"] = key_path or ""
