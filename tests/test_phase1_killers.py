@@ -459,7 +459,7 @@ class TestFleetInventoryContracts(unittest.TestCase):
         self.assertIn('h.htype == "docker"', block)
         self.assertIn('getattr(h, "managed", True)', block)
 
-    def test_init_preserves_vmid_map_for_explicit_hosts(self):
+    def test_init_preserves_canonical_vmid_resolution_for_explicit_hosts(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
             src = f.read()
 
@@ -468,7 +468,7 @@ class TestFleetInventoryContracts(unittest.TestCase):
 
         self.assertIn('ctx.setdefault("ip_vmid_map"', discovery)
         self.assertIn("ip_vmid_map.setdefault(ip, vmid)", discovery)
-        self.assertIn('ctx.get("ip_vmid_map", {}).get(h.ip, 0)', deploy)
+        self.assertIn("_resolve_existing_host_vmid(ctx, h)", deploy)
 
     def test_headless_discovery_auto_registers_only_managed_hosts(self):
         from freq.modules.init_cmd import _is_managed_auto_host
