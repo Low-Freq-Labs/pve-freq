@@ -15,9 +15,9 @@ Contract:
 """
 import os
 import sys
-import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -89,18 +89,12 @@ class TestUnreadableSetupStateFailsClosed(unittest.TestCase):
     def test_permission_error_is_not_converted_into_cleanup_mutation(self):
         from types import SimpleNamespace
 
-        from freq.core.setup_state import ensure_setup_state, load_setup_state
+        from freq.core.setup_state import load_setup_state
 
-        with tempfile.TemporaryDirectory() as td:
-            cfg = SimpleNamespace(data_dir=td)
-            ensure_setup_state(cfg, "sonny")
-            setup_dir = os.path.join(td, "setup")
-            os.chmod(setup_dir, 0)
-            try:
-                with self.assertRaises(PermissionError):
-                    load_setup_state(cfg)
-            finally:
-                os.chmod(setup_dir, 0o700)
+        cfg = SimpleNamespace(data_dir="/nonexistent/test-runtime")
+        with patch("builtins.open", side_effect=PermissionError("denied")):
+            with self.assertRaises(PermissionError):
+                load_setup_state(cfg)
 
 
 if __name__ == "__main__":
