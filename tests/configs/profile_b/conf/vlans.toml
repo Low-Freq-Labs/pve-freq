@@ -1,0 +1,29 @@
+# Profile B VLANs — /16 subnets
+
+[vlan.mgmt]
+id = 10
+name = "MGMT"
+subnet = "10.0.0.0/16"
+prefix = "10.0"
+gateway = "10.0.0.1"
+
+[vlan.servers]
+id = 20
+name = "SERVERS"
+subnet = "10.1.0.0/16"
+prefix = "10.1"
+gateway = "10.1.0.1"
+
+[vlan.storage]
+id = 30
+name = "STORAGE"
+subnet = "10.2.0.0/16"
+prefix = "10.2"
+gateway = "10.2.0.1"
+
+[vlan.public]
+id = 40
+name = "PUBLIC"
+subnet = "10.3.0.0/16"
+prefix = "10.3"
+gateway = "10.3.0.1"

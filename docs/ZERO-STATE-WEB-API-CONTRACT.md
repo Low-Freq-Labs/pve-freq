@@ -1,0 +1,732 @@
+# Zero-State Browser Setup API Contract
+
+Contract version: `zero-state-web-v1`
+
+Status: frozen for backend and frontend implementation
+
+## Goal
+
+A new installation can be configured entirely in a browser. The browser never
+asks for, sends, or displays a server-side path, TOML, a VMID range, or a
+manually written host record.
+
+The flow is:
+
+1. Create the first operator and establish an authenticated admin session.
+2. Submit PVE node IPs and bootstrap SSH credentials as normal form values.
+3. Discover PVE resources and reachable infrastructure.
+4. Select every discovered resource as owned or acknowledged.
+5. Store credentials for owned devices directly in the vault.
+6. Start init from the frozen discovery and selection contract.
+7. Poll live progress until init and browser setup are honestly complete.
+
+The first operator is created before any network probe or secret intake is
+sent. The page may collect fields earlier, but discovery and all later calls
+require the newly-created admin cookie and CSRF token. This preserves the
+existing fail-closed setup security boundary.
+
+## Common rules
+
+- All bodies and responses use JSON and UTF-8.
+- Every response sets `Cache-Control: no-store`.
+- Mutating authenticated calls require the session cookie and
+  `X-Freq-CSRF`.
+- Browser-primary setup is served over the bootstrap self-signed certificate.
+  The operator performs an explicit trust-on-first-use check for the fresh
+  box; replacement with operator-owned certificate lifecycle is post-init.
+- The setup cookie is `HttpOnly; SameSite=Strict; Secure; Path=/` with a
+  3600-second idle TTL. Setup refuses to mint the cookie over cleartext HTTP.
+- `setup_id`, `discovery_id`, `contract_id`, and job IDs are opaque. The
+  browser must not parse them.
+- A caller may supply `client_request_id`, a UUID generated once per user
+  action. For authenticated job/contract mutations, repeating the same action
+  with the same ID returns the existing job or result instead of starting
+  another mutation. `create-admin` is deliberately excluded after the first
+  user exists and returns the pinned 409/403 response below.
+- Passwords, API keys, private keys, and sudo passwords are write-only. They
+  never appear in a response, progress message, log line, exception, audit
+  field, URL, or process argument.
+- New setup endpoints reject keys ending in `_file` or `_path`, raw TOML,
+  `hosts_file`, `vm_contract`, typed VMID lists/ranges, and arbitrary scan
+  subnets with `400 path_input_not_allowed` or
+  `400 manual_contract_not_allowed`.
+- File-based init flags remain supported by the CLI as a legacy/operator
+  interface. They are not part of `zero-state-web-v1`.
+- The PVE API token remains product-minted during init from the submitted PVE
+  bootstrap identity. The browser does not accept or upload a PVE API token.
+- The base browser flow defers optional certificate lifecycle configuration.
+  It does not ask for certificate paths or a Cloudflare token path. Those are
+  authenticated post-init workflows.
+
+### Error envelope
+
+New endpoints return:
+
+```json
+{
+  "ok": false,
+  "schema": "zero-state-web-v1",
+  "error": {
+    "code": "invalid_node_ip",
+    "message": "PVE node 2 must be an IPv4 or IPv6 address.",
+    "field": "cluster.nodes[1].host",
+    "retryable": false
+  },
+  "request_id": "a1b2c3d4e5f6"
+}
+```
+
+This is the serialized public error envelope. The same 12-character request
+identity is returned in the `X-Request-ID` response header. A caller-provided
+`client_request_id` is never substituted into this public correlation field.
+
+HTTP meanings:
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Malformed or forbidden input. |
+| `401` | No valid setup session. |
+| `403` | Wrong role, CSRF failure, or setup window closed. |
+| `404` | Opaque setup/job/resource identifier is unknown. |
+| `409` | Another job is running, stale discovery/contract, or init already complete. |
+| `410` | A setup/discovery job expired after service restart or retention. |
+| `422` | Valid JSON, but selections or required credentials are incomplete. |
+| `429` | Setup probe rate limit reached. |
+| `500` | Internal persistence or state failure. |
+| `503` | A retryable child-delivery or setup service boundary is unavailable. |
+| `502` | All declared PVE bootstrap targets failed. |
+
+Validation errors should identify one field. Aggregate selection errors may
+also include a bounded `details` list containing only resource IDs and error
+codes.
+
+## State machine
+
+`GET /api/setup/status` exposes one `state` value:
+
+| State | Truth |
+| --- | --- |
+| `needs_operator` | No dashboard users and no completion marker. |
+| `collecting` | First admin exists; no successful discovery is frozen. |
+| `discovering` | A discovery job is queued or running. |
+| `selecting` | Discovery succeeded; no complete resource contract exists. |
+| `credentials` | Contract exists; owned devices still require credentials. |
+| `ready` | Contract and required secrets are complete; init may start. |
+| `initializing` | Browser-launched init is running. |
+| `blocked` | Latest discovery/init failed and may be retried in the setup window. |
+| `complete` | `.initialized` and `.web-setup-complete` both exist. |
+
+The setup window remains reachable to the authenticated first admin after a
+failed discovery or init. It closes only at `complete`, or through the existing
+authenticated reset/recovery policy. `/setup` redirects to the dashboard only
+at `complete`.
+
+The status response retains the existing truth fields (`initialized`,
+`web_setup_complete`, `setup_health`, and `setup_reason`) and adds:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "state": "selecting",
+  "setup_id": "opaque-setup-id",
+  "initialized": false,
+  "web_setup_complete": false,
+  "active_discovery_id": "opaque-discovery-id",
+  "active_contract_id": null,
+  "active_init_job_id": null,
+  "next": "build_contract"
+}
+```
+
+For an unauthenticated `needs_operator` response, opaque IDs are `null`.
+
+Authenticated responses also include the same secret-free `init_status`
+projection emitted by `freq init --check --json`:
+
+```json
+{
+  "init_status": {
+    "schema": "pve-freq-init-status-public-v1",
+    "state": "running",
+    "initialized": false,
+    "current_phase": 2,
+    "current_phase_key": "configure",
+    "reason": ""
+  }
+}
+```
+
+The object always has exactly those six fields. `state` is one of
+`not_started`, `running`, `failed`, `succeeded`, `inconsistent`, or `unknown`.
+Phase number/key pairs must match the canonical init catalog; invalid,
+unsupported, or unreadable artifacts project to `unknown`. A status artifact
+that claims success without `.initialized`, or conflicts with that marker,
+projects to `inconsistent`. Private run IDs, checkpoints, provenance, and
+stored payload details are never exposed, and the bounded `reason` passes
+through the canonical credential redactor. Existing setup-status fields and
+unauthenticated responses are unchanged.
+
+### Session resume after reload
+
+The browser resumes an existing HttpOnly setup session through the existing
+authenticated `GET /api/auth/verify` endpoint. A valid response includes
+`valid`, `user`, `role`, `csrf_token`, `auth_mode`, `session_age_s`,
+`session_idle_s`, `session_ttl_s`, and `session_timeout_s`. The frontend must
+call it after reload before issuing another setup mutation and must replace its
+in-memory CSRF token with the returned value. `valid: false` returns the user
+to login/recovery; the browser never reads the HttpOnly cookie itself.
+
+## 1. First operator
+
+### `POST /api/setup/create-admin`
+
+This existing endpoint becomes the only unauthenticated setup mutation. It is
+available only while no dashboard user exists.
+
+Request media type: `application/json`. Origin is not required: browser and
+programmatic callers use the same claim-bound request contract.
+
+Request:
+
+```json
+{
+  "schema": "zero-state-web-v1",
+  "username": "sonny-aif",
+  "password": "write-only-value",
+  "claim_secret": "most-recently-emitted-value",
+  "client_request_id": "uuid"
+}
+```
+
+`password_file` is rejected. Success remains HTTP 200 and establishes the
+cookie session:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "setup_id": "opaque-setup-id",
+  "user": "sonny-aif",
+  "role": "admin",
+  "session_started": true,
+  "csrf_token": "csrf-value",
+  "auth_mode": "cookie",
+  "state": "collecting"
+}
+```
+
+The password is hashed into the vault and verified before `users.conf` is
+changed. A partial write fails closed. Once any dashboard user exists, this
+endpoint never resumes or replaces that account: it returns
+`409 operator_exists` while the authenticated setup window is incomplete, or
+`403 setup_closed` after completion. Reload/session resume uses
+`GET /api/auth/verify`, not a repeated password submission.
+
+### First-admin claim reset
+
+If the operator loses the emitted claim while the appliance is still in zero
+state, run this local host-console sequence for the default layout:
+
+```console
+sudo systemctl stop pve-freq-setup.service
+sudo rm -- /opt/pve-freq/data/setup/first-admin-claim.json
+sudo systemctl start pve-freq-setup.service
+```
+
+The restarted service emits one replacement claim locally. For a custom FREQ_DIR,
+delete the corresponding `data/setup/first-admin-claim.json` inside that
+configured directory while the service is stopped. Remote error
+responses refer to this zero-state runbook and never return the absolute host
+path.
+
+## 2. Discovery
+
+### `POST /api/setup/discovery/start`
+
+Requires admin session and CSRF. Starts one bounded discovery job.
+
+Request media type: `application/json`.
+
+Request:
+
+```json
+{
+  "schema": "zero-state-web-v1",
+  "setup_id": "opaque-setup-id",
+  "client_request_id": "uuid",
+  "cluster": {
+    "name": "dc01",
+    "nodes": [
+      {"host": "10.25.255.26", "name": "pve01"},
+      {"host": "10.25.255.27", "name": "pve02"}
+    ]
+  },
+  "bootstrap": {
+    "username": "freq-ops",
+    "password": "write-only-value"
+  }
+}
+```
+
+Rules:
+
+- `nodes` contains 1-16 unique literal IP addresses. Names are optional and
+  may be replaced by discovered PVE node names.
+- The bootstrap password is stored in a setup-scoped vault namespace for the
+  discovery/init lifecycle. It is never returned.
+- Discovery first proves SSH on a declared PVE node, queries
+  `/cluster/resources?type=vm`, resolves guest addresses where available, and
+  derives bounded management networks from declared nodes and PVE truth.
+- It must not accept a caller-provided arbitrary scan subnet or probe outside
+  declared/derived scope.
+- Device identification may be credential-free. Authentication to a
+  discovered device happens only after explicit selection and credential
+  submission.
+
+Success is HTTP 202:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "setup_id": "opaque-setup-id",
+  "discovery": {
+    "id": "opaque-discovery-id",
+    "state": "queued",
+    "poll_after_ms": 1000
+  }
+}
+```
+
+Only one discovery may run per setup. A new successful discovery invalidates
+the previous contract and credential requirements.
+
+### `GET /api/setup/discovery/status?id=<discovery_id>`
+
+Requires the bound admin session. It returns HTTP 200 for all known job
+states:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "discovery": {
+    "id": "opaque-discovery-id",
+    "state": "succeeded",
+    "started_at": "2026-07-12T05:00:00Z",
+    "updated_at": "2026-07-12T05:00:09Z",
+    "finished_at": "2026-07-12T05:00:09Z",
+    "poll_after_ms": 0,
+    "progress": {
+      "phase": "complete",
+      "current": 36,
+      "total": 36,
+      "message": "Discovered 26 virtual machines and 10 templates."
+    },
+    "results": {
+      "pve_nodes": [],
+      "resources": [],
+      "devices": [],
+      "warnings": []
+    }
+  }
+}
+```
+
+`state` is `queued`, `running`, `succeeded`, or `failed`. Results appear only
+for `succeeded`. Progress messages are allowlisted summaries, not raw command
+output.
+
+PVE node rows contain `id`, `host`, `name`, `reachable`, and `version`.
+
+Virtual resource rows contain:
+
+```json
+{
+  "id": "pve:pve01:qemu:100",
+  "kind": "vm",
+  "vmid": 100,
+  "name": "pve-freq",
+  "node": "pve01",
+  "status": "running",
+  "ips": ["10.25.255.50"]
+}
+```
+
+`kind` is the observed virtualization type: `vm`, `container`, or `template`.
+Discovery does not suggest or prefill disposition or placement. Every row
+requires an explicit operator decision.
+
+Device rows contain:
+
+```json
+{
+  "id": "device:truenas:10.25.255.10",
+  "kind": "truenas",
+  "label": "storage-01",
+  "host": "10.25.255.10",
+  "source": "network-probe",
+  "reachable": true,
+  "credential_fields": ["username", "password", "api_key"]
+}
+```
+
+Device `kind` is an allowlisted product type such as `pfsense`, `truenas`,
+`switch`, `idrac`, or `unknown`. It is an observation, not an ownership,
+placement, role, scope, group, or section decision. In v1 an unknown device is
+acknowledged-only: the frontend disables owned placement with honest copy and
+the backend rejects an owned unknown row with `422 unsupported_device_kind`.
+Assigning or overriding a device kind is intentionally outside the frozen v1
+schema.
+
+## 3. Contract from selections
+
+### `POST /api/setup/contract`
+
+Requires admin session and CSRF. Replaces the current draft atomically.
+
+Request media type: `application/json`.
+
+```json
+{
+  "schema": "zero-state-web-v1",
+  "setup_id": "opaque-setup-id",
+  "discovery_id": "opaque-discovery-id",
+  "client_request_id": "uuid",
+  "selections": [
+    {
+      "resource_id": "pve:pve01:qemu:100",
+      "disposition": "owned",
+      "placement": "production"
+    },
+    {
+      "resource_id": "pve:pve01:qemu:999",
+      "disposition": "acknowledged"
+    },
+    {
+      "resource_id": "device:truenas:10.25.255.10",
+      "disposition": "owned",
+      "placement": "production"
+    }
+  ]
+}
+```
+
+Rules:
+
+- Every discovered virtual resource and device appears exactly once.
+- `disposition` is `owned` or `acknowledged`.
+- `placement` is `production` or `lab` for owned resources and is omitted for
+  acknowledged resources.
+- Owned templates normalize to `template_vmids`; owned VMs/containers
+  normalize to `owned_vmids`; acknowledged virtual resources normalize to
+  `acknowledged_out_of_contract_vmids`.
+- Owned devices become managed physical inventory in their selected scope.
+  Acknowledged devices remain visible inventory-only and require no secret.
+- PVE nodes are infrastructure roots declared by the cluster request and are
+  not repeated as selectable resources.
+- Unknown, missing, duplicate, or stale resource IDs fail the entire request.
+
+Success is HTTP 200:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "contract": {
+    "id": "opaque-contract-id",
+    "discovery_id": "opaque-discovery-id",
+    "revision": 1,
+    "sha256": "normalized-contract-sha256",
+    "counts": {
+      "owned_virtual": 18,
+      "templates": 10,
+      "acknowledged_virtual": 8,
+      "owned_devices": 4,
+      "acknowledged_devices": 1
+    },
+    "credential_requirements": [
+      {
+        "resource_id": "device:truenas:10.25.255.10",
+        "required_any": [["username", "password"], ["api_key"]],
+        "stored_fields": []
+      }
+    ],
+    "ready": false
+  }
+}
+```
+
+The normalized object, not TOML, is the source consumed by web-launched init.
+Its hash is stable for identical discovery IDs and selections.
+
+### `GET /api/setup/contract`
+
+Returns the current normalized contract and credential-presence metadata for
+the bound setup. It never returns secrets or vault keys.
+
+## 4. Device credentials
+
+### `POST /api/setup/device-credentials`
+
+Requires admin session and CSRF. Secrets are values, never paths.
+
+Request media type: `application/json`.
+
+```json
+{
+  "schema": "zero-state-web-v1",
+  "setup_id": "opaque-setup-id",
+  "contract_id": "opaque-contract-id",
+  "client_request_id": "uuid",
+  "credentials": [
+    {
+      "resource_id": "device:truenas:10.25.255.10",
+      "username": "root",
+      "secrets": {
+        "password": "write-only-value",
+        "api_key": "write-only-value"
+      }
+    }
+  ]
+}
+```
+
+Allowed secret field names are `password`, `api_key`, `ssh_private_key`, and
+`sudo_password`. Allowed fields are constrained by device kind. At least one
+server-returned `required_any` alternative must be satisfied for every owned
+device before init may start.
+
+Values are stored directly in a setup-scoped vault namespace with restrictive
+ownership. Updating a credential replaces only fields present in the request.
+Empty strings are rejected and never mean delete.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "contract_id": "opaque-contract-id",
+  "credentials": [
+    {
+      "resource_id": "device:truenas:10.25.255.10",
+      "stored_fields": ["username", "password", "api_key"],
+      "complete": true
+    }
+  ],
+  "ready": true
+}
+```
+
+Responses expose presence only. They never expose length, prefix, hash, last
+characters, encrypted bytes, internal vault key names, or filesystem paths.
+
+## 5. Init
+
+### `POST /api/setup/init/start`
+
+Requires admin session and CSRF. It consumes only opaque frozen objects plus
+remaining value inputs:
+
+Request media type: `application/json`.
+
+```json
+{
+  "schema": "zero-state-web-v1",
+  "setup_id": "opaque-setup-id",
+  "discovery_id": "opaque-discovery-id",
+  "contract_id": "opaque-contract-id",
+  "client_request_id": "uuid",
+  "service_account": {
+    "username": "freq-admin",
+    "password": "write-only-value"
+  },
+  "options": {
+    "ssh_mode": "sudo",
+    "pdm": {"mode": "skip"},
+    "ssl": {"mode": "defer"}
+  }
+}
+```
+
+For PDM modes requiring a credential, `options.pdm.password` is a write-only
+value. No path variant exists.
+
+The backend verifies that discovery and contract IDs are current, all
+selections are complete, required device secrets exist, and no init is already
+running. It then launches the existing bounded headless init runner. Internal
+adapters may materialize short-lived 0600 files where legacy subprocess
+boundaries still require them; those paths are never accepted from or exposed
+to the browser and are removed at terminal job state.
+
+Success is HTTP 202:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "job": {
+    "id": "0123456789abcdef0123456789abcdef",
+    "state": "queued",
+    "poll_after_ms": 1000
+  }
+}
+```
+
+### `POST /api/setup/init/cancel`
+
+Requires an admin session and CSRF. The request identifies only the opaque init
+job owned by the authenticated setup operator:
+
+Request media type: `application/json`.
+
+```json
+{
+  "id": "0123456789abcdef0123456789abcdef"
+}
+```
+
+`id` is an exact 32-character lowercase hexadecimal opaque identity and is the
+only accepted request member. The server requests cancellation through the exact
+retained child handle. It rejects a process ID, signal number, owner override,
+path, manual rollback input, and every other extra member. Repeated and
+concurrent requests deliver at most one pending signal; a request made before
+child publication is retained and delivered when the child becomes available.
+
+An accepted request is HTTP 202:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "cancellation": {
+    "job_id": "0123456789abcdef0123456789abcdef",
+    "state": "requested",
+    "poll_after_ms": 250
+  }
+}
+```
+
+Unknown jobs and jobs owned by another operator both return opaque
+`404 init_not_found`. A terminal job returns `409 init_not_running`. A child
+delivery failure returns `503 init_cancel_delivery_failed` with
+`retryable: true`; private exception and process details are never exposed.
+Cancellation is a request, not a false terminal-success claim. Callers continue
+polling init status until the job reaches an honest terminal state.
+
+### `GET /api/setup/init/status?id=<job_id>`
+
+Returns `queued`, `running`, `succeeded`, or `failed`, bounded progress, and
+honest completion fields:
+
+```json
+{
+  "ok": true,
+  "schema": "zero-state-web-v1",
+  "job": {
+    "id": "0123456789abcdef0123456789abcdef",
+    "state": "succeeded",
+    "returncode": 0,
+    "initialized": true,
+    "web_setup_complete": true,
+    "poll_after_ms": 0,
+    "cancellation": {
+      "requested": false,
+      "delivery": "not_requested",
+      "retryable": false
+    },
+    "progress": {
+      "phase": 12,
+      "phase_name": "Verification",
+      "current": 39,
+      "total": 39,
+      "message": "All verification checks passed."
+    },
+    "log_tail": []
+  }
+}
+```
+
+`cancellation.requested` reports only whether the authenticated operator asked
+for cancellation. `delivery` is `not_requested`, `pending`, `delivered`, or
+`failed`. `pending` is limited to queued or running jobs, and `retryable` is true
+only for a failed child-delivery attempt while the job is still queued or
+running. Once a job succeeds or fails, an undelivered request is reported as
+`failed` and is not retryable. A `delivered` request does not claim the child
+stopped: cancellation may arrive after the point of no return, so the job's
+ordinary terminal state remains the authoritative outcome.
+
+`log_tail` contains only redacted operator-safe lines. The separate existing
+`GET /api/setup/init/logs?id=<job_id>` may return a longer bounded redacted
+tail but follows the same secret rules.
+
+The frontend polls after `poll_after_ms` (minimum 500 ms, maximum 5000 ms),
+stops at a terminal state, and tolerates one service handoff disconnect by
+reloading `GET /api/setup/status` and resuming with the same job ID.
+
+## Completion and markers
+
+Browser setup is complete only when init exits zero, `.initialized` exists,
+and `_write_web_setup_markers()` successfully writes
+`.web-setup-complete`. The terminal job reports `succeeded` only after all
+three facts are true.
+
+`POST /api/setup/complete` is not called by `zero-state-web-v1`. It becomes a
+legacy/recovery endpoint and cannot create a false web-only success state.
+Neither creating the first operator nor freezing a contract writes a
+completion marker.
+
+On failure:
+
+- `.web-setup-complete` is absent.
+- The init job reports `failed` with a redacted blocker.
+- The authenticated setup window remains reachable.
+- Stored selections and credential-presence metadata remain available for a
+  bounded retry; bootstrap/device secret values never return to the browser.
+
+The setup-scoped vault namespace is deleted after successful init and browser
+marker completion. It is also deleted when the setup window is abandoned by
+session/setup TTL expiry or authenticated setup reset. A failed discovery or
+init retains it only for the bounded retry window; expiry cleanup is mandatory
+and never deletes the durable first-operator password namespace.
+
+## Polling and retention
+
+- Discovery: begin at 1000 ms and honor each `poll_after_ms`; no faster than
+  500 ms.
+- Init: begin at 1000 ms, settle at 2000 ms during long phases, and honor the
+  server hint.
+- Only one active discovery and one active init are allowed per setup.
+- Completed job metadata and non-secret results remain available for at least
+  one hour or until setup completes.
+- The setup session and its setup-scoped vault namespace expire after 3600
+  seconds of inactivity. Cleanup runs on expiry observation and periodic
+  retention; abandoned secrets must not wait for the next installation.
+- If process restart loses an in-memory job, the endpoint returns 410 rather
+  than claiming idle or success. Durable `.initialized` and marker truth still
+  wins in `/api/setup/status`.
+
+## Legacy boundaries
+
+The following are explicitly outside the browser contract and must disappear
+from `setup.html` and `setup.js`:
+
+- bootstrap password/private-key paths;
+- service/dashboard password paths;
+- VM contract and device credential paths;
+- owned/template/acknowledged VMID text or range inputs;
+- hosts import/TOML text;
+- certificate/key/Cloudflare token paths;
+- arbitrary core/lab device text lists.
+
+CLI compatibility for those inputs remains until a separate deprecation
+decision. A CLI init may warn when staged credential inputs are present but
+unconsumed. Browser setup cannot trigger that warning because it never accepts
+a server path.
+
+The installer hardening companion in this arc must also prevent local-source
+root permissions from propagating to the install root: the destination root
+must finish traversable by the configured runtime account regardless of a
+mode-700 staging directory.

@@ -1,0 +1,50 @@
+# FREQ Alert Rules
+# Copy to conf/rules.toml and customize.
+# Rules are evaluated after each health probe (~60s interval).
+
+[rule."host-unreachable"]
+condition = "host_unreachable"
+target = "*"           # all hosts
+threshold = 0
+duration = 300         # must be down 5 minutes before alerting
+severity = "critical"
+cooldown = 600         # re-alert every 10 minutes if still down
+enabled = true
+
+[rule."disk-critical"]
+condition = "disk_above"
+target = "*"
+threshold = 90         # alert when disk > 90%
+duration = 0           # alert immediately
+severity = "warning"
+cooldown = 3600        # re-alert every hour
+enabled = true
+
+[rule."ram-pressure"]
+condition = "ram_above"
+target = "*"
+threshold = 95         # alert when RAM > 95%
+duration = 0
+severity = "warning"
+cooldown = 3600
+enabled = true
+
+# Example: alert when CPU load is high on a specific host
+# [rule."high-cpu-pve01"]
+# condition = "cpu_above"
+# target = "pve01"
+# threshold = 4.0       # load average threshold
+# duration = 120        # must be high for 2 minutes
+# severity = "warning"
+# cooldown = 600
+# enabled = true
+
+# Example: alert when Docker containers stop on a host
+# [rule."docker-containers-down"]
+# condition = "docker_down"
+# target = "docker-*"   # all docker hosts
+# threshold = 0
+# duration = 60
+# severity = "critical"
+# cooldown = 300
+# enabled = true

@@ -1,0 +1,173 @@
+"""Self-update mechanism for FREQ.
+
+Domain: freq update
+
+Checks for a newer version and upgrades FREQ in place. Auto-detects
+install method (git, tarball, dpkg, rpm) and uses the appropriate upgrade
+path. One command to stay current across any installation type.
+
+Replaces: Manual git pull + restart, package manager update scripts
+
+Architecture:
+    - Install method detection: .git dir, .install-method marker, dpkg/rpm query
+    - Git update: git fetch + merge with conflict detection
+    - Tarball update: download from GitHub releases via urllib
+    - Package update: dpkg -i or rpm -U with downloaded .deb/.rpm
+
+Design decisions:
+    - Detect, don't assume. FREQ can be installed four different ways;
+      the updater figures out which one and acts accordingly.
+"""
+
+import subprocess
+
+import freq
+from freq.core import fmt
+from freq.core.config import FreqConfig
+from freq.core.packages import detect_install_method as _detect_install_method
+
+# Update timeouts
+UPDATE_FETCH_TIMEOUT = 30
+UPDATE_CHECK_TIMEOUT = 10
+UPDATE_APPLY_TIMEOUT = 60
+
+
+def _failure_detail(stderr, fallback: str) -> str:
+    detail = " ".join(str(stderr or "").split()) or fallback
+    return detail[:160]
+
+
+def cmd_update(cfg: FreqConfig, pack, args) -> int:
+    """Check for updates and upgrade FREQ."""
+    fmt.header("Update")
+    fmt.blank()
+
+    current = freq.__version__
+    method = _detect_install_method(cfg)
+
+    fmt.line(f"  {fmt.C.BOLD}Current version:{fmt.C.RESET}  {current}")
+    fmt.line(f"  {fmt.C.BOLD}Install method:{fmt.C.RESET}   {method}")
+    fmt.line(f"  {fmt.C.BOLD}Install dir:{fmt.C.RESET}      {cfg.install_dir}")
+    fmt.blank()
+
+    if method in ("git", "git-release"):
+        # Both dev checkout and git-release installs can pull from remote
+        return _update_git(cfg, args)
+    elif method == "dpkg":
+        fmt.line(f"  {fmt.C.GRAY}Update via apt: sudo apt update && sudo apt upgrade pve-freq{fmt.C.RESET}")
+    elif method == "rpm":
+        fmt.line(f"  {fmt.C.GRAY}Update via dnf: sudo dnf update pve-freq{fmt.C.RESET}")
+    elif method in ("tarball", "local"):
+        fmt.line(f"  {fmt.C.GRAY}Installed via {method}. Re-run the installer to update:{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}  curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash{fmt.C.RESET}")
+    elif method == "manual":
+        fmt.line(f"  {fmt.C.GRAY}Manual install — no automatic update path available.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}To update, replace the install directory with a newer release:{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}  Option 1: git clone and replace {cfg.install_dir}{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}  Option 2: Run the installer to switch to a managed install:{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}    curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash{fmt.C.RESET}")
+    else:
+        fmt.line(f"  {fmt.C.GRAY}Unrecognized install method: {method}{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}Re-run the installer: sudo bash install.sh{fmt.C.RESET}")
+
+    fmt.blank()
+    fmt.footer()
+    return 0
+
+
+def _update_git(cfg: FreqConfig, args) -> int:
+    """Update from git (development mode)."""
+    fmt.step_start("Checking for updates")
+
+    r = subprocess.run(
+        ["git", "-C", cfg.install_dir, "fetch"],
+        capture_output=True,
+        text=True,
+        timeout=UPDATE_FETCH_TIMEOUT,
+    )
+
+    if r.returncode != 0:
+        fmt.step_warn("Cannot reach remote (offline or no remote configured)")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    r = subprocess.run(
+        ["git", "-C", cfg.install_dir, "status", "-uno", "--porcelain"],
+        capture_output=True,
+        text=True,
+        timeout=UPDATE_CHECK_TIMEOUT,
+    )
+    if r.returncode != 0:
+        detail = _failure_detail(r.stderr, "git status failed without details")
+        fmt.step_fail(f"Cannot inspect working tree: {detail}")
+        fmt.blank()
+        fmt.footer()
+        return 1
+    if r.stdout.strip():
+        fmt.step_warn("Working tree has local changes — commit or stash them before updating")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    r2 = subprocess.run(
+        ["git", "-C", cfg.install_dir, "log", "HEAD..@{u}", "--oneline"],
+        capture_output=True,
+        text=True,
+        timeout=UPDATE_CHECK_TIMEOUT,
+    )
+    if r2.returncode != 0:
+        detail = _failure_detail(r2.stderr, "git log failed without details")
+        fmt.step_fail(f"Cannot compare with upstream: {detail}")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    if r2.stdout.strip():
+        commits = r2.stdout.strip().split("\n")
+        fmt.step_ok(f"{len(commits)} new commit(s) available")
+        fmt.blank()
+        for c in commits[:5]:
+            fmt.line(f"  {fmt.C.DIM}{c}{fmt.C.RESET}")
+        if len(commits) > 5:
+            fmt.line(f"  {fmt.C.DIM}... and {len(commits) - 5} more{fmt.C.RESET}")
+        fmt.blank()
+
+        if getattr(args, "yes", False):
+            confirm = "y"
+        else:
+            try:
+                confirm = input(f"  {fmt.C.YELLOW}Pull updates? [y/N]:{fmt.C.RESET} ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                fmt.step_warn("Update cancelled — rerun with --yes for non-interactive update")
+                fmt.blank()
+                fmt.footer()
+                return 1
+        if confirm == "y":
+            fmt.step_start("Pulling updates")
+            r = subprocess.run(
+                ["git", "-C", cfg.install_dir, "pull", "--ff-only"],
+                capture_output=True,
+                text=True,
+                timeout=UPDATE_APPLY_TIMEOUT,
+            )
+            if r.returncode == 0:
+                fmt.step_ok("Updated successfully")
+                # Reimport to show new version
+                import importlib
+
+                importlib.reload(freq)
+                fmt.line(f"  {fmt.C.GREEN}New version: {freq.__version__}{fmt.C.RESET}")
+            else:
+                detail = _failure_detail(r.stderr, "git pull failed without details")
+                fmt.step_fail(f"Pull failed: {detail}")
+                fmt.blank()
+                fmt.footer()
+                return 1
+    else:
+        fmt.step_ok("Already up to date")
+
+    fmt.blank()
+    fmt.footer()
+    return 0

@@ -1,0 +1,518 @@
+{
+  "additions": [
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/cert_renewal.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "e1084cb6425f353421d61d4b050527dc2787280a",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/dns_lookup.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "42123403de0cb41f5cfb8e139216ca0d48c12bda",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/lab_tool_proxy.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "16639b93b22d2af36bba9059c20bbbfc5b8aae26",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/core/host_identity.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "04c6978ecc71dc3d2a7e13fd33aef90406de1b20",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/fleet_policy.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "d01d5699bebb40c4aead454a45823d62ae3f5133",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/fleet_status.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "42963dddc849f9d2bf0f98eab2c285ef2482898c",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/device_command.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "96b7621525312cabedc371eb8ce6dd68f194607f",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/media_activity.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "0f86693ae05d18e532f9c614fb590f8d7af41fab",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/container_action.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "7b0c27133572cbf20a1d5bec4f8fddaf097ae74e",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/container_logs.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "7c10dc27722880574f6f961f5308d528aca7c82d",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/fleet_connectivity.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "433e2dcc832ddf0bd1e799ee09cb27c81337db90",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/host_diagnostic.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "3a4cb791933283587aa89b39eba09cdb1cf5ff5f",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/portscan.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "d27b3c8c67105e66546111ed5fd14770f47781b7",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/watch_control.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "33bff958e7e4333c9eaf05bd53dd370a982eac32",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/dashboard_doctor.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "350253231d71975442c0c48929566cd521767c2c",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/deployment_history.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "5f3e7406e455daf53362abcfea5a6718fad82f06",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/setup_keys.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "06ea49440ebbddeb035dda9f7a5eed11f2ddf38d",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/release_update.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "7be576601526f554ab30d9fbfcbc5cc75758b184",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/ssh_mux_cleanup.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "0dc8c8c80f9ea291578c782765f93d11da6aabf9",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/setup_inputs.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "420706e8accd570dc287fb1f1108cba3aff273a9",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/setup_handoff.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "8cbe5079271aa0e863f4c98deaf19753939b4792",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/setup_progress.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "c2915ae692ad8c83c1a0c2b50b46eda024fcf721",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/setup_health.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "f5454f6004ae857434e12b6839c189dadb06c43c",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/core/vault.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "2beb85030ac7f8619f9477ee75d911a185a531a1",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/pve.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "22af9e4a2d275b7b8bf18a173838399dcc20d3d9",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/cert.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "7eb00c6fc4ebe5e94a60648a846f709ec2c3b4ac",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/cert_management.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "7eb00c6fc4ebe5e94a60648a846f709ec2c3b4ac",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/snmp.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "7eb00c6fc4ebe5e94a60648a846f709ec2c3b4ac",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/switch_inventory.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "0baa5a00f0bf83c13b7181c932ac9688e0dfd656",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/services/user_registry.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "af617fef1f2891fc00de03c61cab5433d6bfda35",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/core/setup_paths.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "89e7dc889d9709ec0ed16ec76c338554d7d58f5f",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/core/first_admin_claim.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "4378a9ed3588ed4bbb258402902f0a51333d5195",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/core/install_root.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "876d79481fb59541ad6b2f8f33452edbe9960e4c",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/core/opnsense_enrollment.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "1f0e0641ba88fe34b22478a698742078ba95964a",
+      "review_status": "ACCEPTED"
+    },
+    {
+      "contract": {
+        "branch_floor": 0.4,
+        "classification": "UNKNOWN_KEEP",
+        "critical": false,
+        "evidence": [
+          "UNKNOWN defaults KEEP"
+        ],
+        "path": "freq/core/opnsense_lifecycle.py",
+        "zero_branch_statement_floor": 0.7
+      },
+      "introduced_at": "1f0e0641ba88fe34b22478a698742078ba95964a",
+      "review_status": "ACCEPTED"
+    }
+  ],
+  "baseline_source_sha": "b94321f968d1f2601b40404c3aff242e5858ced7",
+  "retirements": [
+    {
+      "path": "freq/jarvis/agent.py",
+      "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e",
+      "review_status": "SONNY_APPROVED"
+    },
+    {
+      "path": "freq/jarvis/gitops.py",
+      "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e",
+      "review_status": "SONNY_APPROVED"
+    },
+    {
+      "path": "freq/jarvis/learn.py",
+      "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e",
+      "review_status": "SONNY_APPROVED"
+    },
+    {
+      "path": "freq/modules/specialist.py",
+      "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e",
+      "review_status": "SONNY_APPROVED"
+    }
+  ],
+  "schema_version": 2
+}

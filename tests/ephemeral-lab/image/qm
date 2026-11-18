@@ -1,0 +1,3 @@
+#!/bin/sh
+[ "$1" = "list" ] && { printf ' VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n'; printf ' 6000 freq-lab-fixture     running        512            4.00 123\n'; exit 0; }
+exit 0

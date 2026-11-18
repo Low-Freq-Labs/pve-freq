@@ -1,0 +1,282 @@
+"""Log aggregation API handlers -- fleet-wide log search and analysis.
+
+Who:   New module for centralized log querying.
+What:  REST endpoints for fleet-wide journalctl queries via parallel SSH.
+Why:   Fleet-wide log search from the dashboard is a killer feature.
+Where: Routes registered at /api/logs/*.
+When:  Registered in the unified fail-closed route registry.
+"""
+
+import json
+import re
+
+from freq.api.helpers import get_param, get_param_int, json_response
+from freq.core.config import load_config
+from freq.core.host_scope import managed_probe_hosts
+from freq.core.ssh import remote_command, result_for
+from freq.core.ssh import run_many as ssh_run_many
+
+# Shell-safe pattern: only allow alphanumeric, spaces, hyphens, dots, colons
+_SAFE_SHELL_RE = re.compile(r"^[a-zA-Z0-9 _\-.:,/]+$")
+
+
+# -- Helpers -----------------------------------------------------------------
+
+
+def _log_query(cfg, command, target=None, max_hosts=50):
+    """Run a log query across fleet hosts. Returns list of {host, output, ok}."""
+    hosts = managed_probe_hosts(cfg)
+    if not hosts:
+        return []
+
+    if target:
+        hosts = [h for h in hosts if target.lower() in h.label.lower()]
+
+    results_raw = ssh_run_many(
+        hosts=hosts[:max_hosts],
+        command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=15,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=True,
+        cfg=cfg,
+    )
+
+    results = []
+    for h in hosts[:max_hosts]:
+        r = result_for(results_raw, h)
+        if not r:
+            continue
+        output = r.stdout.strip() if r.returncode == 0 else ""
+        if output:
+            results.append(
+                {
+                    "host": h.label,
+                    "ip": h.ip,
+                    "output": output[:4000],
+                    "lines": len(output.splitlines()),
+                }
+            )
+
+    return results
+
+
+# -- Handlers ----------------------------------------------------------------
+
+
+def handle_logs_fleet(handler):
+    """GET /api/logs/fleet -- recent errors across fleet.
+
+    Params: ?since=1h&priority=err&target=host-label&limit=30
+    """
+    cfg = load_config()
+    since = get_param(handler, "since", "1 hour ago")
+    priority = get_param(handler, "priority", "err")
+    target = get_param(handler, "target", "")
+    limit = get_param_int(handler, "limit", 30, min_val=5, max_val=100)
+
+    if priority not in ("emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"):
+        priority = "err"
+
+    # Validate since param — must be safe for shell (no injection)
+    if not _SAFE_SHELL_RE.match(since):
+        json_response(
+            handler, {"error": "Invalid 'since' parameter — use format like '1 hour ago' or '2026-04-03'"}, 400
+        )
+        return
+
+    cmd = remote_command(
+        script='journalctl --since "$1" -p "$2" --no-pager -q 2>/dev/null | tail -"$3"',
+        args=(since, priority, str(limit)),
+    )
+    results = _log_query(cfg, cmd, target or None)
+
+    total_lines = sum(r["lines"] for r in results)
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "hosts_with_errors": len(results),
+            "total_lines": total_lines,
+            "since": since,
+            "priority": priority,
+            "results": results,
+        },
+    )
+
+
+def handle_logs_search(handler):
+    """GET /api/logs/search -- search logs fleet-wide by pattern.
+
+    Params: ?pattern=error_text&since=24h&target=host-label&limit=20
+    """
+    cfg = load_config()
+    pattern = get_param(handler, "pattern", "")
+    since = get_param(handler, "since", "24 hours ago")
+    target = get_param(handler, "target", "")
+    limit = get_param_int(handler, "limit", 20, min_val=5, max_val=50)
+
+    if not pattern:
+        json_response(handler, {"error": "pattern parameter required"}, 400)
+        return
+
+    # Validate since param
+    if not _SAFE_SHELL_RE.match(since):
+        json_response(handler, {"error": "Invalid 'since' parameter"}, 400)
+        return
+
+    # Sanitize pattern — strip everything that could be shell metacharacters
+    safe_pattern = re.sub(r"[^a-zA-Z0-9 _\-.:,/]", "", pattern)[:100]
+    if not safe_pattern:
+        json_response(handler, {"error": "Pattern contains only invalid characters"}, 400)
+        return
+
+    cmd = remote_command(
+        script=(
+            'journalctl --since "$1" --no-pager -q 2>/dev/null '
+            '| grep -i -- "$2" | tail -"$3"'
+        ),
+        args=(since, safe_pattern, str(limit)),
+    )
+    results = _log_query(cfg, cmd, target or None)
+
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "pattern": pattern,
+            "hosts_matched": len(results),
+            "results": results,
+        },
+    )
+
+
+def handle_logs_oom(handler):
+    """GET /api/logs/oom -- OOM kill events across fleet.
+
+    Params: ?since=24h&target=host-label
+    """
+    cfg = load_config()
+    since = get_param(handler, "since", "24 hours ago")
+    target = get_param(handler, "target", "")
+
+    if not _SAFE_SHELL_RE.match(since):
+        json_response(handler, {"error": "Invalid 'since' parameter"}, 400)
+        return
+
+    cmd = remote_command(
+        script=(
+            'journalctl -k --since "$1" --no-pager 2>/dev/null '
+            '| grep -iE "oom|out of memory|killed process|invoked oom" | tail -20'
+        ),
+        args=(since,),
+    )
+    results = _log_query(cfg, cmd, target or None)
+
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "hosts_with_oom": len(results),
+            "since": since,
+            "results": results,
+        },
+    )
+
+
+def handle_logs_auth(handler):
+    """GET /api/logs/auth -- authentication failures across fleet.
+
+    Params: ?since=24h&target=host-label
+    """
+    cfg = load_config()
+    since = get_param(handler, "since", "24 hours ago")
+    target = get_param(handler, "target", "")
+
+    if not _SAFE_SHELL_RE.match(since):
+        json_response(handler, {"error": "Invalid 'since' parameter"}, 400)
+        return
+
+    cmd = remote_command(
+        script=(
+            'journalctl _SYSTEMD_UNIT=sshd.service --since "$1" --no-pager '
+            '2>/dev/null | grep -iE "failed|invalid|refused|denied" | tail -30'
+        ),
+        args=(since,),
+    )
+    results = _log_query(cfg, cmd, target or None)
+
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "hosts_with_failures": len(results),
+            "since": since,
+            "results": results,
+        },
+    )
+
+
+def handle_logs_runtime(handler):
+    """GET /api/logs/runtime -- local dashboard/runtime structured log.
+
+    Params: ?level=ERROR&msg=http_handler_exception&request_id=abc&limit=100
+    """
+    cfg = load_config()
+    level = get_param(handler, "level", "").upper()
+    msg = get_param(handler, "msg", "")
+    request_id = get_param(handler, "request_id", "")
+    limit = get_param_int(handler, "limit", 100, min_val=10, max_val=500)
+    if level and level not in ("DEBUG", "INFO", "WARN", "ERROR", "CMD"):
+        json_response(handler, {"error": "Invalid level"}, 400)
+        return
+    if request_id and not re.match(r"^[a-fA-F0-9]{6,32}$", request_id):
+        json_response(handler, {"error": "Invalid request_id"}, 400)
+        return
+    rows = []
+    try:
+        with open(cfg.log_file, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()[-5000:]
+    except OSError as e:
+        json_response(handler, {"error": f"Cannot read runtime log: {e}"}, 500)
+        return
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            row = {"level": "WARN", "msg": "unparsed_log_line", "raw": line[:1000]}
+        if level and row.get("level") != level:
+            continue
+        if msg and msg.lower() not in str(row.get("msg", "")).lower():
+            continue
+        if request_id and row.get("request_id") != request_id:
+            continue
+        rows.append(row)
+        if len(rows) >= limit:
+            break
+    rows.reverse()
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "path": cfg.log_file,
+            "count": len(rows),
+            "entries": rows,
+        },
+    )
+
+
+# -- Registration ------------------------------------------------------------
+
+
+def register(routes: dict):
+    """Register log aggregation API routes."""
+    routes["/api/logs/fleet"] = handle_logs_fleet
+    routes["/api/logs/search"] = handle_logs_search
+    routes["/api/logs/oom"] = handle_logs_oom
+    routes["/api/logs/auth"] = handle_logs_auth
+    routes["/api/logs/runtime"] = handle_logs_runtime

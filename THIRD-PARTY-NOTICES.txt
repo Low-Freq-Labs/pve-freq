@@ -1,0 +1,100 @@
+THIRD-PARTY SOFTWARE NOTICES
+
+Source selection: 37d23021b8fb4e9661866e3de245ccff1d66b21b
+Source tree: a5314020d9a27e479aed63aef1e07941ad95e236
+
+The project LICENSE declaration remains unchanged. COPYING supplies the complete
+GNU Affero General Public License version 3 text. The existing project declaration
+selects AGPL-3.0-or-later. The third-party assets below carry their own licenses.
+
+Bundled browser terminal assets
+
+freq/data/web/vendor/xterm/xterm.min.js
+  SHA-256: c396d1fb827e8dbd0df413b1aff16f3cc662c480924c7a1831a2d20b9a2d3098
+  Package: @xterm/xterm 5.5.0
+  License: MIT
+  Complete notice: LICENSES/xterm-5.5.0-MIT.txt
+  Published package: https://registry.npmjs.org/@xterm/xterm/-/xterm-5.5.0.tgz
+  Published source revision (npm gitHead): 9ba6c00a195c95fcf8292a2b9084d91450e5daae
+
+freq/data/web/vendor/xterm/addon-fit.min.js
+  SHA-256: c22de0e0e65f0ba77ca6c341c984b5da549ed56c18fcb080b38d201692bfec47
+  Package: @xterm/addon-fit 0.10.0
+  License: MIT
+  Complete notice: LICENSES/xterm-addon-fit-0.10.0-MIT.txt
+  Published package: https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.10.0.tgz
+  Published source revision (npm gitHead): 9ba6c00a195c95fcf8292a2b9084d91450e5daae
+
+freq/data/web/vendor/xterm/addon-clipboard.min.js
+  SHA-256: 243df279a2c09c1251b4fc70447200d66dc30e6b28ef33fb85531a3d94eec755
+  Package: @xterm/addon-clipboard 0.1.0
+  License: MIT
+  Complete notice: LICENSES/xterm-addon-clipboard-0.1.0-MIT.txt
+  Published package: https://registry.npmjs.org/@xterm/addon-clipboard/-/addon-clipboard-0.1.0.tgz
+  Published source revision (npm gitHead): 2edc65baaa50f8b99c67f3df6f8d5d93c70a69e6
+
+freq/data/web/vendor/xterm/xterm.min.css
+  SHA-256: b3dee1c4fd6401160a95d726d6532fc72c8e38f2392b66d552a88aa22cb23e12
+  Package: @xterm/xterm 5.5.0
+  License: MIT
+  Complete notice: LICENSES/xterm-5.5.0-MIT.txt
+  Published package: https://registry.npmjs.org/@xterm/xterm/-/xterm-5.5.0.tgz
+  Published source revision (npm gitHead): 9ba6c00a195c95fcf8292a2b9084d91450e5daae
+
+Embedded component: js-base64 3.7.7
+  Embedded within: freq/data/web/vendor/xterm/addon-clipboard.min.js
+  License: BSD-3-Clause
+  Complete notice: LICENSES/js-base64-3.7.7-BSD-3-Clause.txt
+  Published package: https://registry.npmjs.org/js-base64/-/js-base64-3.7.7.tgz
+  Published source revision (npm gitHead): 3d5027674fd0678e7b342618594b29c90483ffa7
+  The published clipboard add-on declares js-base64 ^3.7.5; its bundled
+  implementation contains the 3.7.7 version constant. This notice inventories
+  the embedded implementation, not every version allowed by that range.
+
+Provenance and transformations
+
+The selected files retain CDN package/version provenance headers. The CSS header
+identifies jsDelivr minification with clean-css v5.3.3. The JavaScript headers say
+the original files were already minified and identify the original npm member.
+For all three JavaScript assets, removing only the selected CDN header and the
+published upstream sourceMappingURL comment yields identical executable bodies.
+The CSS transformation was not independently reproduced; its package/version
+attribution comes from its embedded provenance header. No regenerated or newer
+upstream asset is substituted by these notices.
+
+Published package archive and notice verification
+
+@xterm/xterm 5.5.0
+  Metadata: https://registry.npmjs.org/@xterm/xterm/5.5.0
+  Archive SHA-256: bd954fa721872170188cc5d7e83e88db3c83c9a18a4e8d24c2783d26491f59d2
+  Complete notice: LICENSES/xterm-5.5.0-MIT.txt
+  Notice SHA-256: b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd
+
+@xterm/addon-fit 0.10.0
+  Metadata: https://registry.npmjs.org/@xterm/addon-fit/0.10.0
+  Archive SHA-256: 917ac44972453d5eed52edc1e50260c76398ce48cf2290c2e60671102bba0b33
+  Complete notice: LICENSES/xterm-addon-fit-0.10.0-MIT.txt
+  Notice SHA-256: e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f
+
+@xterm/addon-clipboard 0.1.0
+  Metadata: https://registry.npmjs.org/@xterm/addon-clipboard/0.1.0
+  Archive SHA-256: 6cbc7814658cd5e57763c98dd3e3ce79d2adefe2a9e4f96ff97fd40a45ba39e4
+  Complete notice: LICENSES/xterm-addon-clipboard-0.1.0-MIT.txt
+  Notice SHA-256: a26afeeba9ab0a19502a73df658d8fb09186d0906c81af6c04d334064971e81f
+
+js-base64 3.7.7
+  Metadata: https://registry.npmjs.org/js-base64/3.7.7
+  Archive SHA-256: 097efa419e4ee43214424e0719f29ed8bcb7584c507e48d0f06246efb99342c3
+  Complete notice: LICENSES/js-base64-3.7.7-BSD-3-Clause.txt
+  Notice SHA-256: fcf06aacb36ee29237110d6b3a9fbd6296e85ad4324263abf5f8a5cfb5706c81
+
+Distribution scope
+
+These notices accompany the selected source snapshot and its bundled terminal
+assets. Development/build dependency declarations do not themselves redistribute
+the implementations of those dependencies. This inventory does not certify later
+wheel, container, binary, or live-service distributions. Such distributions must
+retain these notices and verify their actual inclusion.
+
+All accompanying third-party license files are copied from the exact published
+package members listed above without textual edits.

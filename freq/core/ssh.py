@@ -1,0 +1,595 @@
+"""SSH transport for FREQ — the network spine.
+
+Provides: run(), async_run(), run_many(), async_run_many()
+
+Every remote operation goes through here. Parallel subprocess-based SSH
+with platform-aware configuration for 6 host types (linux, pve, truenas,
+pfsense/docker, idrac, switch). Legacy devices get RSA keys and weak ciphers
+automatically — no user configuration needed.
+
+Replaces: Ansible SSH transport ($0 but Python dependency hell),
+          Fabric/Paramiko ($0 but requires pip install)
+
+Architecture:
+    - asyncio.create_subprocess_exec for parallel fleet operations
+    - Sync wrapper (run) for single-host commands
+    - SSH multiplexing (ControlMaster) for connection reuse — 4x speedup
+    - Platform-specific cipher/key negotiation per host type
+    - CmdResult dataclass for structured return (rc, stdout, stderr)
+
+Design decisions:
+    - subprocess, not paramiko. Zero dependencies. Ships with Python.
+    - SSH multiplexing persists 5 minutes — fleet ops on 14 hosts in 2.7s.
+    - Legacy host types (iDRAC, Cisco) auto-negotiate weak ciphers.
+      This is a hardware limitation, not a security choice.
+    - Timeout defaults: 5s connect, 30s command. Overridable per call.
+"""
+
+import asyncio
+import os
+import shlex
+import subprocess
+import time
+from typing import Optional, Sequence
+
+from freq.core import log as logger
+from freq.core.types import CmdResult, Host
+
+# Legacy host types that require RSA keys (no ed25519 support)
+LEGACY_HTYPES = {"idrac", "switch"}
+
+# SSH multiplexing settings
+MUX_CONTROL_DIR = "~/.ssh/freq-mux"
+MUX_PERSIST_SECONDS = 300
+
+
+# Platform-specific SSH configuration
+# Each platform type has different auth, sudo, and cipher requirements
+_PLATFORM_SSH_BASE = {
+    "linux": {
+        "sudo": "sudo ",
+        "extra_opts": [],
+    },
+    "pve": {
+        "sudo": "sudo ",
+        "extra_opts": [],
+    },
+    "truenas": {
+        "sudo": "sudo ",
+        "extra_opts": [],
+    },
+    "pfsense": {
+        "sudo": "",
+        "extra_opts": [],
+    },
+    "docker": {
+        "sudo": "sudo ",
+        "extra_opts": [],
+    },
+    "idrac": {
+        "sudo": "",
+        "extra_opts": [
+            "-o",
+            "KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1",
+            "-o",
+            "HostKeyAlgorithms=+ssh-rsa",
+            "-o",
+            "PubkeyAcceptedAlgorithms=+ssh-rsa",
+        ],
+    },
+    "switch": {
+        "sudo": "",
+        "extra_opts": [
+            "-o",
+            "KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1",
+            "-o",
+            "HostKeyAlgorithms=+ssh-rsa",
+            "-o",
+            "PubkeyAcceptedAlgorithms=+ssh-rsa",
+        ],
+    },
+}
+
+
+def get_platform_ssh(htype: str, cfg=None) -> dict:
+    """Return platform SSH config for the given host type.
+
+    Merges base config with dynamic values from FreqConfig:
+    - user: from cfg.ssh_service_account (default from _DEFAULTS)
+    - password_file: from cfg.legacy_password_file for idrac/switch
+    """
+    base = _PLATFORM_SSH_BASE.get(htype, _PLATFORM_SSH_BASE["linux"]).copy()
+
+    # Set user from config or default
+    if cfg and hasattr(cfg, "ssh_service_account") and cfg.ssh_service_account:
+        base["user"] = cfg.ssh_service_account
+    else:
+        from freq.core.config import _DEFAULTS
+
+        base["user"] = _DEFAULTS["ssh_service_account"]
+
+    # Set password_file for legacy devices (only if configured)
+    if htype in LEGACY_HTYPES:
+        if cfg and hasattr(cfg, "legacy_password_file") and cfg.legacy_password_file:
+            base["password_file"] = cfg.legacy_password_file
+
+    return base
+
+
+# Backwards-compatible module-level dict (for callers that access PLATFORM_SSH directly)
+PLATFORM_SSH = {htype: get_platform_ssh(htype) for htype in _PLATFORM_SSH_BASE}
+
+
+def remote_command(
+    argv: Optional[Sequence[str]] = None,
+    *,
+    script: Optional[str] = None,
+    args: Sequence[str] = (),
+) -> str:
+    """Serialize reviewed remote grammar while keeping dynamic values as data.
+
+    ``argv`` is for direct commands. ``script`` is only for a fixed, reviewed
+    shell program whose dynamic values are passed as positional arguments.
+    Callers must choose exactly one mode.
+    """
+    if (argv is None) == (script is None):
+        raise ValueError("choose exactly one of argv or script")
+
+    if argv is not None:
+        if isinstance(argv, (str, bytes)) or not isinstance(argv, Sequence):
+            raise TypeError("argv must be a sequence of strings")
+        if not argv:
+            raise ValueError("argv must not be empty")
+        if args:
+            raise ValueError("args are only valid with script mode")
+        values = tuple(argv)
+    else:
+        if not isinstance(script, str):
+            raise TypeError("script must be a string")
+        if not script:
+            raise ValueError("script must not be empty")
+        if isinstance(args, (str, bytes)) or not isinstance(args, Sequence):
+            raise TypeError("args must be a sequence of strings")
+        values = ("sh", "-c", script, "freq", *tuple(args))
+
+    if any(not isinstance(value, str) for value in values):
+        raise TypeError("remote command values must be strings")
+    if any("\x00" in value for value in values):
+        raise ValueError("remote command values must not contain NUL")
+    return shlex.join(values)
+
+
+def _resolve_legacy_key(key_path: str) -> str:
+    """For legacy devices (iDRAC, switch), find RSA key in same directory.
+
+    These devices don't support ed25519. If the given key is ed25519,
+    look for a sibling RSA key. Zero changes to callers needed.
+    """
+    if not key_path:
+        return key_path
+
+    key_dir = os.path.dirname(key_path)
+    rsa_candidates = [
+        os.path.join(key_dir, "freq_id_rsa"),
+        os.path.join(key_dir, "id_rsa"),
+    ]
+    for rsa_path in rsa_candidates:
+        if os.path.isfile(rsa_path) and os.access(rsa_path, os.R_OK):
+            return rsa_path
+
+    # No RSA key found — return original (will likely fail, but at least
+    # the error message will point to the real problem)
+    return key_path
+
+
+def _resolve_connect_timeout(connect_timeout, cfg) -> int:
+    """Resolve SSH connect timeout: explicit value > cfg > default 5."""
+    if connect_timeout is not None:
+        return connect_timeout
+    if cfg and hasattr(cfg, "ssh_connect_timeout"):
+        return cfg.ssh_connect_timeout
+    return 5
+
+
+def _build_ssh_cmd(
+    host: str,
+    command: str,
+    user: Optional[str] = None,
+    key_path: Optional[str] = None,
+    connect_timeout: Optional[int] = None,
+    htype: str = "linux",
+    use_sudo: bool = True,
+    extra_opts: Optional[list] = None,
+    local_user: Optional[str] = None,
+    password_file: Optional[str] = None,
+    sudo_password_file: bool = False,
+    cfg=None,
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
+) -> list:
+    """Build an SSH command list for subprocess execution."""
+    connect_timeout = _resolve_connect_timeout(connect_timeout, cfg)
+    platform = get_platform_ssh(htype, cfg)
+
+    ssh_user = user or platform["user"]
+    sudo_prefix = platform["sudo"] if use_sudo else ""
+    password_file = password_file if password_file is not None else platform.get("password_file", "")
+
+    # Resolve: only use password auth if the file actually exists on disk.
+    # If configured but missing, fall back to key auth with BatchMode=yes
+    # so SSH fails silently instead of prompting on /dev/tty.
+    use_password = bool(password_file and os.path.isfile(password_file))
+
+    prefix = []
+    if use_password:
+        prefix = ["sshpass", "-f", password_file]
+
+    cmd = ["ssh"]
+
+    # Connection options
+    cmd.extend(["-o", f"ConnectTimeout={connect_timeout}"])
+    if port is not None:
+        normalized_port = int(port)
+        if not 1 <= normalized_port <= 65535:
+            raise ValueError(f"SSH port out of range: {port}")
+        cmd.extend(["-p", str(normalized_port)])
+    if known_hosts_file:
+        cmd.extend(["-o", "StrictHostKeyChecking=yes"])
+        cmd.extend(["-o", f"UserKnownHostsFile={known_hosts_file}"])
+    else:
+        cmd.extend(["-o", "StrictHostKeyChecking=accept-new"])
+    if not use_password:
+        cmd.extend(["-o", "BatchMode=yes"])
+
+    # SSH multiplexing — skip for password-auth and legacy devices
+    # iDRAC/switch have 2-session SSH limits; mux sockets hold connections and exhaust slots
+    # A caller that pins a per-run known_hosts file is asking for a fresh,
+    # independently verified transport boundary. Reusing a mux socket could
+    # bypass that host-key check and also makes temporary HOME paths exceed
+    # the Unix-domain socket path limit.
+    if (
+        not use_password
+        and htype not in LEGACY_HTYPES
+        and not local_user
+        and not known_hosts_file
+    ):
+        control_dir = os.path.expanduser(MUX_CONTROL_DIR)
+        os.makedirs(control_dir, mode=0o700, exist_ok=True)
+        control_path = os.path.join(control_dir, "%r@%h:%p")
+        cmd.extend(["-o", f"ControlPath={control_path}"])
+        cmd.extend(["-o", "ControlMaster=auto"])
+        cmd.extend(["-o", f"ControlPersist={MUX_PERSIST_SECONDS}"])
+
+    # Key — auto-resolve to RSA for legacy devices (iDRAC, switch)
+    # Skip key for password-auth devices
+    if not use_password:
+        resolved_key = key_path
+        if key_path and htype in LEGACY_HTYPES:
+            resolved_key = _resolve_legacy_key(key_path)
+        if resolved_key:
+            cmd.extend(["-i", resolved_key])
+
+    # Platform-specific options
+    cmd.extend(platform.get("extra_opts", []))
+
+    # Extra options
+    if extra_opts:
+        cmd.extend(extra_opts)
+
+    # User@host
+    cmd.append(f"{ssh_user}@{host}")
+
+    # Command with sudo if needed — wrap entire command in sudo sh -c
+    # so ALL chained commands (semicolons, pipes) run as root
+    if sudo_prefix and command:
+        escaped = command.replace("'", "'\\''")
+        cmd.append(f"sudo sh -c '{escaped}'")
+    elif command:
+        cmd.append(command)
+
+    if sudo_password_file and prefix:
+        prefix = ["sudo", "-n"] + prefix
+
+    if local_user:
+        return ["sudo", "-n", "-u", local_user] + prefix + cmd
+    return prefix + cmd
+
+
+def run(
+    host: str,
+    command: str,
+    user: Optional[str] = None,
+    key_path: Optional[str] = None,
+    connect_timeout: Optional[int] = None,
+    command_timeout: int = 30,
+    htype: str = "linux",
+    use_sudo: bool = True,
+    local_user: Optional[str] = None,
+    password_file: Optional[str] = None,
+    sudo_password_file: bool = False,
+    cfg=None,
+    failure_log_level: str = "error",
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
+    input_text: Optional[str] = None,
+) -> CmdResult:
+    """Execute a command on a remote host via SSH (synchronous).
+
+    Returns CmdResult with stdout, stderr, returncode, and duration.
+    """
+    ssh_cmd = _build_ssh_cmd(
+        host=host,
+        command=command,
+        user=user,
+        key_path=key_path,
+        connect_timeout=connect_timeout,
+        htype=htype,
+        use_sudo=use_sudo,
+        local_user=local_user,
+        password_file=password_file,
+        sudo_password_file=sudo_password_file,
+        cfg=cfg,
+        port=port,
+        known_hosts_file=known_hosts_file,
+    )
+
+    logger.debug(f"ssh_start: {host} [{htype}]", command=command[:120])
+
+    # wrap in GNU timeout for
+    # hard OS-level kill. subprocess.run(timeout=) only kills the direct
+    # child; grandchild SSH sessions (especially iDRAC racadm) can hold
+    # pipe FDs open indefinitely. GNU timeout sends SIGKILL to the process
+    # tree at the OS level. start_new_session ensures killpg reaches the
+    # full tree on the Python-side fallback path.
+    wrapped_cmd = ["timeout", "-s", "KILL", str(command_timeout)] + ssh_cmd
+    py_timeout = command_timeout + 10
+
+    start = time.monotonic()
+    try:
+        result = subprocess.run(
+            wrapped_cmd,
+            stdin=None if input_text is not None else subprocess.DEVNULL,
+            input=input_text,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=py_timeout,
+            start_new_session=True,
+        )
+        duration = time.monotonic() - start
+
+        rc = result.returncode
+        # GNU timeout returns 137 on SIGKILL; Python reports -9 when
+        # killpg catches the wrapper. Both mean timeout.
+        if rc in (137, -9):
+            logger.error(f"ssh_timeout: {host} [{htype}] after {command_timeout}s", command=command[:120])
+            logger.perf("ssh", duration, host=host, htype=htype, ok=False, timeout=True)
+            return CmdResult(stdout="", stderr=f"Timeout after {command_timeout}s", returncode=124, duration=duration)
+
+        logger.cmd(
+            f"ssh {host}: {command[:80]}",
+            exit_code=rc,
+            duration=duration,
+            htype=htype,
+        )
+
+        if rc != 0:
+            stderr_snippet = (result.stderr or "").strip()[:200]
+            normalized_failure_log_level = (failure_log_level or "error").lower()
+            log_failure = {
+                "debug": logger.debug,
+                "info": logger.info,
+                "warn": logger.warn,
+                "warning": logger.warn,
+                "error": logger.error,
+            }.get(normalized_failure_log_level, logger.error)
+            log_failure(
+                f"ssh_failed: {host} [{htype}] rc={rc}",
+                command=command[:120],
+                stderr=stderr_snippet,
+                duration=duration,
+                optional=normalized_failure_log_level not in ("", "error"),
+            )
+
+        # Performance tracking
+        logger.perf("ssh", duration, host=host, htype=htype, ok=rc == 0)
+
+        return CmdResult(
+            stdout=result.stdout.strip(),
+            stderr=result.stderr.strip(),
+            returncode=rc,
+            duration=duration,
+        )
+    except subprocess.TimeoutExpired:
+        duration = time.monotonic() - start
+        # Python-side fallback: kill the process group
+        logger.error(f"ssh_timeout: {host} [{htype}] after {command_timeout}s (py fallback)", command=command[:120])
+        logger.perf("ssh", duration, host=host, htype=htype, ok=False, timeout=True)
+        return CmdResult(stdout="", stderr=f"Timeout after {command_timeout}s", returncode=124, duration=duration)
+    except OSError as e:
+        duration = time.monotonic() - start
+        logger.error(f"ssh_error: {host} [{htype}]: {e}", command=command[:120])
+        logger.perf("ssh", duration, host=host, htype=htype, ok=False, error=str(e)[:80])
+        return CmdResult(stdout="", stderr=str(e), returncode=1, duration=duration)
+
+
+async def async_run(
+    host: str,
+    command: str,
+    user: Optional[str] = None,
+    key_path: Optional[str] = None,
+    connect_timeout: Optional[int] = None,
+    command_timeout: int = 30,
+    htype: str = "linux",
+    use_sudo: bool = True,
+    local_user: Optional[str] = None,
+    password_file: Optional[str] = None,
+    sudo_password_file: bool = False,
+    cfg=None,
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
+    input_text: Optional[str] = None,
+) -> CmdResult:
+    """Execute a command on a remote host via SSH (async).
+
+    Uses asyncio.create_subprocess_exec for non-blocking execution.
+    """
+    ssh_cmd = _build_ssh_cmd(
+        host=host,
+        command=command,
+        user=user,
+        key_path=key_path,
+        connect_timeout=connect_timeout,
+        htype=htype,
+        use_sudo=use_sudo,
+        local_user=local_user,
+        password_file=password_file,
+        sudo_password_file=sudo_password_file,
+        cfg=cfg,
+        port=port,
+        known_hosts_file=known_hosts_file,
+    )
+
+    logger.debug(f"async_ssh_start: {host} [{htype}]", command=command[:120])
+
+    start = time.monotonic()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *ssh_cmd,
+            stdin=(
+                asyncio.subprocess.PIPE
+                if input_text is not None
+                else asyncio.subprocess.DEVNULL
+            ),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            stdin_bytes = input_text.encode("utf-8") if input_text is not None else None
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=stdin_bytes), timeout=command_timeout
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            duration = time.monotonic() - start
+            logger.error(f"async_ssh_timeout: {host} [{htype}] after {command_timeout}s", command=command[:120])
+            logger.perf("ssh_async", duration, host=host, htype=htype, ok=False, timeout=True)
+            return CmdResult(stdout="", stderr=f"Timeout after {command_timeout}s", returncode=124, duration=duration)
+
+        duration = time.monotonic() - start
+        rc = proc.returncode or 0
+        out = stdout.decode().strip() if stdout else ""
+        err = stderr.decode().strip() if stderr else ""
+
+        logger.cmd(f"async_ssh {host}: {command[:80]}", exit_code=rc, duration=duration, htype=htype)
+        if rc != 0:
+            logger.error(f"async_ssh_failed: {host} [{htype}] rc={rc}", command=command[:120], stderr=err[:200])
+        logger.perf("ssh_async", duration, host=host, htype=htype, ok=rc == 0)
+
+        return CmdResult(stdout=out, stderr=err, returncode=rc, duration=duration)
+    except OSError as e:
+        duration = time.monotonic() - start
+        logger.error(f"async_ssh_error: {host} [{htype}]: {e}", command=command[:120])
+        logger.perf("ssh_async", duration, host=host, htype=htype, ok=False, error=str(e)[:80])
+        return CmdResult(stdout="", stderr=str(e), returncode=1, duration=duration)
+
+
+async def async_run_many(
+    hosts: list,
+    command: str,
+    key_path: Optional[str] = None,
+    connect_timeout: Optional[int] = None,
+    command_timeout: int = 30,
+    max_parallel: int = 5,
+    use_sudo: bool = True,
+    cfg=None,
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
+    input_text: Optional[str] = None,
+) -> dict:
+    """Execute a command across multiple hosts in parallel.
+
+    Uses a semaphore to limit concurrency to max_parallel.
+    Returns dict mapping Host -> CmdResult.
+
+    This is the async pipeline that delivered 4x speedup in the Convergence.
+    """
+    semaphore = asyncio.Semaphore(max_parallel)
+    results = {}
+
+    # Pre-scan for duplicate labels so BOTH colliders get label@ip keys
+    label_counts = {}
+    for h in hosts:
+        label_counts[h.label] = label_counts.get(h.label, 0) + 1
+    dup_labels = {label for label, count in label_counts.items() if count > 1}
+
+    async def _run_one(host: Host) -> None:
+        async with semaphore:
+            result = await async_run(
+                host=host.ip,
+                command=command,
+                key_path=key_path,
+                connect_timeout=connect_timeout,
+                command_timeout=command_timeout,
+                htype=host.htype,
+                use_sudo=use_sudo,
+                cfg=cfg,
+                port=port,
+                known_hosts_file=known_hosts_file,
+                input_text=input_text,
+            )
+            if host.label in dup_labels:
+                results[f"{host.label}@{host.ip}"] = result
+            else:
+                results[host.label] = result
+            results[host.ip] = result
+
+    tasks = [asyncio.create_task(_run_one(h)) for h in hosts]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    return results
+
+
+def result_for(results: dict, host) -> "CmdResult | None":
+    """Look up a host's result from run_many output.
+
+    Handles both unique labels (keyed by label) and duplicate labels
+    (keyed by label@ip). Falls back to IP lookup.
+    """
+    return results.get(host.label) or results.get(f"{host.label}@{host.ip}") or results.get(host.ip)
+
+
+def run_many(
+    hosts: list,
+    command: str,
+    key_path: Optional[str] = None,
+    connect_timeout: Optional[int] = None,
+    command_timeout: int = 30,
+    max_parallel: int = 5,
+    use_sudo: bool = True,
+    cfg=None,
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
+    input_text: Optional[str] = None,
+) -> dict:
+    """Synchronous wrapper for async_run_many.
+
+    Convenience function for non-async callers.
+    """
+    return asyncio.run(
+        async_run_many(
+            hosts=hosts,
+            command=command,
+            key_path=key_path,
+            connect_timeout=connect_timeout,
+            command_timeout=command_timeout,
+            max_parallel=max_parallel,
+            use_sudo=use_sudo,
+            cfg=cfg,
+            port=port,
+            known_hosts_file=known_hosts_file,
+            input_text=input_text,
+        )
+    )

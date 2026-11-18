@@ -1,0 +1,26 @@
+# FREQ Switch Port Profiles
+# Apply with: freq net switch profile apply <name> <target> --ports Gi1/0/1-24
+
+[profile.access-default]
+description = "Standard access port"
+mode = "access"
+vlan = 1
+spanning_tree = "portfast"
+
+[profile.trunk-uplink]
+description = "Uplink to distribution switch"
+mode = "trunk"
+allowed_vlans = [1, 5, 10, 25, 50, 2550]
+native_vlan = 1
+
+[profile.camera]
+description = "IP camera — isolated VLAN, PoE enabled"
+mode = "access"
+vlan = 50
+poe = true
+port_security = { max_mac = 1, violation = "restrict" }
+spanning_tree = "portfast"
+
+[profile.dead]
+description = "Unused port — shutdown"
+shutdown = true

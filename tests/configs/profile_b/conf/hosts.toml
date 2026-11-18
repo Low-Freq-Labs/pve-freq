@@ -1,0 +1,75 @@
+# FREQ Fleet Registry
+# Managed by freq — do not edit while freq is running
+
+[[host]]
+ip = "10.0.1.1"
+label = "node1"
+type = "pve"
+groups = "prod"
+
+[[host]]
+ip = "10.0.1.2"
+label = "node2"
+type = "pve"
+groups = "prod"
+
+[[host]]
+ip = "10.0.1.3"
+label = "node3"
+type = "pve"
+groups = "prod"
+
+[[host]]
+ip = "10.0.1.100"
+label = "nas01"
+type = "truenas"
+groups = "prod"
+
+[[host]]
+ip = "10.0.0.1"
+label = "firewall"
+type = "pfsense"
+groups = "prod"
+
+[[host]]
+ip = "10.0.2.10"
+label = "web01"
+type = "linux"
+groups = "prod,web"
+
+[[host]]
+ip = "10.0.2.11"
+label = "web02"
+type = "linux"
+groups = "prod,web"
+
+[[host]]
+ip = "10.0.3.10"
+label = "db01"
+type = "linux"
+groups = "prod,db"
+
+[[host]]
+ip = "10.0.4.10"
+label = "docker01"
+type = "docker"
+groups = "prod"
+
+[[host]]
+ip = "10.0.4.11"
+label = "docker02"
+type = "docker"
+groups = "prod"
+
+[[host]]
+ip = "10.0.5.10"
+label = "dev01"
+type = "linux"
+groups = "dev"
+
+[[host]]
+ip = "10.0.6.10"
+label = "lab-test"
+type = "linux"
+groups = "lab"
+

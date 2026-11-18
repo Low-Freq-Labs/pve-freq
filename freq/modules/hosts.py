@@ -1,0 +1,1085 @@
+"""Fleet host registry management for FREQ.
+
+Domain: freq host <list|add|remove|sync|groups-list|groups-add|groups-remove>
+
+Manages the fleet host registry (hosts.toml). Add, remove, list, and group
+hosts. Sync auto-discovers hosts from PVE cluster API and agent endpoints.
+Groups enable targeted operations (e.g., freq fleet exec --group prod).
+
+Replaces: Ansible inventory files ($0 but hand-maintained YAML/INI),
+          /etc/hosts management scripts
+
+Architecture:
+    - Host registry stored in conf/hosts.toml (TOML format, [[host]] array)
+    - PVE sync queries pvesh for VM/container IPs on cluster nodes
+    - Agent sync polls freq-agent endpoints for self-reported hosts
+    - Validation via freq/core/validate.py (IP format, label uniqueness)
+
+Design decisions:
+    - hosts.toml uses TOML format. Easy to grep, easy to edit
+      by hand, easy to version control. Migrated from flat hosts.conf to TOML.
+"""
+
+import json
+import os
+import shutil
+
+from freq.core import fmt, host_identity, resolve, validate
+from freq.core import log as logger
+from freq.core.config import FreqConfig
+
+is_docker_bridge_ip = host_identity.is_docker_bridge_ip
+_physical_display_name_for = host_identity.physical_display_name_for_mapping
+
+# ─────────────────────────────────────────────────────────────
+# CONSTANTS — Timeouts for PVE and agent sync operations
+# ─────────────────────────────────────────────────────────────
+
+HOSTS_PVE_TIMEOUT = 15
+HOSTS_AGENT_TIMEOUT = 10
+
+
+def _toml_inline_string(value: str) -> str:
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+# ─────────────────────────────────────────────────────────────
+# HOST REGISTRY — List, add, remove fleet hosts
+# ─────────────────────────────────────────────────────────────
+
+
+def cmd_hosts(cfg: FreqConfig, pack, args) -> int:
+    """List, add, remove, or sync fleet hosts."""
+    action = getattr(args, "action", "list")
+
+    if action == "list":
+        return _hosts_list(cfg, args)
+    elif action == "add":
+        return _hosts_add(cfg)
+    elif action == "remove":
+        return _hosts_remove(cfg)
+    elif action == "sync":
+        dry_run = getattr(args, "dry_run", False)
+        return _hosts_sync(cfg, dry_run=dry_run)
+    else:
+        fmt.error(f"Unknown host action: {action}. Available: list, add, remove, sync")
+        return 1
+
+
+def cmd_groups(cfg: FreqConfig, pack, args) -> int:
+    """List, add, or remove host groups."""
+    action = getattr(args, "action", "list")
+
+    if action == "list":
+        return _groups_list(cfg)
+    elif action == "add":
+        return _groups_add(cfg, args)
+    elif action == "remove":
+        return _groups_remove(cfg, args)
+    else:
+        fmt.error(f"Unknown groups action: {action}")
+        fmt.info("Usage: freq groups [list|add|remove] --target <host> --group <name>")
+        return 1
+
+
+def _hosts_list(cfg: FreqConfig, args=None) -> int:
+    """Display all registered fleet hosts."""
+    hosts = cfg.hosts
+
+    # JSON output mode
+    if getattr(args, "json_output", False):
+        import json as _json
+
+        data = [{"label": h.label, "ip": h.ip, "type": h.htype,
+                 "groups": h.groups, "vmid": getattr(h, "vmid", 0),
+                 "all_ips": getattr(h, "all_ips", [])} for h in hosts]
+        print(_json.dumps({"hosts": data, "count": len(data)}, indent=2))
+        return 0
+
+    fmt.header("Fleet Hosts")
+    fmt.blank()
+
+    if not hosts:
+        fmt.line(f"{fmt.C.YELLOW}No hosts registered.{fmt.C.RESET}")
+        fmt.line(f"{fmt.C.GRAY}Add hosts with: freq host add{fmt.C.RESET}")
+        fmt.line(f"{fmt.C.GRAY}Or discover with: freq host discover{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    # Summary
+    types = resolve.all_types(hosts)
+    type_str = "  ".join(f"{fmt.C.CYAN}{t}{fmt.C.RESET}: {c}" for t, c in sorted(types.items()))
+    fmt.line(f"{fmt.C.BOLD}{len(hosts)} hosts{fmt.C.RESET}  ({type_str})")
+    fmt.blank()
+
+    # Table
+    # Check if any host has multi-IP data
+    has_multi_ip = any(getattr(h, "all_ips", []) for h in hosts)
+
+    if has_multi_ip:
+        fmt.table_header(
+            ("LABEL", 18),
+            ("IP", 17),
+            ("TYPE", 10),
+            ("GROUPS", 20),
+            ("ALL IPs", 40),
+        )
+    else:
+        fmt.table_header(
+            ("LABEL", 18),
+            ("IP", 17),
+            ("TYPE", 10),
+            ("GROUPS", 25),
+        )
+
+    for h in hosts:
+        type_color = {
+            "pve": fmt.C.PURPLE,
+            "linux": fmt.C.GREEN,
+            "truenas": fmt.C.BLUE,
+            "pfsense": fmt.C.ORANGE,
+            "docker": fmt.C.CYAN,
+            "idrac": fmt.C.YELLOW,
+            "switch": fmt.C.MAGENTA,
+        }.get(h.htype, fmt.C.GRAY)
+
+        all_ips = getattr(h, "all_ips", []) or []
+        # Show additional IPs (skip the primary — it's already in column 2)
+        extra_ips = [ip for ip in all_ips if ip != h.ip]
+
+        if has_multi_ip:
+            ips_str = ", ".join(extra_ips) if extra_ips else ""
+            fmt.table_row(
+                (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 18),
+                (h.ip, 17),
+                (f"{type_color}{h.htype}{fmt.C.RESET}", 10),
+                (f"{fmt.C.DIM}{h.groups}{fmt.C.RESET}" if h.groups else f"{fmt.C.DARK_GRAY}—{fmt.C.RESET}", 20),
+                (f"{fmt.C.DIM}{ips_str}{fmt.C.RESET}" if ips_str else "", 40),
+            )
+        else:
+            fmt.table_row(
+                (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 18),
+                (h.ip, 17),
+                (f"{type_color}{h.htype}{fmt.C.RESET}", 10),
+                (f"{fmt.C.DIM}{h.groups}{fmt.C.RESET}" if h.groups else f"{fmt.C.DARK_GRAY}—{fmt.C.RESET}", 25),
+            )
+
+    fmt.blank()
+    fmt.footer()
+    return 0
+
+
+def _hosts_add(cfg: FreqConfig) -> int:
+    """Interactive host addition."""
+    fmt.header("Add Host")
+    fmt.blank()
+
+    # Get IP
+    try:
+        ip = input(f"  {fmt.C.CYAN}IP address:{fmt.C.RESET} ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 1
+
+    if not validate.ip(ip):
+        fmt.error(f"Invalid IP address: {ip}")
+        return 1
+
+    # Check for duplicates
+    if resolve.by_ip(cfg.hosts, ip):
+        fmt.error(f"Host with IP {ip} already registered.")
+        return 1
+
+    # Get label
+    try:
+        label = input(f"  {fmt.C.CYAN}Label:{fmt.C.RESET} ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 1
+
+    if not validate.label(label):
+        fmt.error(f"Invalid label: {label}")
+        return 1
+
+    if resolve.by_label(cfg.hosts, label):
+        fmt.error(f"Host with label '{label}' already registered.")
+        return 1
+
+    # Get type
+    valid_types = ["linux", "pve", "truenas", "pfsense", "opnsense", "docker", "idrac", "switch"]
+    try:
+        htype = input(f"  {fmt.C.CYAN}Type ({', '.join(valid_types)}):{fmt.C.RESET} ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 1
+
+    if htype not in valid_types:
+        fmt.error(f"Invalid type: {htype}. Must be one of: {', '.join(valid_types)}")
+        return 1
+
+    # Get groups (optional)
+    try:
+        groups = input(f"  {fmt.C.CYAN}Groups (comma-separated, optional):{fmt.C.RESET} ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 1
+
+    # Write to fleet registry
+    from freq.core.config import Host, append_host_toml
+
+    host = Host(ip=ip, label=label, htype=htype, groups=groups)
+    append_host_toml(cfg.hosts_file, host)
+    cfg.hosts.append(host)
+
+    fmt.success(f"Host '{label}' ({ip}) added to fleet as {htype}")
+    return 0
+
+
+def _hosts_remove(cfg: FreqConfig) -> int:
+    """Remove a host from the fleet."""
+    fmt.header("Remove Host")
+    fmt.blank()
+
+    try:
+        target = input(f"  {fmt.C.CYAN}Host label or IP to remove:{fmt.C.RESET} ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 1
+
+    host = resolve.by_target(cfg.hosts, target)
+    if not host:
+        fmt.error(f"Host not found: {target}")
+        return 1
+
+    # Confirm
+    try:
+        confirm = input(f"  {fmt.C.YELLOW}Remove '{host.label}' ({host.ip})? [y/N]:{fmt.C.RESET} ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 1
+
+    if confirm != "y":
+        fmt.info("Cancelled.")
+        return 0
+
+    # Remove from hosts list and rewrite
+    from freq.core.config import save_hosts_toml
+
+    cfg.hosts = [h for h in cfg.hosts if h.ip != host.ip and h.label != host.label]
+    save_hosts_toml(cfg.hosts_file, cfg.hosts)
+
+    fmt.success(f"Host '{host.label}' removed from fleet.")
+    return 0
+
+
+# ─────────────────────────────────────────────────────────────
+# HOST SYNC — Auto-discover hosts from PVE API and fleet-boundaries
+# ─────────────────────────────────────────────────────────────
+
+
+def _pve_sync_topology_id(rows, endpoint):
+    """Return a positive cluster identity or an endpoint-scoped fallback."""
+    if not isinstance(rows, list):
+        return f"endpoint:{endpoint}"
+    clusters = sorted(
+        str(row.get("name", "")).strip()
+        for row in rows
+        if isinstance(row, dict)
+        and row.get("type") == "cluster"
+        and str(row.get("name", "")).strip()
+    )
+    members = sorted(
+        (
+            str(row.get("name", "")).strip(),
+            str(row.get("ip", "")).strip(),
+        )
+        for row in rows
+        if isinstance(row, dict)
+        and row.get("type") == "node"
+        and str(row.get("name", "")).strip()
+    )
+    if len(clusters) != 1 or not members or any(not ip for _name, ip in members):
+        return f"endpoint:{endpoint}"
+    return "cluster:" + json.dumps(
+        {"name": clusters[0], "members": members},
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
+    """Sync hosts.toml from PVE API + fleet-boundaries.
+
+    Queries PVE for all running VMs, gets IPs via qm agent,
+    merges physical devices from fleet-boundaries.toml, and updates hosts.toml.
+
+    Preserves: comments, manual group assignments, manually-added hosts.
+    Adds: new VMs discovered in PVE, physical devices from fleet-boundaries.
+    Flags: hosts that disappeared from PVE (but doesn't remove — user decides).
+    """
+    from freq.core.ssh import run as ssh_single
+
+    fmt.header("Hosts Sync")
+    fmt.blank()
+
+    # ── Step 1: Read existing hosts.toml ──
+    existing = {}  # ip -> {label, htype, groups, all_ips, managed}
+    for h in cfg.hosts:
+        existing[h.ip] = {
+            "label": h.label,
+            "htype": h.htype,
+            "groups": getattr(h, "groups", "") or "",
+            "vmid": getattr(h, "vmid", 0) or 0,
+            "all_ips": getattr(h, "all_ips", []) or [],
+            "managed": getattr(h, "managed", True),
+        }
+
+    fmt.step_ok(f"Current hosts.toml: {len(existing)} hosts")
+
+    # ── Step 2: Establish topology, then query every distinct control plane ──
+    fmt.step_start("Querying PVE control planes")
+    topology_by_endpoint = {}
+    endpoints_by_topology = {}
+    for node_ip in dict.fromkeys(cfg.pve_nodes):
+        topology_id = f"endpoint:{node_ip}"
+        status = ssh_single(
+            host=node_ip,
+            command="pvesh get /cluster/status --output-format json",
+            key_path=cfg.ssh_key_path,
+            command_timeout=HOSTS_PVE_TIMEOUT,
+            htype="pve",
+            use_sudo=True,
+            cfg=cfg,
+        )
+        if status.returncode == 0 and status.stdout:
+            try:
+                topology_id = _pve_sync_topology_id(
+                    json.loads(status.stdout), node_ip
+                )
+            except (json.JSONDecodeError, ValueError):
+                pass
+        topology_by_endpoint[node_ip] = topology_id
+        endpoints_by_topology.setdefault(topology_id, []).append(node_ip)
+
+    pve_vms = []
+    pve_failures = []
+    for topology_id, endpoints in endpoints_by_topology.items():
+        queried = False
+        for node_ip in endpoints:
+            result = ssh_single(
+                host=node_ip,
+                command="pvesh get /cluster/resources --type vm --output-format json",
+                key_path=cfg.ssh_key_path,
+                command_timeout=HOSTS_PVE_TIMEOUT,
+                htype="pve",
+                use_sudo=True,
+                cfg=cfg,
+            )
+            if result.returncode != 0 or not result.stdout:
+                continue
+            try:
+                vms = json.loads(result.stdout)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(vms, list):
+                continue
+            for vm in vms:
+                if not isinstance(vm, dict):
+                    continue
+                observed = dict(vm)
+                observed["_freq_cluster_id"] = topology_id
+                observed["_freq_source_endpoint"] = node_ip
+                pve_vms.append(observed)
+            queried = True
+            break
+        if not queried:
+            pve_failures.extend(endpoints)
+
+    if not pve_vms:
+        fmt.step_warn("No VMs returned from PVE API")
+    else:
+        fmt.step_ok(f"PVE control planes: {len(pve_vms)} VMs found")
+    if pve_failures:
+        fmt.step_warn(
+            "PVE sync incomplete; failed control plane(s): "
+            + ", ".join(pve_failures)
+        )
+
+    endpoint_by_cluster_node = {}
+    for index, node_ip in enumerate(cfg.pve_nodes):
+        if index >= len(cfg.pve_node_names):
+            continue
+        node_name = cfg.pve_node_names[index]
+        topology_id = topology_by_endpoint.get(node_ip, f"endpoint:{node_ip}")
+        endpoint_by_cluster_node[(topology_id, node_name)] = node_ip
+
+    # ── Step 3: Get IPs for running VMs via qm agent ──
+    discovered = {}  # ip -> {label, htype, groups, vmid, source}
+    running_vms = [v for v in pve_vms if v.get("status") == "running" and v.get("type") == "qemu"]
+    fmt.step_start(f"Resolving IPs for {len(running_vms)} running VMs")
+
+    # Derive management VLAN prefix from PVE node IPs (they're on the mgmt VLAN)
+    # This avoids hardcoding site-specific subnet prefixes
+    mgmt_prefixes = set()
+    for nip in cfg.pve_nodes:
+        parts = nip.rsplit(".", 1)
+        if len(parts) == 2:
+            mgmt_prefixes.add(parts[0] + ".")
+    unresolved = []  # VMs where guest agent didn't return IPs
+
+    for v in running_vms:
+        vmid = v.get("vmid", 0)
+        name = v.get("name", "")
+        node = v.get("node", "")
+        cluster_id = v.get("_freq_cluster_id", "")
+
+        # Skip templates and CTs for now
+        if not name or vmid < 100:
+            continue
+
+        # Find which PVE node this VM is on
+        node_ip = endpoint_by_cluster_node.get((cluster_id, node))
+        if not node_ip:
+            node_ip = v.get("_freq_source_endpoint")
+        if not node_ip:
+            continue
+
+        # Get ALL IPs from QEMU guest agent — raw JSON, parse locally
+        r = ssh_single(
+            host=node_ip,
+            command=f"qm agent {vmid} network-get-interfaces 2>/dev/null",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=HOSTS_AGENT_TIMEOUT,
+            htype="pve",
+            use_sudo=True,
+        )
+
+        if r.returncode != 0 or not r.stdout.strip():
+            unresolved.append((vmid, name, "no guest agent response"))
+            continue
+
+        # Parse qm agent JSON locally — handles both dict and list formats
+        try:
+            data = json.loads(r.stdout)
+            ifaces = data.get("result", data) if isinstance(data, dict) else data
+        except (json.JSONDecodeError, ValueError):
+            unresolved.append((vmid, name, "invalid JSON from guest agent"))
+            continue
+
+        # Extract all IPv4 addresses (skip loopback)
+        all_ips = []
+        for iface in ifaces:
+            for addr in iface.get("ip-addresses", []):
+                if addr.get("ip-address-type") == "ipv4":
+                    ip = addr.get("ip-address", "")
+                    if ip and not ip.startswith("127.") and validate.ip(ip):
+                        all_ips.append(ip)
+
+        if not all_ips:
+            unresolved.append((vmid, name, "no IPv4 addresses"))
+            continue
+
+        # Smart IP selection:
+        # 1. If any IP matches an existing hosts.toml entry, use that (avoid duplicates)
+        # 2. Prefer management VLAN (same subnet as PVE nodes)
+        # 3. Fall back to any known VLAN prefix
+        # 4. Last resort: first non-Docker-bridge IP
+        chosen_ip = None
+
+        # Check for existing match first
+        for ip in all_ips:
+            if ip in existing:
+                chosen_ip = ip
+                break
+
+        if not chosen_ip:
+            # Prefer management VLAN (same subnet as PVE nodes)
+            mgmt_ips = [ip for ip in all_ips if any(ip.startswith(p) for p in mgmt_prefixes)]
+            # Skip Docker bridge IPs (172.17-31.x.x)
+            real_ips = [ip for ip in all_ips if not is_docker_bridge_ip(ip)]
+
+            if mgmt_ips:
+                chosen_ip = mgmt_ips[0]
+            elif real_ips:
+                chosen_ip = real_ips[0]
+            else:
+                chosen_ip = all_ips[0]
+
+        # Filter all_ips: skip Docker bridge IPs, keep real NICs
+        real_all_ips = [ip for ip in all_ips if not is_docker_bridge_ip(ip)]
+
+        # PVE name is source of truth for label — always sync it.
+        # Preserve groups and type from existing entry (user may have customized).
+        safe_label = validate.sanitize_label(name)
+        if chosen_ip in existing:
+            e = existing[chosen_ip]
+            discovered[chosen_ip] = {
+                "label": safe_label,
+                "htype": e["htype"],
+                "groups": e["groups"],
+                "vmid": vmid,
+                "source": "pve",
+                "cluster_id": cluster_id,
+                "all_ips": real_all_ips,
+                "managed": e.get("managed", True),
+            }
+        else:
+            # Discovery records observations only. Classification, grouping,
+            # and onboarding are explicit operator decisions after init.
+            discovered[chosen_ip] = {
+                "label": safe_label,
+                "htype": "unknown",
+                "groups": "",
+                "vmid": vmid,
+                "source": "pve",
+                "cluster_id": cluster_id,
+                "all_ips": real_all_ips,
+                "managed": False,
+            }
+
+    fmt.step_ok(f"Resolved {len(discovered)} VM IPs")
+    if unresolved:
+        fmt.step_warn(f"{len(unresolved)} VMs skipped (no guest agent or no IP)")
+
+    # ── Step 4: Add PVE nodes themselves ──
+    for i, node_ip in enumerate(cfg.pve_nodes):
+        name = cfg.pve_node_names[i] if i < len(cfg.pve_node_names) else f"pve{i + 1:02d}"
+        if node_ip in existing:
+            e = existing[node_ip]
+            discovered[node_ip] = {
+                "label": e["label"],
+                "htype": e["htype"],
+                "groups": e["groups"],
+                "vmid": 0,
+                "source": "pve-node",
+                "cluster_id": topology_by_endpoint.get(
+                    node_ip, f"endpoint:{node_ip}"
+                ),
+                "all_ips": e.get("all_ips", []),
+                "managed": e.get("managed", True),
+            }
+        elif node_ip not in discovered:
+            discovered[node_ip] = {
+                "label": name,
+                "htype": "pve",
+                "groups": "prod,cluster",
+                "vmid": 0,
+                "source": "pve-node",
+                "cluster_id": topology_by_endpoint.get(
+                    node_ip, f"endpoint:{node_ip}"
+                ),
+                "all_ips": [],
+            }
+
+    # ── Step 5: Merge physical devices from fleet-boundaries ──
+    fb = cfg.fleet_boundaries
+    if fb and hasattr(fb, "physical"):
+        for dev in fb.physical.values():
+            ip = dev.ip
+            if ip in existing:
+                e = existing[ip]
+                # Existing managed state may encode the browser-frozen
+                # acknowledged-device boundary. Sync may refresh identity,
+                # but it is not authoritative enough to promote that row.
+                managed = e.get("managed", True)
+                discovered[ip] = {
+                    "label": e["label"],
+                    "htype": e["htype"],
+                    "groups": e["groups"],
+                    "vmid": 0,
+                    "source": "fleet-boundaries",
+                    "all_ips": e.get("all_ips", []),
+                    "managed": managed,
+                }
+            elif ip not in discovered:
+                # Sanitize label — hosts.toml labels should be simple identifiers
+                safe_label = dev.label.replace(" ", "-").lower()
+                discovered[ip] = {
+                    "label": safe_label,
+                    "htype": dev.device_type,
+                    "groups": dev.groups
+                    or ("lab" if dev.scope == "lab" else "prod,network" if dev.device_type in ("pfsense", "switch") else "prod"),
+                    "vmid": 0,
+                    "source": "fleet-boundaries",
+                    "all_ips": [],
+                    "managed": dev.scope != "lab",
+                }
+        fmt.step_ok(f"Fleet boundaries: {len(fb.physical)} physical devices")
+
+    # ── Step 6: Preserve manually-added hosts not in PVE or boundaries ──
+    for ip, e in existing.items():
+        if ip not in discovered:
+            discovered[ip] = {
+                "label": e["label"],
+                "htype": e["htype"],
+                "groups": e["groups"],
+                "vmid": 0,
+                "source": "manual",
+                "all_ips": e.get("all_ips", []),
+                "managed": e.get("managed", True),
+            }
+
+    # ── Step 6b: Dedup by hostname across VLANs ──
+    # When the same label appears with different IPs (e.g. VM on mgmt + lab VLAN),
+    # keep only the highest-priority entry.
+    _source_rank = {"existing": 0, "pve": 1, "pve-node": 1, "fleet-boundaries": 2, "manual": 3}
+    by_label = {}
+    for ip, d in discovered.items():
+        label = d["label"]
+        source = d.get("source", "")
+        cluster_id = d.get("cluster_id", "")
+        label_key = (
+            (label, source, cluster_id)
+            if source in {"pve", "pve-node"} and cluster_id
+            else (label, "", "")
+        )
+        if label_key not in by_label:
+            by_label[label_key] = ip
+        else:
+            prev_ip = by_label[label_key]
+            prev = discovered[prev_ip]
+            # Compare: lower source rank wins; on tie, prefer mgmt VLAN
+            prev_rank = _source_rank.get(prev["source"], 9)
+            curr_rank = _source_rank.get(d["source"], 9)
+            if curr_rank < prev_rank:
+                by_label[label_key] = ip
+            elif curr_rank == prev_rank:
+                # Prefer management VLAN IP
+                prev_mgmt = any(prev_ip.startswith(p) for p in mgmt_prefixes)
+                curr_mgmt = any(ip.startswith(p) for p in mgmt_prefixes)
+                if curr_mgmt and not prev_mgmt:
+                    by_label[label_key] = ip
+
+    # Remove duplicate entries (keep winner for each label)
+    keep_ips = set(by_label.values())
+    dup_removed = {ip: d for ip, d in discovered.items() if ip in keep_ips}
+    if len(dup_removed) < len(discovered):
+        removed_count = len(discovered) - len(dup_removed)
+        logger.info(f"hosts_sync_dedup: removed {removed_count} duplicate entries by hostname")
+    discovered = dup_removed
+
+    # ── Step 7: Diff and report ──
+    new_hosts = [ip for ip in discovered if ip not in existing]
+    removed_hosts = [ip for ip in existing if ip not in discovered]
+
+    def _sync_list(value):
+        if isinstance(value, str):
+            return tuple(sorted(v for v in value.split(",") if v))
+        return tuple(sorted(str(v) for v in (value or []) if v))
+
+    def _sync_identity(entry):
+        return {
+            "label": entry.get("label", ""),
+            "htype": entry.get("htype", ""),
+            "groups": entry.get("groups", "") or "",
+            "vmid": int(entry.get("vmid") or 0),
+            "managed": bool(entry.get("managed", True)),
+            "all_ips": _sync_list(entry.get("all_ips", [])),
+        }
+
+    changed_hosts = [
+        ip
+        for ip in discovered
+        if ip in existing and _sync_identity(discovered[ip]) != _sync_identity(existing[ip])
+    ]
+
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Sync Summary:{fmt.C.RESET}")
+    fmt.line(
+        f"    Existing: {len(existing)}  |  Discovered: {len(discovered)}  |  New: {fmt.C.GREEN}{len(new_hosts)}{fmt.C.RESET}  |  Changed: {fmt.C.YELLOW}{len(changed_hosts)}{fmt.C.RESET}  |  Removed: {fmt.C.RED}{len(removed_hosts)}{fmt.C.RESET}"
+    )
+    fmt.blank()
+
+    if new_hosts:
+        fmt.line(f"  {fmt.C.GREEN}New hosts to add:{fmt.C.RESET}")
+        for ip in sorted(new_hosts):
+            d = discovered[ip]
+            fmt.line(f"    {fmt.C.GREEN}+{fmt.C.RESET} {ip}  {d['label']}  [{d['htype']}]  (from {d['source']})")
+        fmt.blank()
+
+    if removed_hosts:
+        fmt.line(f"  {fmt.C.RED}Hosts no longer in PVE (kept in hosts.toml):{fmt.C.RESET}")
+        for ip in sorted(removed_hosts):
+            e = existing[ip]
+            fmt.line(f"    {fmt.C.YELLOW}?{fmt.C.RESET} {ip}  {e['label']}  [{e['htype']}]")
+        fmt.blank()
+
+    if changed_hosts:
+        fmt.line(f"  {fmt.C.YELLOW}Hosts to repair/update:{fmt.C.RESET}")
+        for ip in sorted(changed_hosts):
+            d = discovered[ip]
+            fmt.line(f"    {fmt.C.YELLOW}~{fmt.C.RESET} {ip}  {d['label']}  [{d['htype']}]  (from {d['source']})")
+        fmt.blank()
+
+    if unresolved:
+        fmt.line(f"  {fmt.C.DIM}Unresolved VMs (no guest agent or unreachable):{fmt.C.RESET}")
+        for vmid, vname, reason in sorted(unresolved):
+            fmt.line(f"    {fmt.C.DIM}-{fmt.C.RESET} {vmid}  {vname}  ({reason})")
+        fmt.blank()
+
+    if not new_hosts and not removed_hosts and not changed_hosts:
+        fmt.step_ok("hosts.toml is up to date — no changes needed")
+        if not dry_run:
+            _auto_populate_fleet_boundaries(cfg, discovered)
+        fmt.blank()
+        fmt.footer()
+        return 1 if pve_failures else 0
+
+    if dry_run:
+        fmt.line(f"  {fmt.C.YELLOW}Dry run — no changes written.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Run without --dry-run to apply.{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 1 if pve_failures else 0
+
+    # ── Step 8: Write updated hosts.toml ──
+    from freq.core.config import Host, save_hosts_toml
+
+    # Build Host list from discovered data, sorted by type then IP
+    all_hosts = []
+    for ip, d in sorted(
+        discovered.items(),
+        key=lambda x: (
+            0
+            if x[1]["htype"] == "pve"
+            else 1
+            if x[1]["htype"] == "docker"
+            else 2
+            if x[1]["htype"] == "truenas"
+            else 3
+            if x[1]["htype"] in ("pfsense", "switch")
+            else 4
+            if x[1]["htype"] == "idrac"
+            else 5,
+            x[0],
+        ),
+    ):
+        all_ips = d.get("all_ips", [])
+        if isinstance(all_ips, str):
+            all_ips = [a for a in all_ips.split(",") if a]
+        all_hosts.append(
+            Host(
+                ip=ip,
+                label=d["label"],
+                htype=d["htype"],
+                groups=d.get("groups", ""),
+                vmid=d.get("vmid", 0),
+                managed=d.get("managed", True),
+                all_ips=all_ips,
+            )
+        )
+
+    # Backup existing
+    if os.path.isfile(cfg.hosts_file):
+        backup = cfg.hosts_file + ".bak"
+        shutil.copy2(cfg.hosts_file, backup)
+        fmt.step_ok(f"Backed up to {backup}")
+
+    save_hosts_toml(cfg.hosts_file, all_hosts)
+    cfg.hosts = all_hosts
+
+    fmt.step_ok(f"Fleet registry updated: {len(discovered)} hosts ({len(new_hosts)} new, {len(changed_hosts)} changed)")
+
+    # ── Step 9: Auto-populate fleet-boundaries.toml with discovered devices ──
+    _auto_populate_fleet_boundaries(cfg, discovered)
+
+    fmt.blank()
+    fmt.footer()
+    return 1 if pve_failures else 0
+
+
+def _auto_populate_fleet_boundaries(cfg, discovered: dict):
+    """Auto-populate fleet-boundaries.toml physical section from discovered hosts.
+
+    Only adds devices that aren't already defined. Never overwrites user config.
+    """
+    fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
+
+    # Device types that are "physical infrastructure" (not VMs/containers)
+    INFRA_TYPES = {"pfsense", "opnsense", "truenas", "synology", "switch", "idrac", "ilo", "ipmi"}
+
+    # Find infra devices in discovered hosts (skip lab VMs — they're VMs, not physical infra)
+    lab_vmids = set()
+    for cat_info in cfg.fleet_boundaries.categories.values():
+        if cat_info.get("tier") == "admin":  # lab tier
+            lab_vmids.update(cat_info.get("vmids", []))
+    infra_devices = {}
+    for ip, d in discovered.items():
+        if d["htype"] in INFRA_TYPES:
+            key = d["label"].replace("-", "_").replace(" ", "_")
+            label_l = (d.get("label") or "").lower()
+            groups = d.get("groups", "")
+            scope = d.get("scope") or ("lab" if d.get("vmid", 0) in lab_vmids or "lab" in label_l or "lab" in groups.split(",") else "core")
+            if scope == "lab" and "lab" not in groups.split(","):
+                groups = ",".join([g for g in [groups, "lab"] if g])
+            infra_devices[key] = {
+                "ip": ip,
+                "label": d["label"],
+                "type": d["htype"],
+                "groups": groups,
+                "scope": scope,
+            }
+
+    # Also add infrastructure devices from freq.toml config
+    _cfg_devices = [
+        (cfg.pfsense_ip, "pfsense", "pfsense"),
+        (cfg.truenas_ip, "truenas", "truenas"),
+        (cfg.switch_ip, "switch", "switch"),
+    ]
+    for ip, dtype, key in _cfg_devices:
+        if ip and key not in infra_devices:
+            infra_devices[key] = {"ip": ip, "label": key, "type": dtype}
+
+    # Auto-detect gateway as pfSense/firewall if not already known
+    gw = cfg.vm_gateway or ""
+    if gw and "pfsense" not in infra_devices and "opnsense" not in infra_devices and "firewall" not in infra_devices:
+        # Probe gateway — if it responds, assume firewall
+        import subprocess
+        try:
+            r = subprocess.run(["ping", "-c", "1", "-W", "1", gw], capture_output=True, timeout=3)
+            if r.returncode == 0:
+                # Check if it's FreeBSD (pfSense) via SSH banner
+                gw_type = "pfsense"
+                try:
+                    from freq.core.ssh import run as ssh_run
+                    probe = ssh_run(
+                        host=gw, command="uname -s",
+                        key_path=cfg.ssh_key_path,
+                        connect_timeout=3, command_timeout=5,
+                        htype="pfsense", use_sudo=False,
+                    )
+                    if probe.returncode == 0 and "FreeBSD" in probe.stdout:
+                        gw_type = "pfsense"
+                    elif probe.returncode == 0 and "Linux" in probe.stdout:
+                        gw_type = "opnsense"  # OPNsense runs on Linux too
+                except MemoryError:
+                    raise
+                except Exception:
+                    pass  # Can't SSH — still likely a firewall at the gateway
+                infra_devices["firewall"] = {"ip": gw, "label": "firewall", "type": gw_type}
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
+    # Find PVE nodes
+    pve_nodes = {}
+    for ip, d in discovered.items():
+        if d["htype"] == "pve" and d.get("source") == "pve-node":
+            key = d["label"].replace("-", "_").replace(" ", "_")
+            pve_nodes[key] = {"ip": ip}
+
+    if not infra_devices and not pve_nodes:
+        return
+
+    # Load existing file to avoid overwriting user config
+    from freq.core.read_source_epoch import source_write
+
+    with source_write():
+        import tomllib
+
+        existing_data = {}
+        try:
+            with open(fb_path, "rb") as f:
+                existing_data = tomllib.load(f)
+        except (FileNotFoundError, tomllib.TOMLDecodeError):
+            pass
+
+        existing_physical = existing_data.get("physical", {})
+        existing_pve = existing_data.get("pve_nodes", {})
+
+        # Only add new devices not already defined (dedup by IP, not key name)
+        existing_ips = {v.get("ip", "") for v in existing_physical.values() if isinstance(v, dict)}
+        existing_pve_ips = {v.get("ip", "") for v in existing_pve.values() if isinstance(v, dict)}
+        new_physical = {k: v for k, v in infra_devices.items() if k not in existing_physical and v.get("ip", "") not in existing_ips}
+        new_pve = {k: v for k, v in pve_nodes.items() if k not in existing_pve and v.get("ip", "") not in existing_pve_ips}
+
+        if not new_physical and not new_pve:
+            return
+
+        # Rebuild the physical and pve_nodes sections to avoid duplicate TOML headers.
+        # Merge existing + new, then rewrite the file with a single [physical] and [pve_nodes].
+        merged_physical = {**existing_physical, **new_physical}
+        merged_pve = {**existing_pve, **new_pve}
+
+        # Read the file, strip old [physical] and [pve_nodes] sections, rewrite cleanly
+        try:
+            with open(fb_path) as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            lines = []
+
+        # Remove existing [physical] and [pve_nodes] blocks (including their entries)
+        cleaned = []
+        skip_section = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped == "[physical]" or stripped == "[pve_nodes]":
+                skip_section = True
+                continue
+            if skip_section:
+                # Stop skipping at the next section header or blank line before a header
+                if stripped.startswith("[") and stripped != "[physical]" and stripped != "[pve_nodes]":
+                    skip_section = False
+                    cleaned.append(line)
+                elif stripped.startswith("#") or stripped == "":
+                    # Skip comments/blanks that belong to the removed section
+                    continue
+                else:
+                    continue  # Skip entries in the removed section
+            else:
+                cleaned.append(line)
+
+        with open(fb_path, "w") as f:
+            f.writelines(cleaned)
+            if merged_physical:
+                f.write("\n# Auto-discovered physical devices\n[physical]\n")
+                for key, dev in sorted(merged_physical.items()):
+                    if isinstance(dev, dict):
+                        detail_map = {"pfsense": "Firewall", "opnsense": "Firewall", "truenas": "NAS",
+                                      "synology": "NAS", "switch": "Switch", "idrac": "BMC", "ilo": "BMC", "ipmi": "BMC"}
+                        ip = dev.get("ip", "")
+                        label = dev.get("label", key)
+                        dtype = dev.get("type", "unknown")
+                        detail = dev.get("detail", detail_map.get(dtype, dtype.upper()))
+                        tier = dev.get("tier", "probe")
+                        groups = dev.get("groups", "")
+                        scope = dev.get("scope", "lab" if "lab" in f"{key} {label} {groups}".lower() else "core")
+                        display_name = _physical_display_name_for(dev, merged_physical, merged_pve, cfg)
+                        display_part = f', display_name = "{_toml_inline_string(display_name)}"' if display_name else ""
+                        f.write(
+                            f'{key} = {{ ip = "{ip}", label = "{label}", type = "{dtype}", '
+                            f'tier = "{tier}", detail = "{detail}", groups = "{groups}", scope = "{scope}"{display_part} }}\n'
+                        )
+
+            if merged_pve:
+                f.write("\n# Auto-discovered PVE nodes\n[pve_nodes]\n")
+                for key, node in sorted(merged_pve.items()):
+                    if isinstance(node, dict):
+                        ip = node.get("ip", "")
+                        detail = node.get("detail", "")
+                        f.write(f'{key} = {{ ip = "{ip}", detail = "{detail}" }}\n')
+
+        fmt.step_ok(f"Fleet boundaries: auto-added {len(new_physical)} physical + {len(new_pve)} PVE nodes")
+
+
+# ─────────────────────────────────────────────────────────────
+# HOST HELPERS — Label updates, IP resolution utilities
+# ─────────────────────────────────────────────────────────────
+
+
+def update_host_label(cfg: FreqConfig, target_ip: str, new_label: str) -> bool:
+    """Update a single host's label in hosts.toml by IP match.
+
+    Used by cmd_rename() to immediately sync the label after a PVE rename,
+    instead of waiting for the hourly background sync.
+    Returns True if the entry was found and updated.
+    """
+    updated = False
+    for h in cfg.hosts:
+        if h.ip == target_ip:
+            h.label = new_label
+            updated = True
+            break
+
+    if updated:
+        from freq.core.config import save_hosts_toml
+
+        save_hosts_toml(cfg.hosts_file, cfg.hosts)
+
+    return updated
+
+
+resolve_host_ip = resolve.resolve_host_ip
+
+
+# ─────────────────────────────────────────────────────────────
+# GROUP MANAGEMENT — List, add, remove host group memberships
+# ─────────────────────────────────────────────────────────────
+
+
+def _groups_list(cfg: FreqConfig) -> int:
+    """List all host groups and their members."""
+    fmt.header("Host Groups")
+    fmt.blank()
+
+    groups = resolve.all_groups(cfg.hosts)
+    if not groups:
+        fmt.line(f"{fmt.C.YELLOW}No groups defined.{fmt.C.RESET}")
+        fmt.line(f"{fmt.C.GRAY}Assign groups when adding hosts: freq host add{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    for group_name, members in sorted(groups.items()):
+        fmt.line(f"{fmt.C.PURPLE_BOLD}{group_name}{fmt.C.RESET} ({len(members)} hosts)")
+        for h in members:
+            fmt.line(f"    {fmt.C.DIM}{h.label} ({h.ip}) [{h.htype}]{fmt.C.RESET}")
+        fmt.blank()
+
+    fmt.footer()
+    return 0
+
+
+def _groups_add(cfg: FreqConfig, args) -> int:
+    """Add a host to a group."""
+    target = getattr(args, "target", None)
+    group = getattr(args, "group", None)
+
+    if not target or not group:
+        fmt.error("Usage: freq groups add --target <host> --group <name>")
+        return 1
+
+    host = resolve.by_target(cfg.hosts, target)
+    if not host:
+        fmt.error(f"Host not found: {target}")
+        return 1
+
+    existing = [g.strip() for g in host.groups.split(",") if g.strip()] if host.groups else []
+    if group in existing:
+        fmt.info(f"{host.label} is already in group '{group}'.")
+        return 0
+
+    existing.append(group)
+    new_groups = ",".join(existing)
+
+    # Update in-memory and rewrite
+    host.groups = new_groups
+    from freq.core.config import save_hosts_toml
+
+    save_hosts_toml(cfg.hosts_file, cfg.hosts)
+    fmt.info(f"Added {host.label} to group '{group}'.")
+
+    return 0
+
+
+def _groups_remove(cfg: FreqConfig, args) -> int:
+    """Remove a host from a group."""
+    target = getattr(args, "target", None)
+    group = getattr(args, "group", None)
+
+    if not target or not group:
+        fmt.error("Usage: freq groups remove --target <host> --group <name>")
+        return 1
+
+    host = resolve.by_target(cfg.hosts, target)
+    if not host:
+        fmt.error(f"Host not found: {target}")
+        return 1
+
+    existing = [g.strip() for g in host.groups.split(",") if g.strip()] if host.groups else []
+    if group not in existing:
+        fmt.info(f"{host.label} is not in group '{group}'.")
+        return 0
+
+    existing.remove(group)
+    new_groups = ",".join(existing)
+
+    # Update in-memory and rewrite
+    host.groups = new_groups
+    from freq.core.config import save_hosts_toml
+
+    save_hosts_toml(cfg.hosts_file, cfg.hosts)
+    fmt.info(f"Removed {host.label} from group '{group}'.")
+
+    return 0

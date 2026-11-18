@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "source_sha": "178a0265ec856c4b3e4944cc77925f8418da482d",
+  "policy": {
+    "default": "UNKNOWN_KEEP",
+    "public_retirement_requires_sonny_approval": true,
+    "repo_silence_is_retirement_evidence": false,
+    "ratio_gain_from_deletion_is_new_coverage": false
+  },
+  "summary": {
+    "tracked_python_modules": 199,
+    "static_public_roots": 45,
+    "statically_reachable_modules": 180,
+    "modules_requiring_dynamic_or_non_import_evidence": 19,
+    "config_fields_with_known_consumers": 86,
+    "duplicate_route_registrations": 1,
+    "approved_public_retirements": 0,
+    "safe_internal_retirement_candidates": 1
+  },
+  "safe_internal_candidates": [
+    {
+      "id": "I1",
+      "classification": "RETIRE_CANDIDATE",
+      "approval_required": false,
+      "symbol": "freq.api.v1_stubs.handle_net_switches",
+      "registered_path": "/api/v1/net/switches",
+      "evidence": [
+        "freq/api/v1_stubs.py:169",
+        "freq/api/v1_stubs.py:211",
+        "freq/api/net.py:161",
+        "freq/api/net.py:602",
+        "freq/api/__init__.py:30",
+        "tests/test_serve_helpers.py:584"
+      ],
+      "reason": "The stub registration is always overwritten later in the same deterministic router build by freq.api.net.handle_switches. The public path and real handler remain unchanged.",
+      "public_surface_delta": 0,
+      "baseline_denominator_delta_if_removed": {
+        "covered_lines": -2,
+        "num_statements": -3,
+        "covered_branches": 0,
+        "num_branches": 0
+      },
+      "baseline_ratio_effect": "statement and combined ratios decrease slightly; coverage.py counts the removed definition and overwritten registration as covered lines, and this retirement earns no coverage credit",
+      "test_disposition": "No behavior test is retired. Preserve the final-route identity assertion."
+    }
+  ],
+  "public_candidates_held_unknown_keep": [
+    {
+      "id": "R1",
+      "classification": "UNKNOWN_KEEP",
+      "approval_required": true,
+      "surfaces": ["POST /api/setup/complete"],
+      "evidence": [
+        "freq/modules/serve.py:4088",
+        "freq/modules/serve.py:5308",
+        "docs/ZERO-STATE-WEB-API-CONTRACT.md:555",
+        "tests/test_init_dashboard_truth.py:236"
+      ],
+      "reason": "The disabled endpoint is a compatibility tombstone returning an actionable 409. Removing it changes saved-client behavior to an unstructured 404."
+    },
+    {
+      "id": "R2",
+      "classification": "UNKNOWN_KEEP",
+      "approval_required": true,
+      "surfaces": [
+        "POST /api/setup/configure",
+        "POST /api/setup/generate-key",
+        "UNKNOWN /api/setup/test-ssh"
+      ],
+      "evidence": [
+        "freq/modules/serve.py:5131",
+        "freq/modules/serve.py:5232",
+        "freq/modules/serve.py:5320",
+        "docs/API-REFERENCE.md:244",
+        "freq/data/web/js/setup.js:7"
+      ],
+      "reason": "The current wizard no longer consumes these mutating compatibility endpoints, but external automation is unknown and the handlers still own direct config, key, and connectivity behavior."
+    },
+    {
+      "id": "R3",
+      "classification": "UNKNOWN_KEEP",
+      "approval_required": true,
+      "surfaces": [
+        "/api/snmp/setup/plan",
+        "/api/snmp/setup/status",
+        "/api/snmp/setup/apply",
+        "/api/snmp/setup/credentials"
+      ],
+      "evidence": [
+        "freq/api/snmp.py:100",
+        "freq/api/snmp.py:106",
+        "freq/data/web/js/app.js:1073",
+        "docs/API-REFERENCE.md:182"
+      ],
+      "reason": "The dashboard uses the canonical versioned aliases, but the short aliases are explicit compatibility surfaces and two are documented."
+    },
+    {
+      "id": "R4",
+      "classification": "UNKNOWN_KEEP",
+      "approval_required": true,
+      "surfaces": ["GET /api/v1/cert/list"],
+      "evidence": [
+        "freq/api/v1_stubs.py:90",
+        "freq/api/v1_stubs.py:206",
+        "freq/data/web/js/app.js:1056"
+      ],
+      "known_cross_repo_consumer": {
+        "repository": "pve-freq-public",
+        "inspected_ref": "refs/remotes/origin/main",
+        "commit": "df95511bcc0ced8a90833d479205b8947563d675",
+        "path": "freq/data/web/js/app.js",
+        "line": 3607,
+        "observation": "The locally available remote-tracking object consumes /api/v1/cert/list. No fetch was performed; this is not a claim about deployed or current remote truth."
+      },
+      "reason": "The development frontend uses the real certificate inventory API, but the locally inspected public-repo origin/main object still consumes this stub and deployed or saved external clients remain unknown."
+    },
+    {
+      "id": "R5",
+      "classification": "UNKNOWN_KEEP",
+      "approval_required": true,
+      "surfaces": ["router alias media -> docker"],
+      "evidence": [
+        "freq/data/web/js/app.js:2507",
+        "freq/data/web/app.html:296",
+        "tests/e2e/hermetic-dashboard.spec.js:91"
+      ],
+      "reason": "The alias is retained compatibility for saved bookmarks and has explicit browser coverage."
+    }
+  ],
+  "backend_reachability_disposition": [
+    {
+      "classification": "KEEP",
+      "scope": "180 statically reachable modules",
+      "reason": "Reachable from registered CLI handlers, HTTP handlers, installed entry points, lifecycle owners, or their import closure."
+    },
+    {
+      "classification": "KEEP",
+      "scope": "freq/agent_collector.py",
+      "evidence": [
+        "freq/modules/agent_deployment.py:39",
+        "freq/modules/deploy_agent.py:14",
+        "freq/modules/init_cmd.py:6160"
+      ],
+      "reason": "Packaged runtime payload deployed as the fleet agent, not an import-time module."
+    },
+    {
+      "classification": "KEEP",
+      "scope": "freq/deployers package and discovered vendor modules",
+      "evidence": [
+        "freq/deployers/__init__.py:47",
+        "freq/deployers/__init__.py:65",
+        "freq/deployers/__init__.py:72",
+        "freq/modules/plugin_manager.py:15",
+        "freq/modules/switch_orchestration.py:72"
+      ],
+      "reason": "The registry loads category/vendor modules dynamically and exposes discovery as a plugin contract. Static import silence is expected."
+    },
+    {
+      "classification": "KEEP",
+      "scope": "package __init__.py markers and packaged plugin example",
+      "reason": "They own package/import or shipped-template semantics even when they have no ordinary inbound import edge."
+    },
+    {
+      "classification": "UNKNOWN_KEEP",
+      "scope": "freq/core/exitcodes.py",
+      "evidence": ["freq/core/exitcodes.py:1"],
+      "reason": "No current internal consumer exists, but it presents importable scripting constants and external imports cannot be disproven. Its five-statement denominator is not a reason to break compatibility."
+    },
+    {
+      "classification": "UNKNOWN_KEEP",
+      "scope": "freq/core/remote_platform.py",
+      "evidence": ["freq/core/remote_platform.py:1", "tests/test_platform.py:85", "CHANGELOG.md:25"],
+      "reason": "No current production caller exists, but this is an explicitly shipped and tested multi-distro abstraction with unknown external consumers. It already clears the retained module floor."
+    }
+  ],
+  "product_defects_not_retirement_evidence": [
+    {
+      "id": "B1",
+      "classification": "KEEP_DEFECT",
+      "surface": "Cost Analysis",
+      "evidence": ["freq/data/web/app.html:613", "freq/data/web/js/app.js:6215", "freq/data/web/js/app.js:1093"],
+      "reason": "Visible controls reference missing API.COST_WASTE and API.COST_COMPARE symbols even though backend routes exist."
+    },
+    {
+      "id": "B2",
+      "classification": "KEEP_PRODUCT_DECISION",
+      "surface": "13 actively consumed v1 skeleton endpoints",
+      "evidence": ["freq/api/v1_stubs.py:1", "freq/data/web/js/app.js:4068", "freq/data/web/js/app.js:4452"],
+      "reason": "The visible UI consumes fabricated zero/empty states. Implement real truth or remove the corresponding visible UI; do not call the routes unused."
+    },
+    {
+      "id": "B3",
+      "classification": "UNKNOWN_KEEP_PRODUCT_DECISION",
+      "surface": "lab, infra, and system deep router views",
+      "evidence": ["freq/data/web/js/app.js:2507", "freq/data/web/app.html:1164", "tests/e2e/hermetic-dashboard.spec.js"],
+      "reason": "Hidden from ordinary navigation but still carrying distinct controls and direct-route compatibility."
+    },
+    {
+      "id": "B4",
+      "classification": "INVENTORY_DEFECT",
+      "surface": "five non-call ui-api-consumer literals",
+      "values": [
+        "/api/auth/change-",
+        "/api/auth/change-password.",
+        "/api/health.",
+        "/api/setup/status.",
+        "/api/v1/health"
+      ],
+      "reason": "Comments or input-placeholder text were captured as API calls. Correct the extractor without dropping legitimate query-suffixed consumers."
+    },
+    {
+      "id": "B5",
+      "classification": "KEEP_DEFECT",
+      "surface": "TUI VPN action",
+      "evidence": ["freq/tui/menu.py:1381", "freq/cli.py:1946", "freq/modules/vpn.py:69"],
+      "reason": "The TUI still says VPN management is coming soon even though the CLI implementation exists."
+    }
+  ]
+}

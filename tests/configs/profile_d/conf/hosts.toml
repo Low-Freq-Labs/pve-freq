@@ -1,0 +1,33 @@
+# FREQ Fleet Registry
+# Managed by freq — do not edit while freq is running
+
+[[host]]
+ip = "172.16.0.5"
+label = "pve1"
+type = "pve"
+groups = "prod"
+
+[[host]]
+ip = "172.16.0.10"
+label = "web1"
+type = "linux"
+groups = "prod"
+
+[[host]]
+ip = "172.16.0.11"
+label = "web2"
+type = "linux"
+groups = "prod"
+
+[[host]]
+ip = "172.16.1.10"
+label = "docker1"
+type = "docker"
+groups = "prod"
+
+[[host]]
+ip = "172.16.1.20"
+label = "dev1"
+type = "linux"
+groups = "dev"
+

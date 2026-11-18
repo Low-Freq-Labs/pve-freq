@@ -1,0 +1,64 @@
+# ──────────────────────────────────────────────────────────────────
+# PVE FREQ — Docker Compose (in-repo build)
+#
+# Quick start:
+#   docker compose up -d
+#   docker exec -it pve-freq freq init    <- first-time setup
+#
+# Dashboard:  http://localhost:8888
+# CLI:        docker exec pve-freq freq doctor
+# TUI:        docker exec -it pve-freq freq
+#
+# Runtime contract: Docker is intentionally serve-only. Docker owns process
+# restart and log lifecycle; host systemd/watchdog units are not installed.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  freq:
+    build: .
+    container_name: pve-freq
+    restart: unless-stopped
+
+    ports:
+      - "${FREQ_PORT:-8888}:8888"
+
+    environment:
+      - TZ=${TZ:-UTC}
+      - FREQ_DIR=/opt/pve-freq
+
+    volumes:
+      # Named volumes avoid the first-run bind-mount trap where Docker creates
+      # ./conf and ./data as root-owned directories that the non-root container
+      # user cannot initialize from the Web UI.
+      - freq-conf:/opt/pve-freq/conf
+      - freq-data:/opt/pve-freq/data
+      - freq-etc:/etc/freq
+      # Optional host-side staging for container-run CLI/headless init. TOML
+      # always references /freq-init-inputs/<relative-path>; browser setup does
+      # not accept path-valued inputs.
+      - ${FREQ_INIT_INPUTS_DIR:-/root/freq-init-inputs}:/freq-init-inputs:ro
+
+    tmpfs:
+      - /tmp
+      - /run
+      - /home/freq:uid=1000,gid=1000,mode=755
+
+    # Resource limits (adjust to your needs)
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+    # Log rotation — prevent unbounded log growth
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  freq-conf:
+  freq-data:
+  freq-etc:

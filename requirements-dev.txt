@@ -1,0 +1,10 @@
+# Development only; production dependencies remain empty.
+# Pins from the existing qualified Nexus project environment.
+pytest==9.0.3
+pytest-cov==7.1.0
+coverage==7.13.5
+ruff==0.15.21
+iniconfig==2.3.0
+packaging==26.0
+pluggy==1.6.0
+Pygments==2.20.0

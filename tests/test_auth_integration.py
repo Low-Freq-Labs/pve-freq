@@ -1,0 +1,693 @@
+"""Integration tests for the full auth lifecycle.
+
+Simulates: login → cookie set → authenticated API call → SSE auth →
+mutating endpoint POST enforcement → anonymous rejection.
+
+Proves the auth/cookie/CSP/header contract holds end-to-end.
+"""
+import io
+import json
+import os
+import sys
+import time
+import unittest
+from unittest.mock import patch, MagicMock
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from tests.case_matrix import run_case_matrix  # noqa: E402, I001
+
+
+def _make_handler(path="/", method="GET", headers=None, body=None):
+    """Create a FreqHandler with captured response."""
+    from freq.modules.serve import FreqHandler
+
+    h = FreqHandler.__new__(FreqHandler)
+    h.path = path
+    h.command = method
+    h.wfile = io.BytesIO()
+    h.rfile = io.BytesIO(body.encode() if body else b"")
+    h.requestline = f"{method} {path} HTTP/1.1"
+    h.client_address = ("127.0.0.1", 9999)
+    h.request_version = "HTTP/1.1"
+    h.headers = headers or {}
+    h._headers_buffer = []
+    h._status = None
+    h._resp_headers = []
+
+    def mock_send(code, msg=None):
+        h._status = code
+
+    def mock_header(k, v):
+        h._resp_headers.append((k, v))
+
+    h.send_response = mock_send
+    h.send_header = mock_header
+    h.end_headers = lambda: None
+    return h
+
+
+def _get_json(h):
+    return json.loads(h.wfile.getvalue().decode())
+
+
+def _get_header(h, name):
+    for k, v in h._resp_headers:
+        if k.lower() == name.lower():
+            return v
+    return None
+
+
+class TestFullAuthLifecycle(unittest.TestCase):
+    """End-to-end auth flow: login → cookie → API → SSE → logout."""
+
+    def tearDown(self):
+        """Clean up shared auth state after each test."""
+        from freq.api.auth import _auth_tokens, _auth_lock
+        with _auth_lock:
+            _auth_tokens.clear()
+
+    def _login(self):
+        """Simulate login and return (token, cookie_header)."""
+        from freq.api.auth import handle_auth_login, _auth_tokens, _auth_lock
+
+        h = _make_handler(
+            path="/api/auth/login",
+            method="POST",
+            headers={
+                "Content-Length": "50",
+                "Content-Type": "application/json",
+                "Origin": "https://freq.test",
+                "Host": "freq.test",
+                "Cookie": "",
+                "Authorization": "",
+            },
+            body='{"username":"admin","password":"testpass123"}',
+        )
+
+        # Mock user lookup and password verification
+        mock_users = [{"username": "admin", "role": "admin"}]
+        with patch("freq.modules.users._load_users", return_value=mock_users), \
+             patch("freq.api.auth.verify_password", return_value=True), \
+             patch("freq.api.auth.vault_get", return_value="$pbkdf2$hash"), \
+             patch("freq.api.auth.check_rate_limit", return_value=True), \
+             patch("freq.api.auth.record_login_attempt"), \
+             patch("freq.api.auth.request_is_https", return_value=True), \
+             patch("freq.api.auth.load_config") as mock_cfg:
+            mock_cfg.return_value = MagicMock(conf_dir="/tmp/fake", vault_file="/tmp/fake.vault")
+            handle_auth_login(h)
+
+        self.assertEqual(h._status, 200, "Login should succeed")
+        data = _get_json(h)
+        self.assertIn("token", data)
+        self.assertIn("csrf_token", data)
+        self.assertEqual(data["auth_mode"], "cookie")
+
+        # Verify cookie was set
+        cookie = _get_header(h, "Set-Cookie")
+        self.assertIsNotNone(cookie, "Login must set Set-Cookie header")
+        self.assertIn("freq_session=", cookie)
+        self.assertIn("HttpOnly", cookie)
+        self.assertIn("SameSite=Strict", cookie)
+
+        return data["token"], cookie
+
+    def _case_login_sets_cookie(self):
+        """Login response must include Set-Cookie with HttpOnly + SameSite."""
+        token, cookie = self._login()
+        self.assertTrue(len(token) > 20)
+        self.assertIn("freq_session=", cookie)
+
+    def _case_cookie_authenticates_api_call(self):
+        """A request with only the session cookie (no Bearer) must authenticate."""
+        from freq.api.auth import check_session_role
+
+        token, _ = self._login()
+        h = _make_handler(path="/api/fleet/overview")
+        h.headers = {
+            "Authorization": "",
+            "Cookie": f"freq_session={token}",
+            "Origin": "",
+            "Content-Length": "0",
+        }
+        # Use dict-like get
+        headers_dict = dict(h.headers) if isinstance(h.headers, dict) else {}
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": "",
+            "Cookie": f"freq_session={token}",
+            "Origin": "",
+            "Content-Length": "0",
+        }.get(key, default)
+
+        role, err = check_session_role(h, "viewer")
+        self.assertIsNone(err, f"Cookie auth should succeed, got: {err}")
+        self.assertEqual(role, "admin")
+
+    def _case_query_param_token_does_not_authenticate(self):
+        """?token= in URL must NOT authenticate — only Bearer header or cookie."""
+        from freq.api.auth import check_session_role
+
+        token, _ = self._login()
+        h = _make_handler(path=f"/api/fleet/overview?token={token}")
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": "",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+
+        role, err = check_session_role(h, "viewer")
+        self.assertIsNotNone(err, "Query param token must NOT authenticate")
+
+    def _case_sse_cookie_authenticates(self):
+        """SSE must authenticate via the session cookie on same-origin requests."""
+        from freq.api.auth import check_session_role
+
+        token, _ = self._login()
+        h = _make_handler(path="/api/events")
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": "",
+            "Cookie": f"freq_session={token}",
+            "Origin": "",
+        }.get(key, default)
+
+        role, err = check_session_role(h, "viewer")
+        self.assertIsNone(err, "SSE cookie auth must authenticate")
+        self.assertIsNotNone(role)
+
+    def _case_cookie_post_requires_csrf(self):
+        """Unsafe cookie-authenticated API calls must carry X-Freq-CSRF."""
+        token, _ = self._login()
+        h = _make_handler(
+            path="/api/auth/change-password",
+            method="POST",
+            headers={
+                "Authorization": "",
+                "Cookie": f"freq_session={token}",
+                "Origin": "",
+                "Content-Type": "application/json",
+                "Content-Length": "0",
+            },
+        )
+        h._dispatch()
+
+        self.assertEqual(h._status, 403)
+        self.assertEqual(_get_json(h)["error"], "CSRF token required")
+
+    def _case_cookie_post_accepts_matching_csrf(self):
+        """Matching CSRF token lets cookie-authenticated unsafe API calls proceed."""
+        from freq.api.auth import _auth_tokens, _auth_lock
+
+        token, _ = self._login()
+        with _auth_lock:
+            csrf = _auth_tokens[token]["csrf_token"]
+        h = _make_handler(
+            path="/api/auth/change-password",
+            method="POST",
+            headers={
+                "Authorization": "",
+                "Cookie": f"freq_session={token}",
+                "Origin": "",
+                "Content-Type": "application/json",
+                "X-Freq-CSRF": csrf,
+                "Content-Length": "0",
+            },
+            body="{}",
+        )
+        h._dispatch()
+
+        self.assertNotEqual(h._status, 403)
+
+    def _case_bearer_post_does_not_require_csrf(self):
+        """Bearer API clients are not CSRF targets."""
+        token, _ = self._login()
+        h = _make_handler(
+            path="/api/auth/change-password",
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Cookie": "",
+                "Origin": "",
+                "Content-Type": "application/json",
+                "Content-Length": "0",
+            },
+            body="{}",
+        )
+        h._dispatch()
+
+        self.assertNotEqual(h._status, 403)
+
+    def _case_sse_query_param_reports_removed_auth_channel(self):
+        """SSE query-token callers must get a truthful migration reason."""
+        from freq.api.auth import check_session_role
+
+        token, _ = self._login()
+        h = _make_handler(path=f"/api/events?token={token}")
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": "",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+
+        role, err = check_session_role(h, "viewer")
+        self.assertIsNone(role)
+        self.assertIn("Query-string auth", err)
+
+    def _case_anonymous_request_rejected(self):
+        """Request with no auth at all must fail."""
+        from freq.api.auth import check_session_role
+
+        h = _make_handler(path="/api/fleet/overview")
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": "",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+
+        role, err = check_session_role(h, "viewer")
+        self.assertIsNotNone(err)
+        self.assertEqual(err, "Authentication required")
+
+    def _case_json_response_includes_csp(self):
+        """JSON responses must include Content-Security-Policy."""
+        h = _make_handler("/api/test")
+        h._json_response({"ok": True})
+
+        csp = _get_header(h, "Content-Security-Policy")
+        self.assertIsNotNone(csp, "JSON response must include CSP header")
+        self.assertIn("default-src", csp)
+
+    def _case_trusted_proxy_https_sets_hsts(self):
+        """Trusted proxy X-Forwarded-Proto=https counts as HTTPS for HSTS."""
+        h = _make_handler(
+            "/api/test",
+            headers={"X-Forwarded-Proto": "https", "Host": "freq.example.test"},
+        )
+        h.client_address = ("127.0.0.1", 4444)
+        cfg = MagicMock(trusted_proxy_cidrs=["127.0.0.1/32"])
+        with patch("freq.api.auth.load_config", return_value=cfg):
+            h._json_response({"ok": True})
+
+        hsts = [
+            value
+            for name, value in h._resp_headers
+            if name.lower() == "strict-transport-security"
+        ]
+        self.assertEqual(
+            hsts,
+            ["max-age=31536000; includeSubDomains"],
+        )
+
+    def _case_untrusted_forwarded_proto_does_not_set_hsts(self):
+        """Only HTTPS reported by a trusted proxy may enable HSTS."""
+        cases = (
+            ("trusted proxy reports http", "127.0.0.1", "http"),
+            ("untrusted peer spoofs https", "10.9.8.7", "https"),
+        )
+        for label, peer, forwarded_proto in cases:
+            with self.subTest(label=label):
+                h = _make_handler(
+                    "/api/test",
+                    headers={
+                        "X-Forwarded-Proto": forwarded_proto,
+                        "Host": "freq.example.test",
+                    },
+                )
+                h.client_address = (peer, 4444)
+                cfg = MagicMock(trusted_proxy_cidrs=["127.0.0.1/32"])
+                with patch("freq.api.auth.load_config", return_value=cfg):
+                    h._json_response({"ok": True})
+
+                self.assertIsNone(_get_header(h, "Strict-Transport-Security"))
+
+    def _case_json_response_security_header_parity(self):
+        """Both JSON adapters must share one complete header policy."""
+        from freq.api.helpers import json_response as domain_json_response
+
+        class _DirectTlsSocket:
+            pass
+
+        base_names = {
+            "content-security-policy",
+            "permissions-policy",
+            "referrer-policy",
+            "x-content-type-options",
+            "x-frame-options",
+            "x-xss-protection",
+        }
+        cases = (
+            ("plain HTTP", False, "127.0.0.1", "", [], False),
+            ("direct TLS", True, "127.0.0.1", "", [], True),
+            (
+                "trusted forwarded HTTPS",
+                False,
+                "127.0.0.1",
+                "https",
+                ["127.0.0.1/32"],
+                True,
+            ),
+            (
+                "untrusted forwarded HTTPS",
+                False,
+                "10.9.8.7",
+                "https",
+                ["127.0.0.1/32"],
+                False,
+            ),
+        )
+        for label, direct_tls, peer, forwarded_proto, trusted, expect_hsts in cases:
+            with self.subTest(transport=label):
+                response_headers = {}
+                for adapter in ("transport", "domain"):
+                    h = _make_handler(
+                        "/api/test",
+                        headers={
+                            "Host": "freq.example.test",
+                            "X-Forwarded-Proto": forwarded_proto,
+                        },
+                    )
+                    h.client_address = (peer, 4444)
+                    h.request = _DirectTlsSocket() if direct_tls else object()
+                    cfg = MagicMock(trusted_proxy_cidrs=trusted)
+                    with (
+                        patch("ssl.SSLSocket", _DirectTlsSocket),
+                        patch("freq.api.auth.load_config", return_value=cfg),
+                    ):
+                        if adapter == "transport":
+                            h._json_response({"ok": True})
+                        else:
+                            domain_json_response(h, {"ok": True})
+
+                    captured = {
+                        name.lower(): value
+                        for name, value in h._resp_headers
+                        if name.lower() in base_names | {"strict-transport-security"}
+                    }
+                    self.assertEqual(base_names - set(captured), set())
+                    self.assertEqual(
+                        "strict-transport-security" in captured,
+                        expect_hsts,
+                    )
+                    response_headers[adapter] = captured
+
+                self.assertEqual(response_headers["transport"], response_headers["domain"])
+
+    def _case_mutating_endpoint_rejects_get(self):
+        """Mutating setup endpoints must reject GET."""
+        from freq.modules.serve import FreqHandler
+
+        with patch("freq.modules.serve._is_first_run", return_value=True):
+            for path in ["/api/setup/create-admin", "/api/setup/configure",
+                         "/api/setup/generate-key", "/api/setup/complete"]:
+                h = _make_handler(path, method="GET")
+                handler_name = FreqHandler._ROUTES.get(path)
+                if handler_name:
+                    getattr(h, handler_name)()
+                    self.assertEqual(h._status, 405,
+                                     f"{path} must reject GET with 405")
+
+
+AUTH_LIFECYCLE_CASES = (
+    "_case_login_sets_cookie",
+    "_case_cookie_authenticates_api_call",
+    "_case_query_param_token_does_not_authenticate",
+    "_case_sse_cookie_authenticates",
+    "_case_cookie_post_requires_csrf",
+    "_case_cookie_post_accepts_matching_csrf",
+    "_case_bearer_post_does_not_require_csrf",
+    "_case_sse_query_param_reports_removed_auth_channel",
+    "_case_anonymous_request_rejected",
+    "_case_json_response_includes_csp",
+    "_case_trusted_proxy_https_sets_hsts",
+    "_case_untrusted_forwarded_proto_does_not_set_hsts",
+    "_case_json_response_security_header_parity",
+    "_case_mutating_endpoint_rejects_get",
+)
+
+
+class TestFullAuthLifecycleMatrix(unittest.TestCase):
+    def test_full_auth_lifecycle_matrix(self):
+        self.assertEqual(len(AUTH_LIFECYCLE_CASES), 14)
+        run_case_matrix(self, TestFullAuthLifecycle, AUTH_LIFECYCLE_CASES)
+
+class TestSessionExpiry(unittest.TestCase):
+    """Session tokens must expire and be consistently rejected."""
+
+    def tearDown(self):
+        """Clean up shared auth state after each test."""
+        from freq.api.auth import _auth_tokens, _auth_lock
+        with _auth_lock:
+            _auth_tokens.clear()
+
+    def _case_expired_token_rejected(self):
+        """A token past SESSION_TIMEOUT must return error."""
+        from freq.api.auth import check_session_role, _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS
+
+        token = "expired-test-token"
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time() - SESSION_TIMEOUT_SECONDS - 1,
+            }
+
+        h = MagicMock()
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        h.path = "/api/fleet/overview"
+
+        role, err = check_session_role(h, "viewer")
+        self.assertIsNone(role)
+        self.assertIn("expired", err.lower())
+
+    def _case_old_session_with_recent_activity_is_accepted(self):
+        """Absolute login age must not expire a session that was recently active."""
+        from freq.api.auth import check_session_role, _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS
+
+        token = "recent-activity-token"
+        now = time.time()
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": now - SESSION_TIMEOUT_SECONDS - 120,
+                "last_activity_ts": now - 30,
+            }
+
+        h = MagicMock()
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        h.path = "/api/fleet/overview"
+
+        role, err = check_session_role(h, "viewer")
+        self.assertEqual(role, "admin")
+        self.assertIsNone(err)
+
+    def _case_session_refresh_requires_user_activity_header(self):
+        """Background polls must not reset idle time without user activity."""
+        from freq.api.auth import check_session_role, _auth_tokens, _auth_lock
+
+        token = "idle-no-touch-token"
+        original_activity = time.time() - 120
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time() - 600,
+                "last_activity_ts": original_activity,
+            }
+
+        h = MagicMock()
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        h.path = "/api/health"
+
+        role, err = check_session_role(h, "viewer")
+        self.assertEqual(role, "admin")
+        self.assertIsNone(err)
+        with _auth_lock:
+            self.assertEqual(_auth_tokens[token]["last_activity_ts"], original_activity)
+
+    def _case_user_activity_refreshes_idle_timer_and_cookie(self):
+        """A request marked with user activity must slide idle expiry and cookie Max-Age."""
+        from freq.api.auth import check_session_role, _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS
+
+        token = "idle-touch-token"
+        original_activity = time.time() - 120
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time() - 600,
+                "last_activity_ts": original_activity,
+            }
+
+        h = _make_handler(
+            path="/api/health",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Cookie": "",
+                "Origin": "",
+                "X-Freq-User-Activity": "1",
+            },
+        )
+
+        role, err = check_session_role(h, "viewer")
+        self.assertEqual(role, "admin")
+        self.assertIsNone(err)
+        with _auth_lock:
+            self.assertGreater(_auth_tokens[token]["last_activity_ts"], original_activity)
+
+        h._json_response({"ok": True})
+        cookie = _get_header(h, "Set-Cookie")
+        self.assertIsNotNone(cookie)
+        self.assertIn("freq_session=", cookie)
+        self.assertIn(f"Max-Age={SESSION_TIMEOUT_SECONDS}", cookie)
+
+    def _case_api_wrapper_preserves_expired_session_reason(self):
+        """Protected API routes must return the specific expired-session reason."""
+        from freq.api.auth import _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS
+
+        token = "expired-wrapper-token"
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time() - SESSION_TIMEOUT_SECONDS - 1,
+            }
+
+        h = _make_handler(
+            path="/api/fleet/overview",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Cookie": "",
+                "Origin": "",
+            },
+        )
+        h.do_GET()
+
+        self.assertEqual(h._status, 403)
+        self.assertEqual(_get_json(h)["error"], "Session expired or invalid")
+
+    def _case_api_wrapper_preserves_insufficient_role_reason(self):
+        """Protected API routes must return the specific role failure reason."""
+        from freq.api.auth import _auth_tokens, _auth_lock
+
+        token = "viewer-wrapper-token"
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "viewer", "role": "viewer",
+                "ts": time.time(),
+            }
+
+        h = _make_handler(
+            path="/api/admin/fleet-boundaries",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Cookie": "",
+                "Origin": "",
+            },
+        )
+        h.do_GET()
+
+        self.assertEqual(h._status, 403)
+        self.assertIn("Requires admin role", _get_json(h)["error"])
+
+    def _case_post_logout_token_rejected(self):
+        """After logout, the same token must be rejected."""
+        from freq.api.auth import (
+            handle_auth_logout, check_session_role,
+            _auth_tokens, _auth_lock
+        )
+
+        token = "logout-test-token"
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time(),
+            }
+
+        # Verify token works before logout
+        h = MagicMock()
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        h.path = "/api/test"
+
+        role, err = check_session_role(h, "viewer")
+        self.assertEqual(role, "admin")
+
+        # Logout
+        logout_h = _make_handler("/api/auth/logout", method="POST",
+                                 headers={"Authorization": f"Bearer {token}",
+                                          "Cookie": "", "Origin": "https://freq.test",
+                                          "Host": "freq.test",
+                                          "Content-Length": "0"})
+        logout_h.headers = MagicMock()
+        logout_h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "https://freq.test",
+            "Host": "freq.test",
+        }.get(key, default)
+        with patch("freq.api.auth.request_is_https", return_value=True):
+            handle_auth_logout(logout_h)
+
+        # Verify token is now rejected
+        role2, err2 = check_session_role(h, "viewer")
+        self.assertIsNone(role2)
+        self.assertIn("expired or invalid", err2)
+
+    def _case_login_cookie_has_max_age(self):
+        """Login cookie must include Max-Age matching session timeout."""
+        import inspect
+        from freq.api.auth import handle_auth_login
+        src = inspect.getsource(handle_auth_login)
+        self.assertIn("Max-Age=", src,
+                       "Login cookie must include Max-Age")
+        self.assertIn("SESSION_TIMEOUT_SECONDS", src,
+                       "Cookie Max-Age must reference SESSION_TIMEOUT_SECONDS")
+
+    def _case_logout_clears_cookie(self):
+        """Logout must set cookie Max-Age=0 to clear it."""
+        import inspect
+        from freq.api.auth import handle_auth_logout
+        src = inspect.getsource(handle_auth_logout)
+        self.assertIn("Max-Age=0", src,
+                       "Logout must clear cookie via Max-Age=0")
+
+
+SESSION_EXPIRY_CASES = (
+    "_case_expired_token_rejected",
+    "_case_old_session_with_recent_activity_is_accepted",
+    "_case_session_refresh_requires_user_activity_header",
+    "_case_user_activity_refreshes_idle_timer_and_cookie",
+    "_case_api_wrapper_preserves_expired_session_reason",
+    "_case_api_wrapper_preserves_insufficient_role_reason",
+    "_case_post_logout_token_rejected",
+    "_case_login_cookie_has_max_age",
+    "_case_logout_clears_cookie",
+)
+
+
+class TestSessionExpiryMatrix(unittest.TestCase):
+    def test_session_expiry_matrix(self):
+        run_case_matrix(self, TestSessionExpiry, SESSION_EXPIRY_CASES)
+
+
+if __name__ == "__main__":
+    unittest.main()

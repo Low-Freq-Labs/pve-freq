@@ -1,0 +1,17 @@
+{
+  "canonical": false,
+  "host": "VM999",
+  "results": {
+    "agent_home": {"after": null, "before": null, "clean": false, "measured": false},
+    "etc_freq": {"after": null, "before": null, "clean": false, "measured": false},
+    "git_worktree": {"after": null, "before": null, "clean": false, "measured": false},
+    "persistent_temp_paths": {"after": null, "before": null, "clean": false, "measured": false},
+    "processes": {"after": null, "before": null, "clean": false, "measured": false},
+    "project_root": {"after": null, "before": null, "clean": false, "measured": false},
+    "root_init_inputs": {"after": null, "before": null, "clean": false, "measured": false},
+    "sockets": {"after": null, "before": null, "clean": false, "measured": false},
+    "threads": {"after": null, "before": null, "clean": false, "measured": false}
+  },
+  "schema_version": 2,
+  "source_sha": "b94321f968d1f2601b40404c3aff242e5858ced7"
+}

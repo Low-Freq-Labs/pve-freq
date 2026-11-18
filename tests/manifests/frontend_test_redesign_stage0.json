@@ -1,0 +1,1654 @@
+{
+  "schema_version": 1,
+  "kind": "pve-freq.frontend-test-redesign-stage0",
+  "baseline": {
+    "commit": "b94321f968d1f2601b40404c3aff242e5858ced7",
+    "default_python_collected": 4886,
+    "default_python_passed": 4862,
+    "default_python_skipped": 24,
+    "default_python_seconds": 327.54,
+    "coverage": {
+      "statements": 52806,
+      "covered_statements": 21630,
+      "branches": 18204,
+      "covered_branches": 5955,
+      "statement_percent": 40.96,
+      "branch_percent": 32.71,
+      "combined_display_percent": 39
+    },
+    "frontend_python_slice": {
+      "files": 36,
+      "collected": 432,
+      "passed": 431,
+      "skipped": 1,
+      "seconds": 10.45,
+      "source_membership_assertions": 748,
+      "source_read_sites": 86,
+      "isolated_covered_statements": 1370,
+      "isolated_covered_branches": 49,
+      "isolated_combined_display_percent": 2
+    },
+    "playwright": {
+      "files": 10,
+      "definitions": 76,
+      "hermetic_runnable": 36,
+      "hermetic_skipped_live_or_destructive": 40
+    }
+  },
+  "terminal_targets": {
+    "default_python_hard_ceiling": 3000,
+    "finn_clancy_delivery_ceiling": 2700,
+    "future_infra_failure_reserve_minimum": 300,
+    "frontend_python_ceiling": 70,
+    "playwright_definitions": {
+      "hermetic": 12,
+      "live_safe": 4,
+      "sandbox": 1
+    },
+    "coverage": {
+      "statement_percent_minimum": 70,
+      "branch_percent_minimum": 60,
+      "combined_percent_minimum": 67
+    },
+    "runtime_seconds": {
+      "delivery_median_target": 270,
+      "terminal_median_maximum": 300,
+      "terminal_single_run_maximum": 330
+    }
+  },
+  "owner_catalog": [
+    {
+      "id": "K01",
+      "kind": "static_keep",
+      "name": "session security topology"
+    },
+    {
+      "id": "K02",
+      "kind": "static_keep",
+      "name": "single router root"
+    },
+    {
+      "id": "C01",
+      "kind": "static_consolidated",
+      "name": "asset package CSP and inline hashes"
+    },
+    {
+      "id": "C02",
+      "kind": "static_consolidated",
+      "name": "route subnav and semantic structure"
+    },
+    {
+      "id": "C03",
+      "kind": "static_consolidated",
+      "name": "setup endpoint action and marker schema"
+    },
+    {
+      "id": "C04",
+      "kind": "static_consolidated",
+      "name": "factual state and copy vocabulary"
+    },
+    {
+      "id": "C05",
+      "kind": "static_consolidated",
+      "name": "shipped layout semantics"
+    },
+    {
+      "id": "H01",
+      "kind": "hermetic",
+      "name": "auth and security lifecycle"
+    },
+    {
+      "id": "H02",
+      "kind": "hermetic",
+      "name": "shell router and navigation"
+    },
+    {
+      "id": "H03",
+      "kind": "hermetic",
+      "name": "read and freshness behavior"
+    },
+    {
+      "id": "H04",
+      "kind": "hermetic",
+      "name": "mutation safety"
+    },
+    {
+      "id": "H05",
+      "kind": "hermetic",
+      "name": "operator RBAC"
+    },
+    {
+      "id": "H06",
+      "kind": "hermetic",
+      "name": "zero-state happy path"
+    },
+    {
+      "id": "H07",
+      "kind": "hermetic",
+      "name": "zero-state failure and resume"
+    },
+    {
+      "id": "H08",
+      "kind": "hermetic",
+      "name": "zero-state explicit empty contract"
+    },
+    {
+      "id": "H09",
+      "kind": "hermetic",
+      "name": "accessibility semantics"
+    },
+    {
+      "id": "H10",
+      "kind": "hermetic",
+      "name": "responsive shell"
+    },
+    {
+      "id": "H11",
+      "kind": "hermetic",
+      "name": "operator truth and degradation"
+    },
+    {
+      "id": "H12",
+      "kind": "hermetic",
+      "name": "terminal behavior"
+    },
+    {
+      "id": "L01",
+      "kind": "live_safe",
+      "name": "doctor and core reads"
+    },
+    {
+      "id": "L02",
+      "kind": "live_safe",
+      "name": "device storage and safe terminals"
+    },
+    {
+      "id": "L03",
+      "kind": "live_safe",
+      "name": "responsive shell and console cleanliness"
+    },
+    {
+      "id": "L04",
+      "kind": "live_safe",
+      "name": "operator RBAC"
+    },
+    {
+      "id": "S01",
+      "kind": "sandbox",
+      "name": "destructive sandbox controls"
+    }
+  ],
+  "python": {
+    "expected_nodes": 432,
+    "expected_disposition_counts": {
+      "KEEP": 7,
+      "CONSOLIDATE": 233,
+      "REPLACE": 186,
+      "DELETE": 6
+    },
+    "sources": [
+      {
+        "source_file": "tests/test_public_web_security_frontend_contract.py",
+        "sha256": "d50fc8de6e1bf5e946194e67a5f9f2fdf7956b9b62402b4c5fe7293e8f63e5bb",
+        "disposition": "KEEP",
+        "target_owner": "K01",
+        "node_ids": [
+          "tests/test_public_web_security_frontend_contract.py::test_auth_fetch_uses_cookie_csrf_not_browser_bearer",
+          "tests/test_public_web_security_frontend_contract.py::test_bare_logout_and_password_rotation_still_send_csrf",
+          "tests/test_public_web_security_frontend_contract.py::test_login_and_session_verify_capture_csrf_token",
+          "tests/test_public_web_security_frontend_contract.py::test_terminal_websocket_appends_backend_nonce",
+          "tests/test_public_web_security_frontend_contract.py::test_ui_event_logger_uses_same_origin_csrf_when_available",
+          "tests/test_public_web_security_frontend_contract.py::test_vault_credential_reveal_uses_same_origin_csrf_api_call"
+        ]
+      },
+      {
+        "source_file": "tests/test_single_view_router_contract.py",
+        "sha256": "b52cf2bf2ce93065602069b39d79fd07f40735be87be3e1fd0b93dc87a40ded5",
+        "disposition": "KEEP",
+        "target_owner": "K02",
+        "node_ids": [
+          "tests/test_single_view_router_contract.py::TestSingleViewRouterContract::test_dashboard_has_one_router_root_and_no_page_islands"
+        ]
+      },
+      {
+        "source_file": "tests/test_ah_semantic_classes_contract.py",
+        "sha256": "267e7fba464431596e934293755af000333d0bc7b7b8a64f8a0a3609a401e8ec",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C05",
+        "node_ids": [
+          "tests/test_ah_semantic_classes_contract.py::TestAhClassesUsedInHtml::test_each_class_used_in_html",
+          "tests/test_ah_semantic_classes_contract.py::TestAhDoesNotBreakQInvariants::test_q_chrome_classes_still_defined",
+          "tests/test_ah_semantic_classes_contract.py::TestAhDoesNotBreakQInvariants::test_q_id_rules_block_still_present",
+          "tests/test_ah_semantic_classes_contract.py::TestAhInlineStylesRemoved::test_no_forbidden_inline_style_regressed",
+          "tests/test_ah_semantic_classes_contract.py::TestAhSemanticClassesDefined::test_ah_block_marker_present",
+          "tests/test_ah_semantic_classes_contract.py::TestAhSemanticClassesDefined::test_each_class_defined_in_ah_block"
+        ]
+      },
+      {
+        "source_file": "tests/test_brand_surface_contract.py",
+        "sha256": "91fae6adbc759c6a558671f843d02a4c0eae11ea5d0a2558d05b996ed3365db2",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C04",
+        "node_ids": [
+          "tests/test_brand_surface_contract.py::TestFrontendConsumesContextHeader::test_document_title_uses_dashboard_header",
+          "tests/test_brand_surface_contract.py::TestFrontendConsumesContextHeader::test_nav_version_carries_cluster_context",
+          "tests/test_brand_surface_contract.py::TestFrontendConsumesContextHeader::test_no_hardcoded_dashboard_suffix",
+          "tests/test_brand_surface_contract.py::TestHandleInfoContextAware::test_default_header_falls_back_to_operator_console",
+          "tests/test_brand_surface_contract.py::TestHandleInfoContextAware::test_default_header_uses_cluster_when_present",
+          "tests/test_brand_surface_contract.py::TestHandleInfoContextAware::test_default_subtitle_is_factual_count",
+          "tests/test_brand_surface_contract.py::TestHandleInfoContextAware::test_no_hardcoded_pve_freq_dashboard_fallback",
+          "tests/test_brand_surface_contract.py::TestHandleInfoContextAware::test_pack_override_still_honored_when_non_generic"
+        ]
+      },
+      {
+        "source_file": "tests/test_browser_deploy_truth.py",
+        "sha256": "5015fe695d3cd4a10bf57a275d6516dcc51877fbd74a0d7e1d866cbb110112fe",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C01",
+        "node_ids": [
+          "tests/test_browser_deploy_truth.py::TestAssetVersionHashes::test_css_has_version_hash",
+          "tests/test_browser_deploy_truth.py::TestAssetVersionHashes::test_js_and_css_versions_match",
+          "tests/test_browser_deploy_truth.py::TestAssetVersionHashes::test_js_has_version_hash",
+          "tests/test_browser_deploy_truth.py::TestFrontendMethodConsistency::test_mutating_calls_use_post",
+          "tests/test_browser_deploy_truth.py::TestFrontendMethodConsistency::test_readonly_calls_use_get",
+          "tests/test_browser_deploy_truth.py::TestPveNodeCardContract::test_docker_counts_keep_media_cache_across_rerenders",
+          "tests/test_browser_deploy_truth.py::TestPveNodeCardContract::test_freshness_chip_centers_with_create_vm_action",
+          "tests/test_browser_deploy_truth.py::TestPveNodeCardContract::test_lxc_stop_and_docker_down_are_red_when_nonzero",
+          "tests/test_browser_deploy_truth.py::TestPveNodeCardContract::test_util_summary_uses_live_hooks_not_placeholders",
+          "tests/test_browser_deploy_truth.py::TestStaticAssetHeaders::test_serve_static_correct_mime_js",
+          "tests/test_browser_deploy_truth.py::TestStaticAssetHeaders::test_serve_static_sends_nosniff"
+        ]
+      },
+      {
+        "source_file": "tests/test_collection_state_semantics_contract.py",
+        "sha256": "141735bed4c3d2633679c16aa4d7dc203ec7773e0c8c7cb3e545caa659ae7b6b",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C04",
+        "node_ids": [
+          "tests/test_collection_state_semantics_contract.py::TestNoTransportJargonInStateLabels::test_no_bare_warming_label",
+          "tests/test_collection_state_semantics_contract.py::TestNoTransportJargonInStateLabels::test_no_poll_state_label",
+          "tests/test_collection_state_semantics_contract.py::TestNoTransportJargonInStateLabels::test_no_probe_error_label",
+          "tests/test_collection_state_semantics_contract.py::TestNoTransportJargonInStateLabels::test_no_sse_text_content_assignment",
+          "tests/test_collection_state_semantics_contract.py::TestOperatorFacingLabels::test_cache_warming_label_present",
+          "tests/test_collection_state_semantics_contract.py::TestOperatorFacingLabels::test_cached_label_present",
+          "tests/test_collection_state_semantics_contract.py::TestOperatorFacingLabels::test_live_label_present",
+          "tests/test_collection_state_semantics_contract.py::TestOperatorFacingLabels::test_probe_failed_label_present",
+          "tests/test_collection_state_semantics_contract.py::TestWarmingStateVisibleToOperator::test_warming_surfaces_to_core_systems_age"
+        ]
+      },
+      {
+        "source_file": "tests/test_dense_ops_layout_contract.py",
+        "sha256": "ef9510ede774ccaa6f822cb74ceb188542f9816b6a9106131302413340580334",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C05",
+        "node_ids": [
+          "tests/test_dense_ops_layout_contract.py::TestCardDensity::test_crd_padding_tight",
+          "tests/test_dense_ops_layout_contract.py::TestCardDensity::test_host_card_padding_tight",
+          "tests/test_dense_ops_layout_contract.py::TestCardDensity::test_infra_role_card_padding_tight",
+          "tests/test_dense_ops_layout_contract.py::TestPrimaryLayoutDensity::test_body_line_height_dense",
+          "tests/test_dense_ops_layout_contract.py::TestPrimaryLayoutDensity::test_mn_body_padding_tight",
+          "tests/test_dense_ops_layout_contract.py::TestPrimaryLayoutDensity::test_mn_header_padding_tight",
+          "tests/test_dense_ops_layout_contract.py::TestSectionDensity::test_section_header_padding_tight",
+          "tests/test_dense_ops_layout_contract.py::TestSectionDensity::test_section_margin_bottom_tight",
+          "tests/test_dense_ops_layout_contract.py::TestSubTabsDensity::test_sub_tabs_margin_bottom_tight",
+          "tests/test_dense_ops_layout_contract.py::TestTopOfScreenStatsDensity::test_stat_tile_padding_tight",
+          "tests/test_dense_ops_layout_contract.py::TestTopOfScreenStatsDensity::test_stats_margin_bottom_small"
+        ]
+      },
+      {
+        "source_file": "tests/test_drilldown_affordance_contract.py",
+        "sha256": "ef28f3b298b56bfa807d2113dd95b0f99733b5a3013cc06baa5684ec7bee8fde",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C05",
+        "node_ids": [
+          "tests/test_drilldown_affordance_contract.py::TestAffordanceLanguageConsistency::test_same_chevron_glyph_in_both",
+          "tests/test_drilldown_affordance_contract.py::TestHostCardDrilldownAffordance::test_chevron_does_not_intercept_clicks",
+          "tests/test_drilldown_affordance_contract.py::TestHostCardDrilldownAffordance::test_chevron_hint_hidden_by_default",
+          "tests/test_drilldown_affordance_contract.py::TestHostCardDrilldownAffordance::test_chevron_hint_revealed_on_hover",
+          "tests/test_drilldown_affordance_contract.py::TestHostCardDrilldownAffordance::test_clickable_host_card_has_chevron_hint",
+          "tests/test_drilldown_affordance_contract.py::TestHostCardDrilldownAffordance::test_clickable_host_card_has_pointer_cursor",
+          "tests/test_drilldown_affordance_contract.py::TestInfraRoleCardDrilldownAffordance::test_infra_role_card_chevron_revealed_on_hover",
+          "tests/test_drilldown_affordance_contract.py::TestInfraRoleCardDrilldownAffordance::test_infra_role_card_has_chevron_after",
+          "tests/test_drilldown_affordance_contract.py::TestInfraRoleCardDrilldownAffordance::test_infra_role_card_retains_cursor_pointer"
+        ]
+      },
+      {
+        "source_file": "tests/test_empty_state_evidence_contract.py",
+        "sha256": "2cff0cc0b23e72cda95763e98ae97ed8cfc62691f3995dac63c9f5986bb37159",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C04",
+        "node_ids": [
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_agents_registered_old",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_api_keys_stored",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_containers_period",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_data_unqualified",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_deploy_history_old",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_journal_entries_yet",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_lab_tools_visible_old",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_monitors_configured_old",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_ntp_data",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_recent_activity_old",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_storage_pools_detected_old",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_users_registered_old",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_vault_empty",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_vlans_configured_old",
+          "tests/test_empty_state_evidence_contract.py::TestNoConsumerScaffoldingCopy::test_no_vms_found_on_cluster",
+          "tests/test_empty_state_evidence_contract.py::TestNoDecorativeEmojiInEmptyStates::test_no_es_icon_in_api_keys_empty",
+          "tests/test_empty_state_evidence_contract.py::TestNoDecorativeEmojiInEmptyStates::test_no_es_icon_in_journal_empty",
+          "tests/test_empty_state_evidence_contract.py::TestNoDecorativeEmojiInEmptyStates::test_no_es_icon_in_user_list_empty",
+          "tests/test_empty_state_evidence_contract.py::TestNoDecorativeEmojiInEmptyStates::test_no_es_icon_in_vault_empty",
+          "tests/test_empty_state_evidence_contract.py::TestNoDecorativeEmojiInEmptyStates::test_no_es_icon_in_vms_empty",
+          "tests/test_empty_state_evidence_contract.py::TestProbeFailedLanguageOnCatch::test_activity_catch_is_probe_failed",
+          "tests/test_empty_state_evidence_contract.py::TestProbeFailedLanguageOnCatch::test_heatmap_catch_is_probe_failed",
+          "tests/test_empty_state_evidence_contract.py::TestProbeFailedLanguageOnCatch::test_monitor_catch_is_probe_failed",
+          "tests/test_empty_state_evidence_contract.py::TestProbeFailedLanguageOnCatch::test_ntp_catch_is_probe_failed",
+          "tests/test_empty_state_evidence_contract.py::TestProbeFailedLanguageOnCatch::test_snapshot_catch_is_probe_failed",
+          "tests/test_empty_state_evidence_contract.py::TestProbeFailedLanguageOnCatch::test_storage_catch_is_probe_failed",
+          "tests/test_empty_state_evidence_contract.py::TestTdarrNoGreenTheater::test_no_tdarr_checkmark",
+          "tests/test_empty_state_evidence_contract.py::TestTdarrNoGreenTheater::test_tdarr_not_detected_is_not_installed",
+          "tests/test_empty_state_evidence_contract.py::TestTdarrNoGreenTheater::test_tdarr_says_lowercase_up"
+        ]
+      },
+      {
+        "source_file": "tests/test_inline_style_sweep_contract.py",
+        "sha256": "fdd453d3e6e2d1b301487cd871a84189b1d998e119546b10d7b7f8a879db99a2",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C01",
+        "node_ids": [
+          "tests/test_inline_style_sweep_contract.py::TestQHybridFinishExtractions::test_each_chrome_class_defined_in_css",
+          "tests/test_inline_style_sweep_contract.py::TestQHybridFinishExtractions::test_each_chrome_class_used_in_html",
+          "tests/test_inline_style_sweep_contract.py::TestQHybridFinishExtractions::test_each_id_rule_defined",
+          "tests/test_inline_style_sweep_contract.py::TestQHybridFinishExtractions::test_each_id_rule_target_has_no_inline_style",
+          "tests/test_inline_style_sweep_contract.py::TestQHybridFinishExtractions::test_each_id_rule_target_present_in_html",
+          "tests/test_inline_style_sweep_contract.py::TestQHybridFinishExtractions::test_id_rules_block_present",
+          "tests/test_inline_style_sweep_contract.py::TestQUtilityClassesPresentInCss::test_each_q_class_defined",
+          "tests/test_inline_style_sweep_contract.py::TestQUtilityClassesPresentInCss::test_q_block_header_present",
+          "tests/test_inline_style_sweep_contract.py::TestQUtilityClassesUsedInHtml::test_each_q_class_referenced",
+          "tests/test_inline_style_sweep_contract.py::TestStyleSrcBrowserTruth::test_runtime_style_src_matches_browser_behavior",
+          "tests/test_inline_style_sweep_contract.py::TestStyleSrcBrowserTruth::test_static_style_src_allows_runtime_inline_styles",
+          "tests/test_inline_style_sweep_contract.py::TestStyleSrcBrowserTruth::test_style_src_attr_false_escape_hatch_is_gone",
+          "tests/test_inline_style_sweep_contract.py::TestUnsafeHashesMachinery::test_helper_caches_result",
+          "tests/test_inline_style_sweep_contract.py::TestUnsafeHashesMachinery::test_helper_count_matches_unique_inline_styles",
+          "tests/test_inline_style_sweep_contract.py::TestUnsafeHashesMachinery::test_helper_exists_and_returns_hashes"
+        ]
+      },
+      {
+        "source_file": "tests/test_login_form_robustness_contract.py",
+        "sha256": "d3eeaa94cd9b3f39320dc9689de581e864d4646b7ecf92a4e504c388c785826a",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C02",
+        "node_ids": [
+          "tests/test_login_form_robustness_contract.py::TestDoLoginDropsAutofillFlushHack::test_no_dispatch_event_autofill_flush",
+          "tests/test_login_form_robustness_contract.py::TestLoginFormSubmitHandler::test_binds_form_submit",
+          "tests/test_login_form_robustness_contract.py::TestLoginFormSubmitHandler::test_submit_handler_calls_do_login",
+          "tests/test_login_form_robustness_contract.py::TestLoginFormSubmitHandler::test_submit_handler_idempotent",
+          "tests/test_login_form_robustness_contract.py::TestLoginFormSubmitHandler::test_submit_handler_prevents_default",
+          "tests/test_login_form_robustness_contract.py::TestLoginInputsWrappedInForm::test_login_form_element_exists",
+          "tests/test_login_form_robustness_contract.py::TestLoginInputsWrappedInForm::test_login_form_has_action",
+          "tests/test_login_form_robustness_contract.py::TestLoginInputsWrappedInForm::test_login_form_has_method_post",
+          "tests/test_login_form_robustness_contract.py::TestLoginInputsWrappedInForm::test_login_inputs_have_name_attrs",
+          "tests/test_login_form_robustness_contract.py::TestLoginInputsWrappedInForm::test_login_submit_button_is_type_submit",
+          "tests/test_login_form_robustness_contract.py::TestLoginOverlayDropsPointerInterception::test_pointer_events_drop_targets_login_overlay",
+          "tests/test_login_form_robustness_contract.py::TestLoginOverlayDropsPointerInterception::test_show_app_drops_pointer_events_before_setTimeout"
+        ]
+      },
+      {
+        "source_file": "tests/test_login_home_copy_contract.py",
+        "sha256": "1343de53fc5bc1568544d5f7c26bbcfe826ba4244384e30540c087448314510a",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C04",
+        "node_ids": [
+          "tests/test_login_home_copy_contract.py::TestHomeEmptyStateCopy::test_empty_state_is_operational",
+          "tests/test_login_home_copy_contract.py::TestHomeEmptyStateCopy::test_empty_state_no_comfort_language",
+          "tests/test_login_home_copy_contract.py::TestHomeEmptyStateCopy::test_empty_state_references_real_actions",
+          "tests/test_login_home_copy_contract.py::TestHomeEmptyStateCopy::test_home_empty_exists",
+          "tests/test_login_home_copy_contract.py::TestHomeEmptyStateCopy::test_no_consumer_dashboard_empty_phrase",
+          "tests/test_login_home_copy_contract.py::TestHomeEmptyStateCopy::test_no_ready_made_dashboard_phrase",
+          "tests/test_login_home_copy_contract.py::TestLoginLoadingStateCopy::test_show_app_no_fleet_dashboard",
+          "tests/test_login_home_copy_contract.py::TestLoginLoadingStateCopy::test_show_app_uses_operator_console",
+          "tests/test_login_home_copy_contract.py::TestLoginOverlayCopy::test_login_overlay_exists",
+          "tests/test_login_home_copy_contract.py::TestLoginOverlayCopy::test_login_tagline_is_lowercase",
+          "tests/test_login_home_copy_contract.py::TestLoginOverlayCopy::test_login_tagline_is_operator_console",
+          "tests/test_login_home_copy_contract.py::TestLoginOverlayCopy::test_no_fleet_dashboard_in_login_tagline"
+        ]
+      },
+      {
+        "source_file": "tests/test_mobile_density_contract.py",
+        "sha256": "7713f0c96a20a0a90df0641fd5a64c5c9e60bb1fa776ad88687d6d1810fc942f",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C05",
+        "node_ids": [
+          "tests/test_mobile_density_contract.py::TestCtListFetchIsSilent::test_ct_list_handles_non_ok_gracefully",
+          "tests/test_mobile_density_contract.py::TestCtListFetchIsSilent::test_ct_list_uses_silent",
+          "tests/test_mobile_density_contract.py::TestSubTabsWrapOnNarrowViewports::test_sub_tabs_block_has_flex_wrap_wrap",
+          "tests/test_mobile_density_contract.py::TestSubTabsWrapOnNarrowViewports::test_sub_tabs_still_use_flex"
+        ]
+      },
+      {
+        "source_file": "tests/test_settings_device_assignment_grouping_contract.py",
+        "sha256": "9c70ee5f29b7558214c0859a8ca51e77ed4254d046b8947adc0681ff855f0dad",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C02",
+        "node_ids": [
+          "tests/test_settings_device_assignment_grouping_contract.py::test_assignment_choices_are_prod_lab_temp_ooc_without_sandbox",
+          "tests/test_settings_device_assignment_grouping_contract.py::test_cost_sections_live_at_bottom_of_system_not_settings",
+          "tests/test_settings_device_assignment_grouping_contract.py::test_device_assignment_is_read_only_without_admin_role",
+          "tests/test_settings_device_assignment_grouping_contract.py::test_device_assignment_is_the_single_editing_table",
+          "tests/test_settings_device_assignment_grouping_contract.py::test_device_assignment_owns_admin_mount",
+          "tests/test_settings_device_assignment_grouping_contract.py::test_fleet_admin_moves_into_device_assignment_not_settings_sibling",
+          "tests/test_settings_device_assignment_grouping_contract.py::test_fleet_admin_wrapper_is_flattened_inside_device_assignment",
+          "tests/test_settings_device_assignment_grouping_contract.py::test_old_subpanel_labels_do_not_render_under_device_assignment",
+          "tests/test_settings_device_assignment_grouping_contract.py::test_system_loader_owns_cost_refresh_not_settings_loader"
+        ]
+      },
+      {
+        "source_file": "tests/test_setup_copy_contract.py",
+        "sha256": "2d746f26b68849f74e9adb6ca9eccfcc0ef54d49b4bbd96bdfe82378f5958bd3",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C03",
+        "node_ids": [
+          "tests/test_setup_copy_contract.py::TestSetupDeviceCredentialWriter::test_root_freq_init_inputs_path_aliases_to_container_mount",
+          "tests/test_setup_copy_contract.py::TestSetupDeviceCredentialWriter::test_setup_path_validator_accepts_sudo_readable_files",
+          "tests/test_setup_copy_contract.py::TestSetupDeviceCredentialWriter::test_setup_secret_reader_can_use_sudo_cat",
+          "tests/test_setup_copy_contract.py::TestSetupDeviceCredentialWriter::test_web_bmc_row_writes_idrac_section",
+          "tests/test_setup_copy_contract.py::TestSetupDeviceCredentialWriter::test_web_switch_row_writes_switch_section_and_secret_file",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_base_flow_defers_optional_certificate_lifecycle",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_discovery_review_is_the_centerpiece",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_no_homelab_in_tagline",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_no_homelabbers_tagline",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_no_soft_password_coaching",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_run_panel_not_dashboard_admin_configured",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_run_panel_references_real_init_flow",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_setup_collects_real_init_inputs",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_step_0_clarifies_service_account_separation",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_step_0_mentions_first_operator_or_login",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_step_0_not_dashboard_admin_account",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_tagline_is_operational",
+          "tests/test_setup_copy_contract.py::TestSetupHtmlCopy::test_wizard_is_semantic_and_stepped",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_create_admin_failure_does_not_continue_to_init",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_incremental_credential_success_merges_presence",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_js_removes_legacy_browser_contract_fields",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_js_uses_frozen_endpoint_surface",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_no_hobbyist_language",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_setup_js_captures_csrf_for_post_admin_calls",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_setup_post_json_has_timeout_and_operator_failure_state",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_structured_errors_bind_to_generated_credential_paths",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_success_requires_both_markers_and_status_complete",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_summary_names_freq_admin_as_init_artifact",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_summary_not_dashboard_admin_label",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_summary_references_init_flow",
+          "tests/test_setup_copy_contract.py::TestSetupJsCopy::test_unknown_devices_are_acknowledged_only"
+        ]
+      },
+      {
+        "source_file": "tests/test_snmp_setup_ui_contract.py",
+        "sha256": "65ad5f33fcb63f4bf52e638a818c8293e161b8786b963dea1887d2efa84fe442",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C02",
+        "node_ids": [
+          "tests/test_snmp_setup_ui_contract.py::TestSNMPSetupUIContract::test_apply_is_confirmed_and_dry_run_gated",
+          "tests/test_snmp_setup_ui_contract.py::TestSNMPSetupUIContract::test_js_uses_backend_contract_and_action_allowlist",
+          "tests/test_snmp_setup_ui_contract.py::TestSNMPSetupUIContract::test_network_page_mounts_guided_snmp_setup",
+          "tests/test_snmp_setup_ui_contract.py::TestSNMPSetupUIContract::test_network_surface_ids_are_unique_and_js_scopes_to_active_view",
+          "tests/test_snmp_setup_ui_contract.py::TestSNMPSetupUIContract::test_target_table_surfaces_class_mutation_caveat_and_result"
+        ]
+      },
+      {
+        "source_file": "tests/test_ssl_manager_onboarding_ui_contract.py",
+        "sha256": "b12aa038c25dba366304b9948853e98563911eb9c7312024066fd377119ced6b",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C02",
+        "node_ids": [
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_manager_cloudflare_token_is_write_only_product_secret",
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_manager_consumes_array_shaped_backend_contract",
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_manager_is_mode_aware_after_configuration",
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_manager_is_onboarding_not_config_editor",
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_manager_separates_cert_truth_https_gap_and_app_trust",
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_manager_targets_render_as_compact_truth_table",
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_manager_uses_actionable_state_language",
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_manager_uses_current_onboarding_endpoints_and_actions",
+          "tests/test_ssl_manager_onboarding_ui_contract.py::test_ssl_onboarding_layout_has_responsive_cards"
+        ]
+      },
+      {
+        "source_file": "tests/test_status_copy_tone.py",
+        "sha256": "24ee0c7400744ba9d47849d5108d47cf872fda6f9585bbab0cf1f2df69406ecb",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C04",
+        "node_ids": [
+          "tests/test_status_copy_tone.py::TestNoFleetIsBalancedComfort::test_capacity_empty_state_is_factual",
+          "tests/test_status_copy_tone.py::TestNoFleetIsBalancedComfort::test_migration_empty_state_is_factual",
+          "tests/test_status_copy_tone.py::TestNoFleetIsBalancedComfort::test_no_fleet_is_balanced_phrase",
+          "tests/test_status_copy_tone.py::TestNoFleetIsBalancedComfort::test_no_no_optimization_recommendations_sentence",
+          "tests/test_status_copy_tone.py::TestNoStaleSnapshotComfort::test_no_checkmark_emoji_in_snapshot_empty",
+          "tests/test_status_copy_tone.py::TestNoStaleSnapshotComfort::test_snapshot_empty_state_is_factual",
+          "tests/test_status_copy_tone.py::TestQuickStartToastNeutral::test_no_dashboard_loaded_toast",
+          "tests/test_status_copy_tone.py::TestQuickStartToastNeutral::test_quick_start_toast_reports_count",
+          "tests/test_status_copy_tone.py::TestStatusCopyNotColoredGreen::test_capacity_empty_not_green",
+          "tests/test_status_copy_tone.py::TestStatusCopyNotColoredGreen::test_migration_empty_not_green",
+          "tests/test_status_copy_tone.py::TestStatusCopyNotColoredGreen::test_snapshot_empty_not_green"
+        ]
+      },
+      {
+        "source_file": "tests/test_subnav_symmetry_contract.py",
+        "sha256": "301510cd243dd27fe25475cac9f475f3f9058b7cbaa507ae599c8019d9a83145",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C02",
+        "node_ids": [
+          "tests/test_subnav_symmetry_contract.py::TestClusterSubTabSymmetry::test_every_canonical_target_has_a_view_element",
+          "tests/test_subnav_symmetry_contract.py::TestClusterSubTabSymmetry::test_every_generated_view_declares_its_group_and_active_state",
+          "tests/test_subnav_symmetry_contract.py::TestClusterSubTabSymmetry::test_fleet_has_one_complete_canonical_definition",
+          "tests/test_subnav_symmetry_contract.py::TestClusterSubTabSymmetry::test_generated_mounts_do_not_copy_buttons",
+          "tests/test_subnav_symmetry_contract.py::TestClusterSubTabSymmetry::test_renderer_preserves_active_state_and_chaos_accent",
+          "tests/test_subnav_symmetry_contract.py::TestClusterSubTabSymmetry::test_security_has_one_complete_canonical_definition",
+          "tests/test_subnav_symmetry_contract.py::TestClusterSubTabSymmetry::test_system_has_one_complete_canonical_definition"
+        ]
+      },
+      {
+        "source_file": "tests/test_web_csp_inline_contract.py",
+        "sha256": "83feff8fa5bb554c7a2a542d9f7d53f9cc673977aec7c4f0cc5975c33a4b6dbe",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C01",
+        "node_ids": [
+          "tests/test_web_csp_inline_contract.py::TestCspHonestLimitDocumented::test_app_html_inline_handler_count_matches_documented",
+          "tests/test_web_csp_inline_contract.py::TestCspHonestLimitDocumented::test_app_html_inline_style_count_matches_documented",
+          "tests/test_web_csp_inline_contract.py::TestCspHonestLimitDocumented::test_csp_comment_names_inline_handler_count",
+          "tests/test_web_csp_inline_contract.py::TestCspHonestLimitDocumented::test_csp_comment_references_follow_up_token",
+          "tests/test_web_csp_inline_contract.py::TestCspHonestLimitDocumented::test_script_src_dropped_unsafe_inline",
+          "tests/test_web_csp_inline_contract.py::TestCspHonestLimitDocumented::test_style_src_attr_escape_hatch_removed",
+          "tests/test_web_csp_inline_contract.py::TestCspHonestLimitDocumented::test_style_src_dropped_unsafe_inline_uses_unsafe_hashes",
+          "tests/test_web_csp_inline_contract.py::TestDelegatedFleetActions::test_pve_node_create_button_uses_delegated_action",
+          "tests/test_web_csp_inline_contract.py::TestFoucMovedToCss::test_app_html_has_no_inline_style_block",
+          "tests/test_web_csp_inline_contract.py::TestFoucMovedToCss::test_css_fouc_comment_explains_move",
+          "tests/test_web_csp_inline_contract.py::TestFoucMovedToCss::test_css_has_body_fadein_rule",
+          "tests/test_web_csp_inline_contract.py::TestNoExternalStylesheet::test_no_external_hosts_in_app_css",
+          "tests/test_web_csp_inline_contract.py::TestNoExternalStylesheet::test_no_external_hosts_in_app_html",
+          "tests/test_web_csp_inline_contract.py::TestNoExternalStylesheet::test_no_external_hosts_in_setup_html",
+          "tests/test_web_csp_inline_contract.py::TestNoInlineScriptBlocks::test_all_script_tags_have_src"
+        ]
+      },
+      {
+        "source_file": "tests/test_web_external_asset_contract.py",
+        "sha256": "b6085f3f6b7c5582819c27310792da305d042f7f6856ea528c7c3c9995fda2a2",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C01",
+        "node_ids": [
+          "tests/test_web_external_asset_contract.py::TestAppHtmlHasNoExternalAssets::test_addon_clipboard_uses_vendor_path",
+          "tests/test_web_external_asset_contract.py::TestAppHtmlHasNoExternalAssets::test_addon_fit_uses_vendor_path",
+          "tests/test_web_external_asset_contract.py::TestAppHtmlHasNoExternalAssets::test_no_jsdelivr_reference",
+          "tests/test_web_external_asset_contract.py::TestAppHtmlHasNoExternalAssets::test_xterm_css_uses_vendor_path",
+          "tests/test_web_external_asset_contract.py::TestAppHtmlHasNoExternalAssets::test_xterm_js_uses_vendor_path",
+          "tests/test_web_external_asset_contract.py::TestCspHeaderIsSelfOnly::test_csp_default_src_is_self",
+          "tests/test_web_external_asset_contract.py::TestCspHeaderIsSelfOnly::test_csp_font_src_is_self_only",
+          "tests/test_web_external_asset_contract.py::TestCspHeaderIsSelfOnly::test_csp_has_no_jsdelivr",
+          "tests/test_web_external_asset_contract.py::TestCspHeaderIsSelfOnly::test_csp_method_exists",
+          "tests/test_web_external_asset_contract.py::TestCssHasNoExternalAssets::test_no_cdn_import",
+          "tests/test_web_external_asset_contract.py::TestStaticHandlerServesVendor::test_read_asset_resolves_vendor_css",
+          "tests/test_web_external_asset_contract.py::TestStaticHandlerServesVendor::test_read_asset_resolves_vendor_js",
+          "tests/test_web_external_asset_contract.py::TestXtermPackageData::test_pyproject_includes_vendor_xterm_assets",
+          "tests/test_web_external_asset_contract.py::TestXtermVendored::test_addon_clipboard_vendored",
+          "tests/test_web_external_asset_contract.py::TestXtermVendored::test_addon_fit_vendored",
+          "tests/test_web_external_asset_contract.py::TestXtermVendored::test_xterm_css_vendored",
+          "tests/test_web_external_asset_contract.py::TestXtermVendored::test_xterm_js_vendored"
+        ]
+      },
+      {
+        "source_file": "tests/test_zero_dependency_fonts_contract.py",
+        "sha256": "251268fc1abcaaa796c266b297eac4a14da96ca4e3fb4f3acf06387503eac8f3",
+        "disposition": "CONSOLIDATE",
+        "target_owner": "C01",
+        "node_ids": [
+          "tests/test_zero_dependency_fonts_contract.py::TestNoRuntimeFontImport::test_no_at_import_url",
+          "tests/test_zero_dependency_fonts_contract.py::TestSystemFontFallbacks::test_font_mono_has_system_fallbacks",
+          "tests/test_zero_dependency_fonts_contract.py::TestSystemFontFallbacks::test_font_ui_has_system_fallbacks"
+        ]
+      },
+      {
+        "source_file": "tests/test_auth_fetch_silent_opt_contract.py",
+        "sha256": "82db43267d763430cf5d49ac372e9bc751345922a80812ea9c4404dc89e91f7d",
+        "disposition": "REPLACE",
+        "target_owner": "H11",
+        "node_ids": [
+          "tests/test_auth_fetch_silent_opt_contract.py::TestAuthFetchAcceptsSilentOpt::test_501_never_toasts",
+          "tests/test_auth_fetch_silent_opt_contract.py::TestAuthFetchAcceptsSilentOpt::test_silent_flag_is_extracted_from_opts",
+          "tests/test_auth_fetch_silent_opt_contract.py::TestAuthFetchAcceptsSilentOpt::test_silent_suppresses_non_ok_toast",
+          "tests/test_auth_fetch_silent_opt_contract.py::TestChaosLogIsSilentAndRendersInlineFailure::test_chaos_log_fetch_is_silent",
+          "tests/test_auth_fetch_silent_opt_contract.py::TestChaosLogIsSilentAndRendersInlineFailure::test_chaos_log_renders_inline_on_non_ok",
+          "tests/test_auth_fetch_silent_opt_contract.py::TestDriveWipeOfflineCardIsEvidenceFirst::test_has_station_offline_monospace_tag",
+          "tests/test_auth_fetch_silent_opt_contract.py::TestDriveWipeOfflineCardIsEvidenceFirst::test_no_gradient_ghost_hero_text",
+          "tests/test_auth_fetch_silent_opt_contract.py::TestDriveWipeOfflineCardIsEvidenceFirst::test_offline_hint_still_present",
+          "tests/test_auth_fetch_silent_opt_contract.py::TestWatchdogProbeIsSilent::test_load_home_watchdog_call_is_silent"
+        ]
+      },
+      {
+        "source_file": "tests/test_auth_preauth_storm_contract.py",
+        "sha256": "b3b5d4c02b952b799ec7d9e097c6cff019c6580a84a05d887f2a55ead9bcdd65",
+        "disposition": "REPLACE",
+        "target_owner": "H01",
+        "node_ids": [
+          "tests/test_auth_preauth_storm_contract.py::TestAuthFetchHasRecursionGuard::test_auth_failing_flag_defined",
+          "tests/test_auth_preauth_storm_contract.py::TestAuthFetchHasRecursionGuard::test_auth_fetch_gates_dologout_with_flag",
+          "tests/test_auth_preauth_storm_contract.py::TestAuthFetchHasRecursionGuard::test_auth_fetch_sends_credentials_same_origin",
+          "tests/test_auth_preauth_storm_contract.py::TestDoLoginUsesBareFetch::test_login_clears_auth_failing_on_success",
+          "tests/test_auth_preauth_storm_contract.py::TestDoLoginUsesBareFetch::test_login_sends_credentials_same_origin",
+          "tests/test_auth_preauth_storm_contract.py::TestDoLoginUsesBareFetch::test_login_uses_bare_fetch",
+          "tests/test_auth_preauth_storm_contract.py::TestDoLogoutUsesBareFetch::test_logout_restores_login_card",
+          "tests/test_auth_preauth_storm_contract.py::TestDoLogoutUsesBareFetch::test_logout_tears_down_app_chrome",
+          "tests/test_auth_preauth_storm_contract.py::TestDoLogoutUsesBareFetch::test_logout_uses_bare_fetch_for_server_invalidation",
+          "tests/test_auth_preauth_storm_contract.py::TestLoginCardCaptureAndRestore::test_capture_helper_exists",
+          "tests/test_auth_preauth_storm_contract.py::TestLoginCardCaptureAndRestore::test_restore_reinvokes_register_login_bindings",
+          "tests/test_auth_preauth_storm_contract.py::TestLoginCardCaptureAndRestore::test_show_app_captures_before_replacing_overlay",
+          "tests/test_auth_preauth_storm_contract.py::TestNoRecursiveLogoutInAuthFetch::test_auth_fetch_does_not_nest_dologout_calls",
+          "tests/test_auth_preauth_storm_contract.py::TestPreAuthBootstrapIsGated::test_no_unconditional_load_home",
+          "tests/test_auth_preauth_storm_contract.py::TestPreAuthBootstrapIsGated::test_no_unconditional_start_sparklines",
+          "tests/test_auth_preauth_storm_contract.py::TestPreAuthBootstrapIsGated::test_no_unconditional_start_sse",
+          "tests/test_auth_preauth_storm_contract.py::TestPreAuthBootstrapIsGated::test_show_app_kicks_off_loaders"
+        ]
+      },
+      {
+        "source_file": "tests/test_blueteam_hardening_contract.py",
+        "sha256": "fdb77aecf8e2acd22f0ee11d891502fb825839eb05831197abc6ac2c322482d2",
+        "disposition": "REPLACE",
+        "target_owner": "H01",
+        "node_ids": [
+          "tests/test_blueteam_hardening_contract.py::TestConfirmActionSanitizer::test_confirmAction_uses_createElement_and_sanitizer",
+          "tests/test_blueteam_hardening_contract.py::TestConfirmActionSanitizer::test_sanitize_helper_exists_and_strips_attributes",
+          "tests/test_blueteam_hardening_contract.py::TestCspFrameAncestorsAndLockdown::test_security_header_block_carries_each_directive",
+          "tests/test_blueteam_hardening_contract.py::TestHstsOnlyOnTls::test_hsts_gated_on_request_https_helper",
+          "tests/test_blueteam_hardening_contract.py::TestPermissionsPolicyHeader::test_permissions_policy_sent",
+          "tests/test_blueteam_hardening_contract.py::TestReflectedOriginCorsRemoved::test_auth_login_drops_acao_send_header",
+          "tests/test_blueteam_hardening_contract.py::TestReflectedOriginCorsRemoved::test_helpers_json_response_drops_acao_send_header",
+          "tests/test_blueteam_hardening_contract.py::TestReflectedOriginCorsRemoved::test_no_reflected_origin_pattern_remains_in_web_paths",
+          "tests/test_blueteam_hardening_contract.py::TestReflectedOriginCorsRemoved::test_serve_json_response_drops_acao_send_header",
+          "tests/test_blueteam_hardening_contract.py::TestSetupHealthDegradedAllowlist::test_both_banner_renderers_use_the_helper",
+          "tests/test_blueteam_hardening_contract.py::TestSetupHealthDegradedAllowlist::test_helper_deny_lists_known_bad_values",
+          "tests/test_blueteam_hardening_contract.py::TestSetupHealthDegradedAllowlist::test_helper_function_exists",
+          "tests/test_blueteam_hardening_contract.py::TestSetupHealthDegradedAllowlist::test_helper_returns_false_for_unknown_and_healthy_values",
+          "tests/test_blueteam_hardening_contract.py::TestVaultRevealAutoHide::test_hide_helper_clears_timer",
+          "tests/test_blueteam_hardening_contract.py::TestVaultRevealAutoHide::test_timeout_constant_exists",
+          "tests/test_blueteam_hardening_contract.py::TestVaultRevealAutoHide::test_vault_reveal_arms_timer"
+        ]
+      },
+      {
+        "source_file": "tests/test_blueteam_ux_contract.py",
+        "sha256": "807753cb95be08af0449f5aa44a0bf302bc97da40f13aad2b8dbd2c52d817413",
+        "disposition": "REPLACE",
+        "target_owner": "H04",
+        "node_ids": [
+          "tests/test_blueteam_ux_contract.py::TestAuthVerifyExposesSessionAgeAndTtl::test_verify_handler_computes_age_from_ts",
+          "tests/test_blueteam_ux_contract.py::TestAuthVerifyExposesSessionAgeAndTtl::test_verify_handler_sets_three_session_fields",
+          "tests/test_blueteam_ux_contract.py::TestChangePasswordModalWiring::test_error_path_surfaces_server_error_inline",
+          "tests/test_blueteam_ux_contract.py::TestChangePasswordModalWiring::test_modal_function_exists",
+          "tests/test_blueteam_ux_contract.py::TestChangePasswordModalWiring::test_modal_has_three_inputs",
+          "tests/test_blueteam_ux_contract.py::TestChangePasswordModalWiring::test_submit_path_uses_bare_fetch_not_authfetch",
+          "tests/test_blueteam_ux_contract.py::TestChangePasswordModalWiring::test_submit_validates_min_length_and_mismatch",
+          "tests/test_blueteam_ux_contract.py::TestChangePasswordModalWiring::test_success_toast_names_sessions_purged_count",
+          "tests/test_blueteam_ux_contract.py::TestConfirmDestructiveTypeToConfirm::test_gwipeWipeAll_uses_confirmDestructive",
+          "tests/test_blueteam_ux_contract.py::TestConfirmDestructiveTypeToConfirm::test_helper_exists_and_builds_safely",
+          "tests/test_blueteam_ux_contract.py::TestConfirmDestructiveTypeToConfirm::test_vmDestroy_uses_confirmDestructive",
+          "tests/test_blueteam_ux_contract.py::TestUserMenuRewrite::test_format_duration_helper_exists",
+          "tests/test_blueteam_ux_contract.py::TestUserMenuRewrite::test_user_menu_has_change_password_button",
+          "tests/test_blueteam_ux_contract.py::TestUserMenuRewrite::test_user_menu_has_session_badge_slot",
+          "tests/test_blueteam_ux_contract.py::TestUserMenuRewrite::test_user_menu_uses_createElement_not_innerHTML"
+        ]
+      },
+      {
+        "source_file": "tests/test_chaos_confirmation_ui_contract.py",
+        "sha256": "e56f3a9332799d011c30ddbaf761e07482003033dd9253c1227271459bd21738",
+        "disposition": "REPLACE",
+        "target_owner": "H04",
+        "node_ids": [
+          "tests/test_chaos_confirmation_ui_contract.py::TestChaosConfirmationUIContract::test_chaos_run_uses_sanitized_styled_confirmation"
+        ]
+      },
+      {
+        "source_file": "tests/test_dashboard_accessibility_contract.py",
+        "sha256": "903a13b426021b3b92300aa244b5de750a939c77ddb4f1f3529155e4356562bd",
+        "disposition": "REPLACE",
+        "target_owner": "H09",
+        "node_ids": [
+          "tests/test_dashboard_accessibility_contract.py::TestDashboardAccessibilityContract::test_overlay_surfaces_have_dialog_semantics",
+          "tests/test_dashboard_accessibility_contract.py::TestDashboardAccessibilityContract::test_placeholder_only_controls_receive_explicit_names",
+          "tests/test_dashboard_accessibility_contract.py::TestDashboardAccessibilityContract::test_symbol_only_static_buttons_have_accessible_names"
+        ]
+      },
+      {
+        "source_file": "tests/test_dashboard_operator_truth_contract.py",
+        "sha256": "68626c888f0a68dcf2bf72a01a293f6fd1843162c11ab57292978b0504f4d883",
+        "disposition": "REPLACE",
+        "target_owner": "H05",
+        "node_ids": [
+          "tests/test_dashboard_operator_truth_contract.py::TestDashboardOperatorTruthContract::test_hardening_requires_an_explicit_target",
+          "tests/test_dashboard_operator_truth_contract.py::TestDashboardOperatorTruthContract::test_ooc_is_expanded_for_operators",
+          "tests/test_dashboard_operator_truth_contract.py::TestDashboardOperatorTruthContract::test_shortcut_help_matches_the_implemented_map"
+        ]
+      },
+      {
+        "source_file": "tests/test_data_freshness_ui_contract.py",
+        "sha256": "c3e739824b362d21e2066d62c70910e21c5dca4e203001453f11303e0bcd07b3",
+        "disposition": "REPLACE",
+        "target_owner": "H03",
+        "node_ids": [
+          "tests/test_data_freshness_ui_contract.py::TestDataFreshnessUIContract::test_chaos_duration_is_query_encoded",
+          "tests/test_data_freshness_ui_contract.py::TestDataFreshnessUIContract::test_expanding_section_invokes_only_read_loader_actions",
+          "tests/test_data_freshness_ui_contract.py::TestDataFreshnessUIContract::test_failed_or_unparseable_fetches_do_not_advance_freshness",
+          "tests/test_data_freshness_ui_contract.py::TestDataFreshnessUIContract::test_loader_and_auto_refresh_stamps_follow_declared_writes",
+          "tests/test_data_freshness_ui_contract.py::TestDataFreshnessUIContract::test_successful_fetches_receive_panel_context_and_timestamp",
+          "tests/test_data_freshness_ui_contract.py::TestDataFreshnessUIContract::test_timestamp_uses_existing_dim_visual_language"
+        ]
+      },
+      {
+        "source_file": "tests/test_live_polish_contract.py",
+        "sha256": "61ffababd698484a180cfe47bcc4b5bdffbedb483550483ba9cee61932180d5c",
+        "disposition": "REPLACE",
+        "target_owner": "H10",
+        "node_ids": [
+          "tests/test_live_polish_contract.py::TestFleetGridsResponsive::test_core_systems_grid_uses_auto_fill",
+          "tests/test_live_polish_contract.py::TestFleetGridsResponsive::test_pve_node_inner_grid_uses_auto_fill",
+          "tests/test_live_polish_contract.py::TestFleetGridsResponsive::test_pve_vms_grid_uses_auto_fill",
+          "tests/test_live_polish_contract.py::TestGitopsCommitHistoryPlaceholder::test_not_enabled_branch_renders_log_placeholder",
+          "tests/test_live_polish_contract.py::TestSecurityOverviewFillsPolicies::test_load_security_overview_calls_load_policies",
+          "tests/test_live_polish_contract.py::TestSecurityOverviewFillsPolicies::test_load_security_overview_still_calls_risk_and_posture"
+        ]
+      },
+      {
+        "source_file": "tests/test_operator_truth_contract.py",
+        "sha256": "46be95c27c997027a4a12a2205d4986d01b317a3ef180fe35e5e11ca53e29366",
+        "disposition": "REPLACE",
+        "target_owner": "H11",
+        "node_ids": [
+          "tests/test_operator_truth_contract.py::TestApiDegradedStreakAndProbeStatus::test_degraded_helpers_exist",
+          "tests/test_operator_truth_contract.py::TestApiDegradedStreakAndProbeStatus::test_fleet_refresh_counts_http_failures",
+          "tests/test_operator_truth_contract.py::TestApiDegradedStreakAndProbeStatus::test_fleet_refresh_honors_probe_status_errors_without_stale_bubble",
+          "tests/test_operator_truth_contract.py::TestApiDegradedStreakAndProbeStatus::test_health_refresh_counts_http_failures",
+          "tests/test_operator_truth_contract.py::TestApiDegradedStreakAndProbeStatus::test_health_refresh_honors_probe_status_errors_without_stale_bubble",
+          "tests/test_operator_truth_contract.py::TestApiDegradedStreakAndProbeStatus::test_mark_api_degraded_flips_stream_and_banner",
+          "tests/test_operator_truth_contract.py::TestLogin401RePropesTruth::test_dologin_error_reprobes_setup_on_401",
+          "tests/test_operator_truth_contract.py::TestOperatorTruthBannerPostAuth::test_css_defines_banner_and_err_variant",
+          "tests/test_operator_truth_contract.py::TestOperatorTruthBannerPostAuth::test_html_has_operator_truth_banner_slot",
+          "tests/test_operator_truth_contract.py::TestOperatorTruthBannerPostAuth::test_render_post_auth_truth_banner_function",
+          "tests/test_operator_truth_contract.py::TestOperatorTruthBannerPostAuth::test_show_app_triggers_post_auth_probe",
+          "tests/test_operator_truth_contract.py::TestPersistentStreamStatus::test_css_defines_all_three_states",
+          "tests/test_operator_truth_contract.py::TestPersistentStreamStatus::test_header_contains_stream_status_slot",
+          "tests/test_operator_truth_contract.py::TestPersistentStreamStatus::test_render_stream_status_function_exists",
+          "tests/test_operator_truth_contract.py::TestPersistentStreamStatus::test_sse_handlers_feed_stream_indicator",
+          "tests/test_operator_truth_contract.py::TestPreAuthSetupTruthBanner::test_banner_mentions_setup_link_and_initialized",
+          "tests/test_operator_truth_contract.py::TestPreAuthSetupTruthBanner::test_css_defines_login_setup_banner",
+          "tests/test_operator_truth_contract.py::TestPreAuthSetupTruthBanner::test_login_card_has_setup_banner_slot",
+          "tests/test_operator_truth_contract.py::TestPreAuthSetupTruthBanner::test_probe_function_exists",
+          "tests/test_operator_truth_contract.py::TestPreAuthSetupTruthBanner::test_show_login_overlay_triggers_probe",
+          "tests/test_operator_truth_contract.py::TestSessionExpiryRehydrationStillHolds::test_dologin_still_uses_bare_fetch_not_authfetch",
+          "tests/test_operator_truth_contract.py::TestSessionExpiryRehydrationStillHolds::test_dologout_still_tears_down_evtsource"
+        ]
+      },
+      {
+        "source_file": "tests/test_operator_truth_product_law.py",
+        "sha256": "4f9295425da740c12bc6aa02a356285221581c49aa26083b01b9305510e0abba",
+        "disposition": "REPLACE",
+        "target_owner": "H11",
+        "node_ids": [
+          "tests/test_operator_truth_product_law.py::TestDoctorTruthSurfaces::test_doctor_probe_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestDoctorTruthSurfaces::test_doctor_probe_started_post_auth",
+          "tests/test_operator_truth_product_law.py::TestDoctorTruthSurfaces::test_doctor_probe_torn_down_on_logout",
+          "tests/test_operator_truth_product_law.py::TestDoctorTruthSurfaces::test_doctor_probe_uses_doctor_endpoint",
+          "tests/test_operator_truth_product_law.py::TestDoctorTruthSurfaces::test_doctor_summary_inspects_status_failed_warnings_checks",
+          "tests/test_operator_truth_product_law.py::TestDoctorTruthSurfaces::test_doctor_summary_lists_failing_check_names",
+          "tests/test_operator_truth_product_law.py::TestDoctorTruthSurfaces::test_doctor_truth_summary_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestDoctorTruthSurfaces::test_post_auth_banner_merges_doctor_into_setup_truth",
+          "tests/test_operator_truth_product_law.py::TestFleetHostCardFreshness::test_decorate_host_card_fresh_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestFleetHostCardFreshness::test_decorator_field_tolerant_for_per_host_timestamps",
+          "tests/test_operator_truth_product_law.py::TestFleetHostCardFreshness::test_decorator_skips_stale_cards",
+          "tests/test_operator_truth_product_law.py::TestFleetHostCardFreshness::test_mark_stale_strips_pre_existing_fresh_chip",
+          "tests/test_operator_truth_product_law.py::TestFleetHostCardFreshness::test_render_fleet_data_calls_decorator",
+          "tests/test_operator_truth_product_law.py::TestFleetHostCardFreshness::test_silent_health_refresh_calls_decorator",
+          "tests/test_operator_truth_product_law.py::TestHomeTileDensification::test_age_from_payload_helper_handles_all_field_names",
+          "tests/test_operator_truth_product_law.py::TestHomeTileDensification::test_d_helper_returns_clickable_tile_when_view_present",
+          "tests/test_operator_truth_product_law.py::TestHomeTileDensification::test_fresh_chip_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestHomeTileDensification::test_home_fleet_stats_carries_expected_vs_actual",
+          "tests/test_operator_truth_product_law.py::TestHomeTileDensification::test_home_fleet_stats_threads_view_clickthrough",
+          "tests/test_operator_truth_product_law.py::TestHomeTileDensification::test_home_fleet_stats_uses_fresh_chip",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_all_core_device_reads_use_structured_renderers",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_bmc_summary_rows_are_not_repeated_in_detail_table",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_core_action_map_exposes_complete_read_surface",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_core_device_outputs_use_compact_summary_chips",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_known_truenas_rest_api_alert_has_operator_language",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_pfsense_backend_is_target_aware_for_lab_firewalls",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_pfsense_interfaces_backend_emits_one_curated_section",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_pfsense_interfaces_render_as_one_operator_table",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_pfsense_summary_sections_are_promoted_once",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_pfsense_target_resolver_can_adopt_inventory_description_ip",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_pfsense_target_resolver_supports_lab_vm_inventory",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_repeated_api_toasts_are_deduped_and_rate_limited",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_switch_monitoring_uses_native_switch_commands",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_truenas_alert_renderer_explains_meaning_and_action",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_truenas_missing_actions_have_specific_renderers",
+          "tests/test_operator_truth_product_law.py::TestInfraOutputIsHumanReadable::test_truenas_output_uses_structured_renderer",
+          "tests/test_operator_truth_product_law.py::TestMonRunDoctorStructuredRenderer::test_falls_back_to_legacy_output_field",
+          "tests/test_operator_truth_product_law.py::TestMonRunDoctorStructuredRenderer::test_lists_failing_check_names",
+          "tests/test_operator_truth_product_law.py::TestMonRunDoctorStructuredRenderer::test_renders_status_passed_failed",
+          "tests/test_operator_truth_product_law.py::TestPveMetricsStaleMarker::test_pve_metrics_marks_stale_when_offline",
+          "tests/test_operator_truth_product_law.py::TestPveMetricsStaleMarker::test_stale_marker_helpers_exist",
+          "tests/test_operator_truth_product_law.py::TestPveMetricsStaleMarker::test_stale_marker_uses_last_seen_ts_when_present",
+          "tests/test_operator_truth_product_law.py::TestSecurityOverviewDensification::test_cert_summary_carries_expected_actual_form",
+          "tests/test_operator_truth_product_law.py::TestSecurityOverviewDensification::test_load_sec_posture_threads_fresh_chip",
+          "tests/test_operator_truth_product_law.py::TestSecurityOverviewDensification::test_load_sec_posture_threads_view_clickthrough",
+          "tests/test_operator_truth_product_law.py::TestSetupTruthMissingArtifactsSurface::test_login_banner_consumes_summary",
+          "tests/test_operator_truth_product_law.py::TestSetupTruthMissingArtifactsSurface::test_missing_artifacts_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestSetupTruthMissingArtifactsSurface::test_missing_artifacts_inspects_three_required_fields",
+          "tests/test_operator_truth_product_law.py::TestSetupTruthMissingArtifactsSurface::test_post_auth_banner_consumes_summary",
+          "tests/test_operator_truth_product_law.py::TestSetupTruthMissingArtifactsSurface::test_setup_truth_summary_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestSetupTruthMissingArtifactsSurface::test_setup_truth_summary_returns_null_only_when_fully_clean",
+          "tests/test_operator_truth_product_law.py::TestSetupTruthMissingArtifactsSurface::test_summary_fires_on_missing_artifacts_without_setup_health",
+          "tests/test_operator_truth_product_law.py::TestSetupTruthMissingArtifactsSurface::test_summary_prefers_backend_setup_reason_when_present",
+          "tests/test_operator_truth_product_law.py::TestSilentRefreshStructuralSanity::test_fleet_structural_flags_all_pve_offline",
+          "tests/test_operator_truth_product_law.py::TestSilentRefreshStructuralSanity::test_fleet_structural_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestSilentRefreshStructuralSanity::test_health_structural_flags_no_hosts",
+          "tests/test_operator_truth_product_law.py::TestSilentRefreshStructuralSanity::test_health_structural_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestSilentRefreshStructuralSanity::test_silent_fleet_consumes_structural_check",
+          "tests/test_operator_truth_product_law.py::TestSilentRefreshStructuralSanity::test_silent_fleet_field_tolerant_for_new_state_fields",
+          "tests/test_operator_truth_product_law.py::TestSilentRefreshStructuralSanity::test_silent_health_consumes_structural_check",
+          "tests/test_operator_truth_product_law.py::TestSilentRefreshStructuralSanity::test_silent_health_field_tolerant_for_new_state_fields",
+          "tests/test_operator_truth_product_law.py::TestSmallWidgetDensification::test_deploy_log_widget_carries_fresh_chip_and_view",
+          "tests/test_operator_truth_product_law.py::TestSmallWidgetDensification::test_storage_widget_carries_fresh_chip_and_view",
+          "tests/test_operator_truth_product_law.py::TestSmallWidgetDensification::test_tdarr_widget_carries_fresh_chip_and_view",
+          "tests/test_operator_truth_product_law.py::TestStreamStatusFreshness::test_last_stream_event_state_exists",
+          "tests/test_operator_truth_product_law.py::TestStreamStatusFreshness::test_mark_stream_event_helper_exists",
+          "tests/test_operator_truth_product_law.py::TestStreamStatusFreshness::test_render_includes_freshness_label",
+          "tests/test_operator_truth_product_law.py::TestStreamStatusFreshness::test_sse_listener_wrapping_marks_event_ts",
+          "tests/test_operator_truth_product_law.py::TestStreamStatusFreshness::test_stale_demotes_dot_color",
+          "tests/test_operator_truth_product_law.py::TestVmCardFreshness::test_render_fleet_data_calls_vm_decorator",
+          "tests/test_operator_truth_product_law.py::TestVmCardFreshness::test_silent_fleet_refresh_calls_vm_decorator",
+          "tests/test_operator_truth_product_law.py::TestVmCardFreshness::test_vm_card_decorator_exists",
+          "tests/test_operator_truth_product_law.py::TestVmCardFreshness::test_vm_decorator_field_tolerant",
+          "tests/test_operator_truth_product_law.py::TestVmCardFreshness::test_vm_decorator_marks_stale_when_fleet_degraded"
+        ]
+      },
+      {
+        "source_file": "tests/test_watchdog_ui_honesty.py",
+        "sha256": "8daabc726181df594a81fd306a7a802650838b8cb0e019eb24d1878e9f30189e",
+        "disposition": "REPLACE",
+        "target_owner": "H11",
+        "node_ids": [
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogAPIContract::test_daemon_down_includes_watchdog_down_flag",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogAPIContract::test_daemon_down_returns_503",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogAPIContract::test_proxies_to_configured_port",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogAPIContract::test_proxy_error_returns_502",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogAPIContract::test_success_forwards_daemon_response",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetNotFakeGreen::test_catch_path_does_not_show_green",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetNotFakeGreen::test_error_path_does_not_show_green",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetStates::test_degraded_shows_yellow",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetStates::test_error_response_shows_offline",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetStates::test_healthy_shows_green",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetStates::test_network_failure_shows_not_reachable",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetStates::test_offline_uses_dim_text",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetStates::test_shows_host_count",
+          "tests/test_watchdog_ui_honesty.py::TestWatchdogWidgetStates::test_status_uppercased"
+        ]
+      },
+      {
+        "source_file": "tests/test_fleet_infra_overview_removed_contract.py",
+        "sha256": "67c6058f771d06263bac4abf977067d6549328a38caeb4286752f9c0daf819d1",
+        "disposition": "DELETE",
+        "target_owner": "H02",
+        "node_ids": [
+          "tests/test_fleet_infra_overview_removed_contract.py::test_fleet_infra_page_does_not_render_overview_section",
+          "tests/test_fleet_infra_overview_removed_contract.py::test_fleet_section_registry_skips_removed_overview_section"
+        ]
+      },
+      {
+        "source_file": "tests/test_release_ux_qa_contract.py",
+        "sha256": "59aeacbd780f213c953979ef2bc0fc26e2c1aec78ebad399f070d86e4e0bcc65",
+        "disposition": "DELETE",
+        "target_owner": "H01",
+        "node_ids": [
+          "tests/test_release_ux_qa_contract.py::TestMnBodyDNoneRemovalPostLogin::test_css_dnone_utility_is_display_none",
+          "tests/test_release_ux_qa_contract.py::TestMnBodyDNoneRemovalPostLogin::test_dologout_still_reapplies_inline_hide",
+          "tests/test_release_ux_qa_contract.py::TestMnBodyDNoneRemovalPostLogin::test_html_ships_mn_body_with_dnone_default_hidden",
+          "tests/test_release_ux_qa_contract.py::TestMnBodyDNoneRemovalPostLogin::test_show_app_handoff_removes_dnone_class"
+        ]
+      }
+    ]
+  },
+  "playwright": {
+    "expected_nodes": 76,
+    "nodes": [
+      {
+        "id": "[chromium] \u203a accessibility-semantics.spec.js:15:3 \u203a dashboard accessibility semantics \u203a visible form controls have explicit programmatic names on every view",
+        "project": "chromium",
+        "file": "accessibility-semantics.spec.js",
+        "line": 15,
+        "column": 3,
+        "title": "dashboard accessibility semantics \u203a visible form controls have explicit programmatic names on every view",
+        "target_owner": "H09"
+      },
+      {
+        "id": "[chromium] \u203a accessibility-semantics.spec.js:33:3 \u203a dashboard accessibility semantics \u203a symbol-only close controls expose names and work from the keyboard",
+        "project": "chromium",
+        "file": "accessibility-semantics.spec.js",
+        "line": 33,
+        "column": 3,
+        "title": "dashboard accessibility semantics \u203a symbol-only close controls expose names and work from the keyboard",
+        "target_owner": "H09"
+      },
+      {
+        "id": "[chromium] \u203a all-pages-safe-read-buttons.spec.js:118:3 \u203a all-page safe read buttons \u203a Security read buttons render real output",
+        "project": "chromium",
+        "file": "all-pages-safe-read-buttons.spec.js",
+        "line": 118,
+        "column": 3,
+        "title": "all-page safe read buttons \u203a Security read buttons render real output",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a all-pages-safe-read-buttons.spec.js:134:3 \u203a all-page safe read buttons \u203a Network read buttons render real output",
+        "project": "chromium",
+        "file": "all-pages-safe-read-buttons.spec.js",
+        "line": 134,
+        "column": 3,
+        "title": "all-page safe read buttons \u203a Network read buttons render real output",
+        "target_owner": "L02"
+      },
+      {
+        "id": "[chromium] \u203a all-pages-safe-read-buttons.spec.js:144:3 \u203a all-page safe read buttons \u203a Settings read buttons render real output",
+        "project": "chromium",
+        "file": "all-pages-safe-read-buttons.spec.js",
+        "line": 144,
+        "column": 3,
+        "title": "all-page safe read buttons \u203a Settings read buttons render real output",
+        "target_owner": "L04"
+      },
+      {
+        "id": "[chromium] \u203a all-pages-safe-read-buttons.spec.js:59:3 \u203a all-page safe read buttons \u203a Docker read buttons render real output",
+        "project": "chromium",
+        "file": "all-pages-safe-read-buttons.spec.js",
+        "line": 59,
+        "column": 3,
+        "title": "all-page safe read buttons \u203a Docker read buttons render real output",
+        "target_owner": "L02"
+      },
+      {
+        "id": "[chromium] \u203a all-pages-safe-read-buttons.spec.js:76:3 \u203a all-page safe read buttons \u203a System/tools read buttons render real output",
+        "project": "chromium",
+        "file": "all-pages-safe-read-buttons.spec.js",
+        "line": 76,
+        "column": 3,
+        "title": "all-page safe read buttons \u203a System/tools read buttons render real output",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a docker-live-controls.spec.js:42:3 \u203a live Docker controls \u203a Plex logs button returns real output",
+        "project": "chromium",
+        "file": "docker-live-controls.spec.js",
+        "line": 42,
+        "column": 3,
+        "title": "live Docker controls \u203a Plex logs button returns real output",
+        "target_owner": "L02"
+      },
+      {
+        "id": "[chromium] \u203a docker-live-controls.spec.js:61:3 \u203a live Docker controls \u203a Plex restart button reports success and service comes back",
+        "project": "chromium",
+        "file": "docker-live-controls.spec.js",
+        "line": 61,
+        "column": 3,
+        "title": "live Docker controls \u203a Plex restart button reports success and service comes back",
+        "target_owner": "S01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:111:3 \u203a hermetic dashboard behavior oracle \u203a bad password is rejected",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 111,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a bad password is rejected",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:117:3 \u203a hermetic dashboard behavior oracle \u203a empty password is rejected",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 117,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a empty password is rejected",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:124:3 \u203a hermetic dashboard behavior oracle \u203a successful login returns a session token and csrf token",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 124,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a successful login returns a session token and csrf token",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:133:3 \u203a hermetic dashboard behavior oracle \u203a login rejects GET",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 133,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a login rejects GET",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:137:3 \u203a hermetic dashboard behavior oracle \u203a browser login reveals the real dashboard shell",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 137,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a browser login reveals the real dashboard shell",
+        "target_owner": "H02"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:143:3 \u203a hermetic dashboard behavior oracle \u203a Network actions render into the active view instead of hidden Fleet panels",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 143,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a Network actions render into the active view instead of hidden Fleet panels",
+        "target_owner": "H03"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:210:3 \u203a hermetic dashboard behavior oracle \u203a expanding a data panel fetches fresh data and stamps only successful responses",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 210,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a expanding a data panel fetches fresh data and stamps only successful responses",
+        "target_owner": "H03"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:260:3 \u203a hermetic dashboard behavior oracle \u203a verified Fleet writes stamp both sections and cache-only renders do not",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 260,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a verified Fleet writes stamp both sections and cache-only renders do not",
+        "target_owner": "H03"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:292:3 \u203a hermetic dashboard behavior oracle \u203a chaos injection uses the styled non-blocking confirmation flow",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 292,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a chaos injection uses the styled non-blocking confirmation flow",
+        "target_owner": "H04"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:29:3 \u203a hermetic dashboard behavior oracle \u203a unauthenticated dashboard shows the login form",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 29,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a unauthenticated dashboard shows the login form",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:330:3 \u203a hermetic dashboard behavior oracle \u203a authenticated fleet overview returns cache truth",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 330,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a authenticated fleet overview returns cache truth",
+        "target_owner": "H11"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:341:3 \u203a hermetic dashboard behavior oracle \u203a authenticated health returns host state",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 341,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a authenticated health returns host state",
+        "target_owner": "H11"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:350:3 \u203a hermetic dashboard behavior oracle \u203a mutation endpoint rejects GET",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 350,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a mutation endpoint rejects GET",
+        "target_owner": "H04"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:358:3 \u203a hermetic dashboard behavior oracle \u203a dashboard sends content-type protection",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 358,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a dashboard sends content-type protection",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:35:3 \u203a hermetic dashboard behavior oracle \u203a unauthenticated dashboard keeps fleet content covered",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 35,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a unauthenticated dashboard keeps fleet content covered",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:363:3 \u203a hermetic dashboard behavior oracle \u203a dashboard denies framing",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 363,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a dashboard denies framing",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:368:3 \u203a hermetic dashboard behavior oracle \u203a dashboard sends a content security policy",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 368,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a dashboard sends a content security policy",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:373:3 \u203a hermetic dashboard behavior oracle \u203a json api responses carry security headers",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 373,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a json api responses carry security headers",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:378:3 \u203a hermetic dashboard behavior oracle \u203a anonymous fleet access is forbidden",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 378,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a anonymous fleet access is forbidden",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:382:3 \u203a hermetic dashboard behavior oracle \u203a fleet response exposes explicit freshness state",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 382,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a fleet response exposes explicit freshness state",
+        "target_owner": "H11"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:390:3 \u203a hermetic dashboard behavior oracle \u203a health score is numeric and graded",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 390,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a health score is numeric and graded",
+        "target_owner": "H11"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:401:3 \u203a hermetic dashboard behavior oracle \u203a logout invalidates the browser session",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 401,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a logout invalidates the browser session",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:408:3 \u203a hermetic dashboard behavior oracle \u203a unknown api endpoint returns json",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 408,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a unknown api endpoint returns json",
+        "target_owner": "H01"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:418:3 \u203a hermetic dashboard behavior oracle \u203a served javascript is the checked-in application bundle",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 418,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a served javascript is the checked-in application bundle",
+        "target_owner": "H02"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:41:3 \u203a hermetic dashboard behavior oracle \u203a generated Fleet, Security, and System subnav strips stay complete and self-active",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 41,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a generated Fleet, Security, and System subnav strips stay complete and self-active",
+        "target_owner": "H02"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:425:3 \u203a hermetic dashboard behavior oracle \u203a served router is the checked-in zero-dependency view module",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 425,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a served router is the checked-in zero-dependency view module",
+        "target_owner": "H02"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:432:3 \u203a hermetic dashboard behavior oracle \u203a probe failure renders a visible transport failure indicator",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 432,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a probe failure renders a visible transport failure indicator",
+        "target_owner": "H11"
+      },
+      {
+        "id": "[chromium] \u203a hermetic-dashboard.spec.js:82:3 \u203a hermetic dashboard behavior oracle \u203a one view router owns direct, alias, back, and forward navigation",
+        "project": "chromium",
+        "file": "hermetic-dashboard.spec.js",
+        "line": 82,
+        "column": 3,
+        "title": "hermetic dashboard behavior oracle \u203a one view router owns direct, alias, back, and forward navigation",
+        "target_owner": "H02"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:130:3 \u203a live dashboard safe E2E \u203a doctor and infra quick are clean",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 130,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a doctor and infra quick are clean",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:164:5 \u203a live dashboard safe E2E \u203a core system card opens and reads bmc-10",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 164,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a core system card opens and reads bmc-10",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:164:5 \u203a live dashboard safe E2E \u203a core system card opens and reads bmc-11",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 164,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a core system card opens and reads bmc-11",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:164:5 \u203a live dashboard safe E2E \u203a core system card opens and reads firewall",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 164,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a core system card opens and reads firewall",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:164:5 \u203a live dashboard safe E2E \u203a core system card opens and reads switch",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 164,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a core system card opens and reads switch",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:164:5 \u203a live dashboard safe E2E \u203a core system card opens and reads truenas",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 164,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a core system card opens and reads truenas",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:185:3 \u203a live dashboard safe E2E \u203a visible core system cards are clickable",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 185,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a visible core system cards are clickable",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:207:5 \u203a live dashboard safe E2E \u203a safe core endpoint returns real data: TrueNAS pools",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 207,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a safe core endpoint returns real data: TrueNAS pools",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:207:5 \u203a live dashboard safe E2E \u203a safe core endpoint returns real data: bmc-10 status",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 207,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a safe core endpoint returns real data: bmc-10 status",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:207:5 \u203a live dashboard safe E2E \u203a safe core endpoint returns real data: bmc-11 status",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 207,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a safe core endpoint returns real data: bmc-11 status",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:207:5 \u203a live dashboard safe E2E \u203a safe core endpoint returns real data: pfSense status",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 207,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a safe core endpoint returns real data: pfSense status",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:207:5 \u203a live dashboard safe E2E \u203a safe core endpoint returns real data: switch status",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 207,
+        "column": 5,
+        "title": "live dashboard safe E2E \u203a safe core endpoint returns real data: switch status",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:215:3 \u203a live dashboard safe E2E \u203a truenas alerts render as operator-readable output",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 215,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a truenas alerts render as operator-readable output",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:232:3 \u203a live dashboard safe E2E \u203a expanded core read actions render readable output without toast spam",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 232,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a expanded core read actions render readable output without toast spam",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:267:3 \u203a live dashboard safe E2E \u203a terminal sessions open and close without touching power state",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 267,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a terminal sessions open and close without touching power state",
+        "target_owner": "H12"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:287:3 \u203a live dashboard safe E2E \u203a network device terminals return real websocket output",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 287,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a network device terminals return real websocket output",
+        "target_owner": "L02"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:303:3 \u203a live dashboard safe E2E \u203a truenas terminal returns real websocket output",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 303,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a truenas terminal returns real websocket output",
+        "target_owner": "L02"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:313:3 \u203a live dashboard safe E2E \u203a idrac terminal returns real websocket output",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 313,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a idrac terminal returns real websocket output",
+        "target_owner": "L02"
+      },
+      {
+        "id": "[chromium] \u203a live-safe.spec.js:333:3 \u203a live dashboard safe E2E \u203a dashboard does not emit page errors during safe navigation",
+        "project": "chromium",
+        "file": "live-safe.spec.js",
+        "line": 333,
+        "column": 3,
+        "title": "live dashboard safe E2E \u203a dashboard does not emit page errors during safe navigation",
+        "target_owner": "L03"
+      },
+      {
+        "id": "[chromium] \u203a operator-truth.spec.js:25:3 \u203a operator-facing truth \u203a device assignment is read-only and makes no admin request for operators",
+        "project": "chromium",
+        "file": "operator-truth.spec.js",
+        "line": 25,
+        "column": 3,
+        "title": "operator-facing truth \u203a device assignment is read-only and makes no admin request for operators",
+        "target_owner": "H05"
+      },
+      {
+        "id": "[chromium] \u203a operator-truth.spec.js:47:3 \u203a operator-facing truth \u203a hardening remediation requires an explicit host or fleet target",
+        "project": "chromium",
+        "file": "operator-truth.spec.js",
+        "line": 47,
+        "column": 3,
+        "title": "operator-facing truth \u203a hardening remediation requires an explicit host or fleet target",
+        "target_owner": "H05"
+      },
+      {
+        "id": "[chromium] \u203a operator-truth.spec.js:70:3 \u203a operator-facing truth \u203a shortcut help names the exact implemented key map",
+        "project": "chromium",
+        "file": "operator-truth.spec.js",
+        "line": 70,
+        "column": 3,
+        "title": "operator-facing truth \u203a shortcut help names the exact implemented key map",
+        "target_owner": "H05"
+      },
+      {
+        "id": "[chromium] \u203a responsive-layout-sweep.spec.js:129:5 \u203a responsive layout sweep \u203a desktop-1440x1000: main pages and nested tabs stay contained",
+        "project": "chromium",
+        "file": "responsive-layout-sweep.spec.js",
+        "line": 129,
+        "column": 5,
+        "title": "responsive layout sweep \u203a desktop-1440x1000: main pages and nested tabs stay contained",
+        "target_owner": "H10"
+      },
+      {
+        "id": "[chromium] \u203a responsive-layout-sweep.spec.js:129:5 \u203a responsive layout sweep \u203a laptop-1366x768: main pages and nested tabs stay contained",
+        "project": "chromium",
+        "file": "responsive-layout-sweep.spec.js",
+        "line": 129,
+        "column": 5,
+        "title": "responsive layout sweep \u203a laptop-1366x768: main pages and nested tabs stay contained",
+        "target_owner": "H10"
+      },
+      {
+        "id": "[chromium] \u203a responsive-layout-sweep.spec.js:129:5 \u203a responsive layout sweep \u203a narrow-desktop-1100x820: main pages and nested tabs stay contained",
+        "project": "chromium",
+        "file": "responsive-layout-sweep.spec.js",
+        "line": 129,
+        "column": 5,
+        "title": "responsive layout sweep \u203a narrow-desktop-1100x820: main pages and nested tabs stay contained",
+        "target_owner": "H10"
+      },
+      {
+        "id": "[chromium] \u203a responsive-layout-sweep.spec.js:129:5 \u203a responsive layout sweep \u203a phone-390x844: main pages and nested tabs stay contained",
+        "project": "chromium",
+        "file": "responsive-layout-sweep.spec.js",
+        "line": 129,
+        "column": 5,
+        "title": "responsive layout sweep \u203a phone-390x844: main pages and nested tabs stay contained",
+        "target_owner": "H10"
+      },
+      {
+        "id": "[chromium] \u203a responsive-layout-sweep.spec.js:129:5 \u203a responsive layout sweep \u203a tablet-820x1180: main pages and nested tabs stay contained",
+        "project": "chromium",
+        "file": "responsive-layout-sweep.spec.js",
+        "line": 129,
+        "column": 5,
+        "title": "responsive layout sweep \u203a tablet-820x1180: main pages and nested tabs stay contained",
+        "target_owner": "H10"
+      },
+      {
+        "id": "[chromium] \u203a responsive-layout-sweep.spec.js:129:5 \u203a responsive layout sweep \u203a wide-1920x1080: main pages and nested tabs stay contained",
+        "project": "chromium",
+        "file": "responsive-layout-sweep.spec.js",
+        "line": 129,
+        "column": 5,
+        "title": "responsive layout sweep \u203a wide-1920x1080: main pages and nested tabs stay contained",
+        "target_owner": "H10"
+      },
+      {
+        "id": "[chromium] \u203a responsive-layout-sweep.spec.js:129:5 \u203a responsive layout sweep \u203a wide-short-1980x900: main pages and nested tabs stay contained",
+        "project": "chromium",
+        "file": "responsive-layout-sweep.spec.js",
+        "line": 129,
+        "column": 5,
+        "title": "responsive layout sweep \u203a wide-short-1980x900: main pages and nested tabs stay contained",
+        "target_owner": "H10"
+      },
+      {
+        "id": "[chromium] \u203a responsive-layout-sweep.spec.js:167:1 \u203a fleet activity endpoints are not duplicated during initial home/fleet render",
+        "project": "chromium",
+        "file": "responsive-layout-sweep.spec.js",
+        "line": 167,
+        "column": 1,
+        "title": "fleet activity endpoints are not duplicated during initial home/fleet render",
+        "target_owner": "H03"
+      },
+      {
+        "id": "[chromium] \u203a ui-polish.spec.js:124:3 \u203a UI polish regressions \u203a mobile global nav remains available after login",
+        "project": "chromium",
+        "file": "ui-polish.spec.js",
+        "line": 124,
+        "column": 3,
+        "title": "UI polish regressions \u203a mobile global nav remains available after login",
+        "target_owner": "L03"
+      },
+      {
+        "id": "[chromium] \u203a ui-polish.spec.js:161:3 \u203a UI polish regressions \u203a mobile tables and controls stay inside dark shell",
+        "project": "chromium",
+        "file": "ui-polish.spec.js",
+        "line": 161,
+        "column": 3,
+        "title": "UI polish regressions \u203a mobile tables and controls stay inside dark shell",
+        "target_owner": "L03"
+      },
+      {
+        "id": "[chromium] \u203a ui-polish.spec.js:227:3 \u203a UI polish regressions \u203a Fleet optional enrichment degrades without stale loading rows",
+        "project": "chromium",
+        "file": "ui-polish.spec.js",
+        "line": 227,
+        "column": 3,
+        "title": "UI polish regressions \u203a Fleet optional enrichment degrades without stale loading rows",
+        "target_owner": "L01"
+      },
+      {
+        "id": "[chromium] \u203a ui-polish.spec.js:33:3 \u203a UI polish regressions \u203a mobile login card stays inside the viewport",
+        "project": "chromium",
+        "file": "ui-polish.spec.js",
+        "line": 33,
+        "column": 3,
+        "title": "UI polish regressions \u203a mobile login card stays inside the viewport",
+        "target_owner": "L03"
+      },
+      {
+        "id": "[chromium] \u203a ui-polish.spec.js:55:3 \u203a UI polish regressions \u203a Fleet keeps LXC grouped with PVE nodes and sparklines pinned",
+        "project": "chromium",
+        "file": "ui-polish.spec.js",
+        "line": 55,
+        "column": 3,
+        "title": "UI polish regressions \u203a Fleet keeps LXC grouped with PVE nodes and sparklines pinned",
+        "target_owner": "L03"
+      },
+      {
+        "id": "[chromium] \u203a vm-controls-destructive.spec.js:126:3 \u203a destructive VM control acceptance \u203a sandbox clone exercises VM controls and host tools without touching owned VMs",
+        "project": "chromium",
+        "file": "vm-controls-destructive.spec.js",
+        "line": 126,
+        "column": 3,
+        "title": "destructive VM control acceptance \u203a sandbox clone exercises VM controls and host tools without touching owned VMs",
+        "target_owner": "S01"
+      },
+      {
+        "id": "[chromium] \u203a zero-state-web-ux.spec.js:212:1 \u203a complete state without both durable markers never reveals completion",
+        "project": "chromium",
+        "file": "zero-state-web-ux.spec.js",
+        "line": 212,
+        "column": 1,
+        "title": "complete state without both durable markers never reveals completion",
+        "target_owner": "H07"
+      },
+      {
+        "id": "[chromium] \u203a zero-state-web-ux.spec.js:228:1 \u203a successful empty discovery can freeze an explicit empty contract",
+        "project": "chromium",
+        "file": "zero-state-web-ux.spec.js",
+        "line": 228,
+        "column": 1,
+        "title": "successful empty discovery can freeze an explicit empty contract",
+        "target_owner": "H08"
+      },
+      {
+        "id": "[chromium] \u203a zero-state-web-ux.spec.js:40:1 \u203a browser-only wizard builds an explicit fleet contract and verifies completion",
+        "project": "chromium",
+        "file": "zero-state-web-ux.spec.js",
+        "line": 40,
+        "column": 1,
+        "title": "browser-only wizard builds an explicit fleet contract and verifies completion",
+        "target_owner": "H06"
+      }
+    ]
+  },
+  "source_hashes": {
+    "playwright.hermetic.config.js": "0385e53f57a1801388b39d1e24c0c552cbb5a85c0a7b53dda33673099020a70c",
+    "tests/e2e/accessibility-semantics.spec.js": "e78a0a24f053dcff27996422ece227abf81e60ad7ccd6dfc997352534027afcf",
+    "tests/e2e/all-pages-safe-read-buttons.spec.js": "dc9dcee78a5435191328d8e31f742e5b0106b8831cc636b4e62239e2d178b2e0",
+    "tests/e2e/docker-live-controls.spec.js": "2654b171e4c1b1e313249f87efd1c3415aaaef2ba8e39514563926ef728a4e1a",
+    "tests/e2e/hermetic-dashboard.spec.js": "e318f68de8e0ef70b4c187eff764a1cda24267f21bcba913dc4ee1f9517a9ba0",
+    "tests/e2e/live-safe.spec.js": "19b33e48dc6b356bbd12ba32a2ff460912563af1629bdeaaf5e50024ecefc1e2",
+    "tests/e2e/operator-truth.spec.js": "005d4e07713be1c3a5e2eda220b2e9df1aa7d26f1ca9d1139bb2dcbf1ff4bbc5",
+    "tests/e2e/responsive-layout-sweep.spec.js": "69d9d03959336a1803ad59bdea7b805d9322bc244d6d59a51159b8dae5087768",
+    "tests/e2e/ui-polish.spec.js": "cc0fded59add91ac372ae6a655af794e19d6369800df6ffb5f71ab7847e71b1e",
+    "tests/e2e/vm-controls-destructive.spec.js": "d29ac28ba2b4d81c7e542ece8e994a9126f491ec0cb36ab8d91480a1680fe233",
+    "tests/e2e/zero-state-web-ux.spec.js": "8c440ac4c59453367c10d3d07604fe9c26f6016f10fb0d78ea51ce90202bcb7d",
+    "tests/test_ah_semantic_classes_contract.py": "267e7fba464431596e934293755af000333d0bc7b7b8a64f8a0a3609a401e8ec",
+    "tests/test_auth_fetch_silent_opt_contract.py": "82db43267d763430cf5d49ac372e9bc751345922a80812ea9c4404dc89e91f7d",
+    "tests/test_auth_preauth_storm_contract.py": "b3b5d4c02b952b799ec7d9e097c6cff019c6580a84a05d887f2a55ead9bcdd65",
+    "tests/test_blueteam_hardening_contract.py": "fdb77aecf8e2acd22f0ee11d891502fb825839eb05831197abc6ac2c322482d2",
+    "tests/test_blueteam_ux_contract.py": "807753cb95be08af0449f5aa44a0bf302bc97da40f13aad2b8dbd2c52d817413",
+    "tests/test_brand_surface_contract.py": "91fae6adbc759c6a558671f843d02a4c0eae11ea5d0a2558d05b996ed3365db2",
+    "tests/test_browser_deploy_truth.py": "5015fe695d3cd4a10bf57a275d6516dcc51877fbd74a0d7e1d866cbb110112fe",
+    "tests/test_chaos_confirmation_ui_contract.py": "e56f3a9332799d011c30ddbaf761e07482003033dd9253c1227271459bd21738",
+    "tests/test_collection_state_semantics_contract.py": "141735bed4c3d2633679c16aa4d7dc203ec7773e0c8c7cb3e545caa659ae7b6b",
+    "tests/test_dashboard_accessibility_contract.py": "903a13b426021b3b92300aa244b5de750a939c77ddb4f1f3529155e4356562bd",
+    "tests/test_dashboard_operator_truth_contract.py": "68626c888f0a68dcf2bf72a01a293f6fd1843162c11ab57292978b0504f4d883",
+    "tests/test_data_freshness_ui_contract.py": "c3e739824b362d21e2066d62c70910e21c5dca4e203001453f11303e0bcd07b3",
+    "tests/test_dense_ops_layout_contract.py": "ef9510ede774ccaa6f822cb74ceb188542f9816b6a9106131302413340580334",
+    "tests/test_drilldown_affordance_contract.py": "ef28f3b298b56bfa807d2113dd95b0f99733b5a3013cc06baa5684ec7bee8fde",
+    "tests/test_empty_state_evidence_contract.py": "2cff0cc0b23e72cda95763e98ae97ed8cfc62691f3995dac63c9f5986bb37159",
+    "tests/test_fleet_infra_overview_removed_contract.py": "67c6058f771d06263bac4abf977067d6549328a38caeb4286752f9c0daf819d1",
+    "tests/test_inline_style_sweep_contract.py": "fdd453d3e6e2d1b301487cd871a84189b1d998e119546b10d7b7f8a879db99a2",
+    "tests/test_live_polish_contract.py": "61ffababd698484a180cfe47bcc4b5bdffbedb483550483ba9cee61932180d5c",
+    "tests/test_login_form_robustness_contract.py": "d3eeaa94cd9b3f39320dc9689de581e864d4646b7ecf92a4e504c388c785826a",
+    "tests/test_login_home_copy_contract.py": "1343de53fc5bc1568544d5f7c26bbcfe826ba4244384e30540c087448314510a",
+    "tests/test_mobile_density_contract.py": "7713f0c96a20a0a90df0641fd5a64c5c9e60bb1fa776ad88687d6d1810fc942f",
+    "tests/test_operator_truth_contract.py": "46be95c27c997027a4a12a2205d4986d01b317a3ef180fe35e5e11ca53e29366",
+    "tests/test_operator_truth_product_law.py": "4f9295425da740c12bc6aa02a356285221581c49aa26083b01b9305510e0abba",
+    "tests/test_public_web_security_frontend_contract.py": "d50fc8de6e1bf5e946194e67a5f9f2fdf7956b9b62402b4c5fe7293e8f63e5bb",
+    "tests/test_release_ux_qa_contract.py": "59aeacbd780f213c953979ef2bc0fc26e2c1aec78ebad399f070d86e4e0bcc65",
+    "tests/test_settings_device_assignment_grouping_contract.py": "9c70ee5f29b7558214c0859a8ca51e77ed4254d046b8947adc0681ff855f0dad",
+    "tests/test_setup_copy_contract.py": "2d746f26b68849f74e9adb6ca9eccfcc0ef54d49b4bbd96bdfe82378f5958bd3",
+    "tests/test_single_view_router_contract.py": "b52cf2bf2ce93065602069b39d79fd07f40735be87be3e1fd0b93dc87a40ded5",
+    "tests/test_snmp_setup_ui_contract.py": "65ad5f33fcb63f4bf52e638a818c8293e161b8786b963dea1887d2efa84fe442",
+    "tests/test_ssl_manager_onboarding_ui_contract.py": "b12aa038c25dba366304b9948853e98563911eb9c7312024066fd377119ced6b",
+    "tests/test_status_copy_tone.py": "24ee0c7400744ba9d47849d5108d47cf872fda6f9585bbab0cf1f2df69406ecb",
+    "tests/test_subnav_symmetry_contract.py": "301510cd243dd27fe25475cac9f475f3f9058b7cbaa507ae599c8019d9a83145",
+    "tests/test_watchdog_ui_honesty.py": "8daabc726181df594a81fd306a7a802650838b8cb0e019eb24d1878e9f30189e",
+    "tests/test_web_csp_inline_contract.py": "83feff8fa5bb554c7a2a542d9f7d53f9cc673977aec7c4f0cc5975c33a4b6dbe",
+    "tests/test_web_external_asset_contract.py": "b6085f3f6b7c5582819c27310792da305d042f7f6856ea528c7c3c9995fda2a2",
+    "tests/test_zero_dependency_fonts_contract.py": "251268fc1abcaaa796c266b297eac4a14da96ca4e3fb4f3acf06387503eac8f3"
+  },
+  "collection_commands": {
+    "python": "python -m pytest --collect-only -q -o addopts= -p no:cacheprovider <36 frozen files>",
+    "playwright": "playwright test --config=playwright.hermetic.config.js --list"
+  }
+}

@@ -1,0 +1,37 @@
+# Example: Host Recovery Playbook
+# Generic host recovery — check connectivity, restart services, verify.
+
+[playbook]
+name = "Host Recovery"
+description = "Verify and recover an unresponsive host"
+trigger = "host_unreachable"
+
+[[step]]
+name = "Ping check"
+type = "check"
+command = "echo pong"
+target = "docker-media"
+expect = "pong"
+timeout = 10
+
+[[step]]
+name = "Check disk usage"
+type = "check"
+command = "df -h / | tail -1 | awk '{print $5}'"
+target = "docker-media"
+expect = "%"
+
+[[step]]
+name = "Check memory pressure"
+type = "check"
+command = "free -m | awk '/Mem:/{printf \"%d/%dMB\", $3, $2}'"
+target = "docker-media"
+expect = "MB"
+
+[[step]]
+name = "Restart critical services"
+type = "action"
+command = "systemctl restart docker"
+target = "docker-media"
+confirm = true
+timeout = 60

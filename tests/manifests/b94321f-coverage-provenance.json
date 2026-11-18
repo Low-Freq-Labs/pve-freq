@@ -1,0 +1,9 @@
+{
+  "artifact_sha256": "7ecea83c947bd54c2444d05768513067a7b42bdf27062a942a7d55f62231841f",
+  "canonical": true,
+  "clean": true,
+  "command": ".venv/bin/python -m coverage json -o /tmp/pve-freq-stage0-coverage.json",
+  "schema_version": 1,
+  "source_sha": "b94321f968d1f2601b40404c3aff242e5858ced7",
+  "totals_sha256": "d74644948d34f9c0eb1d07a8c0ce9ab4946718bcb42fa40d5db5f36b56333913"
+}

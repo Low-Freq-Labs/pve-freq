@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE FREQ</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%230d1117'/%3E%3Cpath d='M7 8h18v3.5H11.5v4H20v3.5H11.5V24H7V8z' fill='%23c9d1d9'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/css/app.css?v=pve-lab-window-20261113-r1">
+<link rel="stylesheet" href="/static/css/cockpit.css?v=pve-lab-window-20261113-r1">
+<link rel="stylesheet" href="/static/css/cockpit-workspaces.css?v=pve-lab-window-20261113-r1">
+<link rel="stylesheet" href="/static/css/registered-lab-panel.css?v=pve-lab-window-20261113-r1">
+<link rel="stylesheet" href="/static/css/lab-window-panel.css?v=pve-lab-window-20261113-r1">
+<link rel="stylesheet" href="/static/vendor/xterm/xterm.min.css?v=pve-lab-window-20261113-r1">
+<script src="/static/vendor/xterm/xterm.min.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/vendor/xterm/addon-fit.min.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/vendor/xterm/addon-clipboard.min.js?v=pve-lab-window-20261113-r1"></script>
+<style id="configured-selection-style">#container-cards,#services-container-cards,#media-container-cards{display:block;min-width:0;max-width:100%} [id$="-configured-host"],[id$="-configured-service"]{margin-bottom:12px} [id$="-configured-host-label"],[id$="-configured-service-label"]{display:block;margin-top:12px} [id$="-configured-summary"],[id$="-configured-detail"]{border:1px solid var(--border);padding:12px;margin-top:12px} [id$="-configured-detail"] button{margin:4px;max-width:100%;white-space:normal}</style>
+<style id="cluster-pilot-deferred-style">[data-cluster-pilot-deferred]{display:none!important}</style>
+</head>
+<body>
+
+<!-- Login Overlay — inline handlers extracted to app.js delegator +
+     CSS (.login-input, .login-submit-btn). Wrapped in a real <form>
+     with method=post action=# so browser autofill populates .value
+     reliably AND so onsubmit goes through a single entry point. See
+     registerLoginBindings() for the submit handler. -->
+<div id="login-overlay" class="login-overlay">
+  <div class="login-card">
+    <div class="login-wordmark">PVE FREQ</div>
+    <div class="login-tagline">operator console</div>
+    <div id="login-setup-banner" class="login-setup-banner d-none"></div>
+    <form id="login-form" class="login-form" method="post" action="#" autocomplete="on">
+      <div class="login-fields">
+        <input id="login-user" class="login-input" name="username" aria-label="Username" placeholder="Username" autocomplete="username">
+        <input id="login-pass" class="login-input" name="password" aria-label="Password" type="password" placeholder="Password" autocomplete="current-password">
+        <button id="login-submit-btn" class="login-submit-btn" type="submit">LOG IN</button>
+      </div>
+      <div id="login-error" class="login-error" role="alert" aria-live="assertive" aria-atomic="true"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div class="mn">
+<div class="mn-header">
+  <div class="flex-gap-16-center">
+    <button type="button" data-view="home" class="pve-freq-wordmark">PVE FREQ</button><span class="nav-ver-label" id="nav-ver"></span>
+    <div class="nav-divider"></div>
+    <div><h1 id="page-title" class="fs-16">Home</h1><span id="route-location-status" class="route-location-status" role="status" aria-live="polite" aria-atomic="true"></span><div class="tagline fs-11" id="header-tagline" ></div></div>
+  </div>
+  <div class="flex-gap-16-center">
+    <span id="stream-status" class="stream-status">STREAM INACTIVE</span>
+    <span id="watchdog-status"></span>
+    <button id="header-user-btn" class="header-user-btn d-none" data-action="openUserMenu"><span id="header-user-icon" class="header-user-icon"></span><span id="header-user-name" class="header-user-name"></span><span id="header-user-role" class="header-user-role"></span></button>
+    <span class="header-time-label" id="header-time"></span>
+  </div>
+</div>
+<div id="update-banner" class="update-banner d-none">
+  <span id="update-banner-text"></span>
+  <button class="update-banner-dismiss" data-action="dismissUpdateBanner" aria-label="Dismiss update notice" disabled aria-disabled="true" title="Unavailable in this read-only entry">&times;</button>
+</div>
+<div id="operator-truth-banner" class="operator-truth-banner d-none">
+  <span id="operator-truth-text"></span>
+</div>
+<main class="mn-body d-none" id="mn-body">
+
+<!-- ════════ SINGLE VIEW ROUTER ROOT ════════ -->
+<div id="dashboard-root">
+<!-- Toolbar -->
+<div class="view-toolbar">
+<div class="view-toolbar-row">
+  <button class="mobile-menu-btn" data-action="toggleNavItems" aria-label="Menu">&#9776;</button>
+  <nav id="nav-items" class="nav-toolbar" aria-label="Primary">
+  <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
+  <button class="fleet-btn view-btn" data-view="fleet">FLEET</button>
+  <button class="fleet-btn view-btn" data-view="network">NETWORK</button>
+  <button class="fleet-btn view-btn" data-view="storage">STORAGE</button>
+  <button id="pve-firewall-nav" type="button" class="fleet-btn view-btn" data-view="pve-firewall">PVE FIREWALL</button>
+  <button class="fleet-btn view-btn" data-view="docker">DOCKER</button>
+  <button class="fleet-btn view-btn" data-view="security">SECURITY</button>
+  <button class="fleet-btn view-btn" data-view="vault">VAULT</button>
+  <button class="fleet-btn view-btn" data-view="tools">SYSTEM</button>
+  <button id="registered-lab-nav" type="button" class="fleet-btn view-btn" data-view="registered-lab">LAB</button>
+  <div class="flex-1"></div>
+  <button class="fleet-btn view-btn opacity-7" data-view="settings">&#9881; SETTINGS</button>
+  </nav>
+</div></div>
+<p id="cluster-pilot-scope">Observe your PVE fleet by node. Management workspaces are available to explore; controls marked unavailable are not connected yet.</p>
+<div id="storage-view" class="d-none" hidden inert data-cluster-pilot-deferred></div>
+<div id="registered-lab-view" class="d-none" hidden inert><div id="lab-window-workspace"></div><section id="registered-lab-workspace" aria-label="Registered lab power"></section></div>
+<!-- HOME VIEW -->
+<div id="home-view">
+<!-- Widget dashboard -->
+<div id="home-widgets"></div>
+<!-- Empty state — dense card, no decorative ghost glyph. The old
+     36px hamburger at opacity 0.15 was pure chrome; the home page
+     reads the same state without it, faster. -->
+<div id="home-empty" inert hidden data-cluster-pilot-deferred>
+  <div style="font-size:13px;color:var(--text);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">no widgets configured</div>
+  <div style="font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:14px">QUICK START loads the default operator set. LAYOUT selects the fleet, docker, security, and system widgets that matter for this install.</div>
+  <button class="fleet-btn c-purple-active" data-action="openLayoutConfig"  disabled aria-disabled="true" title="Unavailable in this read-only entry">&#9776; CONFIGURE DASHBOARD</button>
+</div>
+<!-- Version and environment are already rendered in the top header,
+     so the old home-only footer was redundant chrome on every cold load.
+     Kept the element id so any code still setting its textContent stays
+     harmless, but it no longer draws a border row on the empty home. -->
+<div id="home-ver-footer" class="d-none" inert hidden data-cluster-pilot-deferred></div>
+</div><!-- close home-view -->
+<!-- FLEET VIEW (hidden by default) -->
+<div id="fleet-view" class="d-none">
+<section id="pve-inventory-report" class="section pve-inventory-report" aria-label="PVE inventory"></section>
+<section id="pve-host-configuration" class="section pve-host-configuration" aria-label="Configure PVE sources" hidden></section>
+<div class="sub-tabs" id="subtabs-fleet" data-subnav-group="fleet" data-subnav-active="fleet" inert hidden data-cluster-pilot-deferred></div>
+<section id="selected-device-panel" class="section" aria-labelledby="selected-device-heading" inert hidden data-cluster-pilot-deferred>
+  <h3 id="selected-device-heading">Device selection</h3>
+  <p>Choose a device from the visible inventory. Selection provides navigation context only.</p>
+  <button id="selected-device-refresh" type="button" aria-controls="selected-device-select selected-device-status" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ DEVICES</button>
+  <label for="selected-device-select">Device</label>
+  <select id="selected-device-select" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Read devices to choose</option></select>
+  <button id="selected-device-clear" type="button" aria-controls="selected-device-selection" disabled aria-disabled="true" title="Unavailable in this read-only entry">CLEAR SELECTION</button>
+  <p id="selected-device-status" role="status" aria-live="polite">Not observed. Read devices to begin.</p>
+  <p id="selected-device-selection">No device selected.</p>
+</section>
+
+<section id="pve-storage-workspace" class="section" aria-label="Storage observations" inert hidden data-cluster-pilot-deferred>
+  <h2>Storage observations</h2>
+  <p>Storage observations unavailable. No current storage selection is connected.</p>
+</section>
+
+<section id="pve-console-workspace" class="section" aria-label="Console availability" inert hidden data-cluster-pilot-deferred>
+  <h3>Console</h3>
+  <p>Interactive console access is unavailable in this entry.</p>
+  <button id="pve-console-availability" type="button">Console availability</button>
+  <div id="pve-console-out" role="status" aria-live="polite"></div>
+</section>
+
+<section id="guest-read-workspace" class="section" aria-labelledby="guest-read-heading" inert hidden data-cluster-pilot-deferred>
+  <h3 id="guest-read-heading">Guest profiles</h3>
+  <p>Choose a configured source, then a guest to read its reported status and network addresses.</p>
+  <button id="guest-read-start" type="button" disabled aria-disabled="true">READ CONFIGURED SOURCES</button>
+  <p id="guest-read-status" role="status" aria-live="polite">Guest profiles are unavailable.</p>
+  <div id="guest-read-sources"><p>No configured source selected.</p></div>
+  <div id="guest-read-inventory"><p>No guest selected.</p></div>
+</section>
+
+<section id="fleet-os-accounts" class="section" aria-labelledby="fleet-os-accounts-heading" inert hidden data-cluster-pilot-deferred>
+  <h3 id="fleet-os-accounts-heading">Fleet OS accounts</h3>
+  <p>Fleet account changes are unavailable. Host coverage and account information have not been verified.</p>
+  <p>Dashboard sign-in accounts are managed in Security &gt; Access.</p>
+</section>
+
+<!-- Fleet Stats group -->
+<div class="section layout-section" id="fleet-sec-stats" inert hidden data-cluster-pilot-deferred>
+  <div class="section-header"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="stats" id="metrics-summary"></div>
+  </div>
+</div>
+<!-- Hosts & VMs & LXC group -->
+<div class="section layout-section" id="fleet-sec-infra" inert hidden data-cluster-pilot-deferred>
+  <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs &amp; LXC</h3><div class="flex-1"></div><input id="fleet-filter" class="fleet-filter-input" aria-label="Filter hosts and workloads" placeholder="&#128269; Filter..." disabled aria-disabled="true" title="Unavailable in this read-only entry"><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
+  <div class="section-body"><div id="metrics-cards"></div><p id="fleet-ct-observation" class="exec-out">No admitted CT observation. Container counts unknown.</p></div>
+</div>
+<!-- Quick Terminal -->
+<div class="section layout-section" id="fleet-sec-terminal" inert hidden data-cluster-pilot-deferred>
+  <div class="section-header fleet-terminal-header"><h3>Terminal</h3><span class="fleet-terminal-header-help">Open a live SSH shell to any host, VM, or LXC container.</span><span class="chev ml-8">▾</span></div>
+  <div class="section-body">
+    <div class="fleet-terminal-shell">
+      <div class="fleet-terminal-picker">
+      <div class="fleet-terminal-field fleet-terminal-type">
+        <label class="c-dim-fs12" for="term-type">Type</label>
+        <select id="term-type" class="input w-120" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          <option value="node">PVE Node</option>
+          <option value="vm">VM</option>
+          <option value="ct">Container</option>
+          <option value="host">Fleet Host</option>
+          <option value="pfsense">pfSense</option>
+          <option value="truenas">TrueNAS</option>
+          <option value="idrac">iDRAC</option>
+          <option value="switch">Switch</option>
+        </select>
+      </div>
+      <div class="fleet-terminal-field fleet-terminal-target">
+        <label class="c-dim-fs12" for="term-target">Target</label>
+        <select id="term-target" class="input w-260" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Select...</option></select>
+      </div>
+      <button class="fleet-btn c-purple-active" data-action="launchTermFromPicker" style="color:var(--cyan)" disabled aria-disabled="true" title="Unavailable in this read-only entry">&#9002; OPEN TERMINAL</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- LXC Containers -->
+<div class="section layout-section d-none" id="fleet-sec-ct" inert hidden data-cluster-pilot-deferred>
+  <div class="section-header"><h3>LXC Containers</h3><div class="flex-1"></div>
+    <button class="fleet-btn" data-action="loadLxcContainers" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button>
+    <span class="chev ml-8">▾</span>
+  </div>
+  <div class="section-body">
+    <div class="stats" id="ct-stats"></div>
+    <div id="ct-cards" class="cards"></div>
+    <div class="card-block-bg2">
+      <h4 class="helptext-sm-mb8">CONTAINER MANAGEMENT</h4>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="fleet-btn" data-action="openCtTool" data-arg="create" disabled aria-disabled="true" title="Unavailable in this read-only entry">CREATE</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="clone" disabled aria-disabled="true" title="Unavailable in this read-only entry">CLONE</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="migrate" disabled aria-disabled="true" title="Unavailable in this read-only entry">MIGRATE</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="resize" disabled aria-disabled="true" title="Unavailable in this read-only entry">RESIZE DISK</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="snapshot" disabled aria-disabled="true" title="Unavailable in this read-only entry">SNAPSHOT</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="rollback" disabled aria-disabled="true" title="Unavailable in this read-only entry">ROLLBACK</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="exec" disabled aria-disabled="true" title="Unavailable in this read-only entry">EXEC</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="config" disabled aria-disabled="true" title="Unavailable in this read-only entry">CONFIG</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="templates" disabled aria-disabled="true" title="Unavailable in this read-only entry">TEMPLATES</button>
+      </div>
+      <div id="ct-tool-form"></div>
+      <div id="ct-tool-out"></div>
+    </div>
+  </div>
+</div>
+  <!-- Lab Equipment (collapsed) -->
+<div class="section collapsed layout-section" id="fleet-lab-section" inert hidden data-cluster-pilot-deferred>
+  <div class="section-header"><h3>Lab Equipment</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="fleet-lab-cards" class="lab-card-grid"></div>
+  </div>
+</div>
+<div class="section layout-section" id="fleet-sec-network-topology" inert hidden data-cluster-pilot-deferred>
+  <div class="section-header"><h3>Network Topology</h3><div class="flex-1"></div><button class="fleet-btn mr-4" data-action="resetTopoLayout" disabled aria-disabled="true" title="Unavailable in this read-only entry">RESET LAYOUT</button><button class="fleet-btn" data-action="loadTopology" data-expand-fetch="off" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="topo-legend" class="topo-legend">
+      <span style="color:var(--purple-light)">&#9632;</span> PVE Node
+      <span class="text-green">&#9632;</span> VM (running)
+      <span class="text-dim">&#9632;</span> VM (stopped)
+      <span class="c-red">&#9632;</span> Unreachable
+      <span style="color:var(--blue)">&#9632;</span> Device
+    </div>
+    <svg id="topo-svg" width="100%" height="700"></svg>
+    <div id="topo-info" class="helptext-mt8"></div>
+  </div>
+</div>
+<div class="section layout-section" id="fleet-sec-network-monitoring" inert hidden data-cluster-pilot-deferred>
+  <div class="section-header"><h3>Network Monitoring</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadNetworkPage" data-expand-fetch="off" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="fleet-network-grid">
+      <div class="fleet-network-panel">
+        <div class="fleet-network-panel-head">
+          <h4>Switch Fleet</h4>
+          <div class="stats compact-stats fleet-network-stats" id="net-switch-stats"></div>
+        </div>
+        <div class="responsive-table-wrap"><table><thead><tr><th>Switch</th><th>Model</th><th>Firmware</th><th>Ports</th><th>Uptime</th><th>Status</th></tr></thead><tbody id="net-switch-tbl"></tbody></table></div>
+      </div>
+      <div class="fleet-network-panel">
+        <div class="fleet-network-panel-head"><h4>Poll Data / Interfaces</h4></div>
+        <div class="flex-wrap-8-mb12">
+          <button class="fleet-btn" type="button" id="fleet-netmon-samples" data-expand-fetch="off" data-action="loadNetmonData" disabled aria-disabled="true" title="Unavailable in this read-only entry">POLL DATA</button>
+          <button class="fleet-btn" type="button" id="fleet-netmon-interfaces" data-expand-fetch="off" data-action="loadNetmonInterfaces" disabled aria-disabled="true" title="Unavailable in this read-only entry">INTERFACES</button>
+        </div>
+        <p id="fleet-netmon-notice">Use POLL DATA to read saved samples or INTERFACES to read returned interface observations. These results do not establish live health or complete host coverage.</p>
+        <div class="exec-out mt-8" id="fleet-netmon-out" data-network-role="netmon-out">Click to load network monitoring data.</div>
+      </div>
+    </div>
+    <div class="fleet-network-panel mt-12" id="fleet-snmp-setup-section" data-network-role="snmp-setup-section">
+      <div class="fleet-network-panel-head">
+        <h4>SNMP Setup</h4>
+        <div class="stats compact-stats fleet-network-stats" id="fleet-snmp-setup-stats" data-network-role="snmp-setup-stats"></div>
+      </div>
+      <div id="fleet-snmp-setup-main" data-network-role="snmp-setup-main"><p>Read-only SNMP metadata and saved records. Credential setup, probing and changes are unavailable here. Expand this section and use original Refresh to read.</p></div>
+    </div>
+  </div>
+</div>
+</div><!-- close fleet-view -->
+<div id="pve-firewall-view" hidden inert style="display:none">
+  <div id="pve-firewall-workspace">
+    <h2>PVE firewall</h2>
+    <p>PVE firewall is unavailable. Select an authorized datacenter, node, or guest before this workspace can be connected.</p>
+    <dl>
+      <dt data-firewall-row="K01">Policy and scope</dt><dd>Policy and scope observations are unavailable.</dd>
+      <dt data-firewall-row="K02">Rules</dt><dd>Rules and editing are unavailable.</dd>
+      <dt data-firewall-row="K03">Groups</dt><dd>Groups and dependency coverage are unavailable.</dd>
+      <dt data-firewall-row="K04">IP sets</dt><dd>IP sets and reference coverage are unavailable.</dd>
+      <dt data-firewall-row="K05">Aliases</dt><dd>Aliases and scoped resolution are unavailable.</dd>
+      <dt data-firewall-row="K06">Logs</dt><dd>Logs and query coverage are unavailable. This does not establish an empty result.</dd>
+      <dt data-firewall-row="K07">Apply and recovery</dt><dd>Preview, apply, operation lookup and recovery are unavailable.</dd>
+    </dl>
+  </div>
+</div>
+
+
+<!-- DOCKER VIEW -->
+<div id="docker-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="section layout-section" id="docker-sec-containers">
+  <div class="section-header"><h3>Containers</h3><div class="stats" id="container-stats"></div><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="docker-subnav mb-8">
+      <button class="fleet-btn docker-sub active-view" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all" disabled aria-disabled="true" title="Unavailable in this read-only entry">ALL</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-services" data-action="switchDockerSub" data-arg="services" disabled aria-disabled="true" title="Unavailable in this read-only entry">SERVICES</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-media" data-action="switchDockerSub" data-arg="media" disabled aria-disabled="true" title="Unavailable in this read-only entry">MEDIA</button>
+      <button class="fleet-btn docker-sub" id="registry-tab" type="button" data-dsub="docker-registry" data-action="switchDockerSub" data-arg="registry" disabled aria-disabled="true" title="Unavailable in this read-only entry">REGISTRY</button>
+      <button class="fleet-btn docker-sub" id="docker-fleet-tab" type="button" aria-controls="docker-sub-fleet-inv" data-dsub="docker-fleet-inv" data-action="switchDockerSub" data-arg="fleet-inv" disabled aria-disabled="true" title="Unavailable in this read-only entry">FLEET INVENTORY</button>
+    </div>
+    <!-- SERVICES sub-view (default) -->
+    <div id="docker-sub-services" class="d-none">
+      <div id="stack-actions" class="docker-subnav-actions">
+        <button type="button" class="fleet-btn docker-stack-action" data-action="loadStackInfo" data-arg="status" id="stack-status-button" disabled aria-disabled="true" title="Unavailable in this read-only entry">STACK STATUS</button>
+        <button type="button" class="fleet-btn docker-stack-action" data-action="loadStackInfo" data-arg="health" id="stack-health-button" disabled aria-disabled="true" title="Unavailable in this read-only entry">STACK HEALTH</button>
+      </div>
+      <div id="stack-info" class="mb-12"></div>
+      <div id="services-container-cards" class="cards docker-container-grid"></div>
+    </div>
+    <!-- ALL containers sub-view -->
+    <div id="docker-sub-all">
+      <div id="container-cards" class="cards docker-container-grid"></div>
+      <div class="exec-out" id="container-logs">Configured service logs are unavailable.</div>
+    </div>
+    <!-- MEDIA sub-view -->
+    <div id="docker-sub-media" class="d-none">
+      <div id="media-container-cards" class="cards mb-16"></div>
+      <div class="section">
+        <div class="section-header"><h3>Downloads</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDownloadDetail" disabled aria-disabled="true" title="Unavailable in this read-only entry">DETAIL VIEW</button><span class="chev">▾</span></div>
+        <div class="section-body">
+          <div class="stats" id="dl-stats"></div>
+          <div id="dl-detail" class="mb-8"></div>
+          <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><h3>Streams</h3><span class="chev">▾</span></div>
+        <div class="section-body">
+          <div class="stats" id="stream-stats"></div>
+          <table><thead><tr><th>User</th><th>Title</th><th>Type</th><th>Quality</th><th>State</th></tr></thead><tbody id="stream-table"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <!-- REGISTRY sub-view -->
+    <div id="docker-sub-registry" class="d-none">
+      <div class="flex-row-8-mb12-center-wrap">
+        <button class="fleet-btn c-purple-active" id="registry-rescan-disabled" type="button" aria-describedby="registry-operation-notice" disabled aria-disabled="true" title="Unavailable in this read-only entry">RESCAN FLEET</button>
+        <button class="fleet-btn" id="registry-refresh" type="button" data-action="loadContainerRegistry" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button>
+        <span id="registry-status" class="text-meta">Select Registry or REFRESH to read saved configuration.</span>
+      </div>
+      <p id="registry-operation-notice">Registry changes and rescans are unavailable until target and operation ownership are defined. Drafts are not submitted.</p>
+      <p id="registry-observation-notice">Saved-configuration snapshots and unsent drafts only. Displayed observations and draft choices may be retained, split across responses, or partially updated. A received response does not confirm synchronized choices, current configuration, unique host identity, or an operation target.</p>
+      <div id="rescan-results"></div>
+      <div id="registry-table" style="min-width:0;max-width:100%">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;min-width:0">
+          <label id="registry-group-label" for="registry-group">Reported key group</label>
+          <select id="registry-group" class="input" style="min-width:0;max-width:100%;width:280px" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Choose reported key group...</option></select>
+          <label id="registry-record-label" for="registry-record">Saved record</label>
+          <select id="registry-record" class="input" style="min-width:0;max-width:100%;width:280px" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Choose saved record...</option></select>
+        </div>
+        <div id="registry-summary" style="max-height:min(480px,60vh);overflow:auto;overflow-wrap:anywhere;min-width:0;min-height:1px"><p>No saved-configuration observation selected.</p></div>
+        <div id="registry-detail" aria-label="Selected saved record" style="max-height:min(480px,60vh);overflow:auto;overflow-wrap:anywhere;min-width:0;min-height:1px"></div>
+      </div>
+      <div style="margin-top:12px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+        <h4 class="helptext-mb8">ADD CONTAINER</h4>
+        <div class="flex-gap-8-center-wrap">
+          <input class="input w-160" id="reg-name" aria-label="Container name" placeholder="Container name" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          <select class="input w-160" id="reg-vmid" aria-label="Container virtual machine" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Select VM...</option></select>
+          <input class="input w-100" id="reg-port" aria-label="Container port" placeholder="Port (optional)" type="number" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          <button class="fleet-btn" id="registry-add-disabled" type="button" aria-describedby="registry-operation-notice" disabled aria-disabled="true" title="Unavailable in this read-only entry">ADD</button>
+          <span id="reg-msg" class="text-meta">Unsent draft. Choices shown are reported-key representations, not operation targets.</span>
+        </div>
+      </div>
+    </div>
+    <!-- FLEET INVENTORY sub-view -->
+    <div id="docker-sub-fleet-inv" class="d-none">
+      <div class="helptext-mb12">Configured Docker host observations. Collection age is not live health.</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <button id="docker-fleet-refresh" type="button" aria-controls="docker-fleet-table" class="fleet-btn c-purple-active" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button>
+        <label id="docker-fleet-host-label" for="docker-fleet-host">Host</label>
+        <select id="docker-fleet-host" style="max-width:100%;min-width:0" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Refresh required</option></select>
+        <label id="docker-fleet-container-label" for="docker-fleet-container">Container</label>
+        <select id="docker-fleet-container" style="max-width:100%;min-width:0" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Select a host first</option></select>
+      </div>
+      <div id="docker-fleet-stats" class="mb-12" role="status" style="min-height:1em">Refresh required</div>
+      <div id="docker-fleet-table" tabindex="0" role="region" aria-label="Configured Docker host observations" style="min-height:1em;max-width:100%;max-height:min(480px,60vh);overflow:auto;overflow-wrap:anywhere">Enter this subview or Refresh to read configured Docker hosts.</div>
+      <div id="docker-fleet-detail" tabindex="0" role="region" aria-label="Selected Docker container observation" style="min-height:1em;max-width:100%;max-height:min(480px,60vh);overflow:auto;overflow-wrap:anywhere"></div>
+    </div>
+  </div>
+</div>
+</div><!-- close docker-view -->
+
+<!-- Compatibility route `media` is resolved by VIEW_ALIASES to Docker. -->
+
+<!-- SECURITY VIEW — Overview -->
+<div id="security-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-security" data-subnav-group="security" data-subnav-active="security"></div>
+<div class="section layout-section" id="sec-risk">
+  <div class="section-header"><h3>Configured risk information</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <p id="risk-chain-label">Reported configured chain</p>
+    <div class="chain" id="risk-chain"></div>
+    <p id="risk-note" class="c-dim-mb12-fs12">Reported configuration only. Chain order, severity, impact and recovery notes are not verified topology or recovery guarantees. Configuration availability, completeness and freshness are unknown.</p>
+    <table><thead><tr><th>Reported target</th><th>Configured severity</th><th>Reported primary impact</th><th>Reported recovery notes</th></tr></thead><tbody id="risk-tbl"></tbody></table>
+  </div>
+</div>
+<div class="section layout-section" id="sec-policies">
+  <div class="section-header"><h3>Built-in policy definitions</h3><span class="chev">▾</span></div>
+  <div class="section-body"><p id="policies-note">Built-in definitions only. Enforcement and compliance are not assessed.</p><div id="policies-c"></div></div>
+</div>
+<div class="section layout-section">
+  <div class="section-header"><h3>Security Posture</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="stats" id="sec-posture-stats"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+      <div>
+        <h4 class="helptext-mb8">SECRETS AUDIT</h4>
+        <div id="sec-secrets-audit"><div class="exec-out">Loading...</div></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="fleet-btn" data-action="loadSecretsLeases" disabled aria-disabled="true" title="Unavailable in this read-only entry">VIEW LEASES</button>
+          <button class="fleet-btn" data-action="loadSecretsScan" disabled aria-disabled="true" title="Unavailable in this read-only entry">SCAN RESULTS</button>
+        </div>
+        <div id="sec-secrets-detail" class="mt-8"></div>
+      </div>
+      <div>
+        <h4 class="helptext-mb8">COMPLIANCE STATUS</h4>
+        <div id="sec-comply-status"><div class="exec-out">Loading...</div></div>
+      </div>
+    </div>
+    <div class="mt-16">
+      <h4 class="helptext-mb8">CERTIFICATE SUMMARY</h4>
+      <div id="sec-cert-summary"><div class="exec-out">Loading...</div></div>
+    </div>
+    <div class="mt-16">
+      <h4 class="helptext-mb8">PATCH STATUS</h4>
+      <div id="sec-patch-status"><div class="exec-out">Loading...</div></div>
+    </div>
+  </div>
+</div>
+</div><!-- close security-view -->
+
+<!-- SECURITY — Hardening -->
+<div id="sec-hardening-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-sec-hardening" data-subnav-group="security" data-subnav-active="sec-hardening"></div>
+<div class="section layout-section" id="sec-audit">
+  <div class="section-header"><h3>Audit</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12-wrap">
+      <button class="fleet-btn c-purple-active" data-audit="all" disabled aria-disabled="true" title="Unavailable in this read-only entry">FULL AUDIT</button>
+      <button class="fleet-btn" data-audit="ssh-root" disabled aria-disabled="true" title="Unavailable in this read-only entry">SSH ROOT LOGIN</button>
+      <button class="fleet-btn" data-audit="ssh-pass" disabled aria-disabled="true" title="Unavailable in this read-only entry">SSH PASSWORD AUTH</button>
+      <button class="fleet-btn" data-audit="ssh-empty" disabled aria-disabled="true" title="Unavailable in this read-only entry">EMPTY PASSWORDS</button>
+      <button class="fleet-btn" data-audit="ports" disabled aria-disabled="true" title="Unavailable in this read-only entry">OPEN PORTS</button>
+      <button class="fleet-btn" data-audit="failed" disabled aria-disabled="true" title="Unavailable in this read-only entry">FAILED SERVICES</button>
+      <button class="fleet-btn" data-audit="firewall" disabled aria-disabled="true" title="Unavailable in this read-only entry">FIREWALL STATUS</button>
+      <button class="fleet-btn" data-action="runSshSweep" disabled aria-disabled="true" title="Unavailable in this read-only entry">POLICY SWEEP</button>
+    </div>
+    <div id="audit-c"></div>
+    <div id="sweep-c" class="mt-12"></div>
+  </div>
+</div>
+<div class="section layout-section" id="sec-harden">
+  <div class="section-header"><h3>Hardening</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12-wrap">
+      <button class="fleet-btn c-purple-active" data-action="runHarden"  disabled aria-disabled="true" title="Unavailable in this read-only entry">FULL HARDENING AUDIT</button>
+      <select id="harden-target" class="input-field w-180" aria-label="Hardening remediation target" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+        <option value="">Select remediation target...</option>
+        <option value="all">ALL FLEET HOSTS</option>
+      </select>
+      <button class="fleet-btn" data-action="hardenAction" data-arg="disable-root" disabled aria-disabled="true" title="Unavailable in this read-only entry">DISABLE ROOT SSH</button>
+      <button class="fleet-btn" data-action="hardenAction" data-arg="key-only" disabled aria-disabled="true" title="Unavailable in this read-only entry">ENFORCE KEY-ONLY AUTH</button>
+      <button class="fleet-btn" data-action="hardenAction" data-arg="disable-empty" disabled aria-disabled="true" title="Unavailable in this read-only entry">BLOCK EMPTY PASSWORDS</button>
+      <button class="fleet-btn" data-action="hardenAction" data-arg="auto-updates" disabled aria-disabled="true" title="Unavailable in this read-only entry">ENABLE AUTO UPDATES</button>
+      <button class="fleet-btn" data-action="sshdPanel" data-arg="harden-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">RESTART SSHD</button>
+    </div>
+    <div id="harden-c"></div>
+  </div>
+</div>
+</div><!-- close sec-hardening-view -->
+
+<!-- SECURITY — Access -->
+<div id="sec-access-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-sec-access" data-subnav-group="security" data-subnav-active="sec-access"></div>
+<div class="section layout-section" id="sec-users">
+  <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="exec-bar"><input id="u-name" aria-label="Username" placeholder="Username" disabled aria-disabled="true" title="Unavailable in this read-only entry"><select id="u-role" aria-label="User role" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option>viewer</option><option selected>operator</option><option>admin</option></select><button type="button" id="dashboard-create-user" aria-controls="dashboard-create-status" disabled aria-disabled="true" title="Unavailable in this read-only entry">CREATE USER</button><span id="dashboard-create-status" role="status">No creation request sent.</span></div>
+    <button id="account-registry-read" type="button" aria-controls="users-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ DASHBOARD USERS</button>
+    <p id="account-registry-status" role="status">No saved dashboard registry requested.</p>
+    <div id="users-c">Use READ DASHBOARD USERS to inspect saved registry metadata. Host accounts are not verified.</div>
+  </div>
+</div>
+<div class="section layout-section" id="sec-sshkeys">
+  <div class="section-header"><h3>SSH Keys</h3><span class="chev">▾</span></div>
+  <div class="section-body"><button type="button" id="key-observation-read" aria-controls="keys-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ KEY OBSERVATIONS</button><p id="key-observation-status" role="status">Not currently observed</p><div id="keys-c">Read key observations to inspect supplied inventory counts. Authentication and freshness are not established.</div></div>
+</div>
+</div><!-- close sec-access-view -->
+
+<!-- LAB TOOLS VIEW — REMOVED: merged into TOOLS > Lab Tools section -->
+
+<!-- VAULT VIEW -->
+<div id="vault-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="section layout-section vault-shell" id="vault-main">
+  <div class="section-header"><h3>Vault</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="stats compact-stats vault-stat-strip" id="vault-stats" role="status">Metadata not currently observed</div>
+    <div class="vault-toolbar">
+      <div class="vault-scope-tabs">
+        <button type="button" class="fleet-btn vault-filter" id="vault-filter-all" aria-controls="vault-credentials-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">ALL</button>
+        <button type="button" class="fleet-btn vault-filter" id="vault-filter-global" aria-controls="vault-credentials-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">GLOBAL</button>
+        <button type="button" class="fleet-btn vault-filter" id="vault-filter-user" aria-controls="vault-credentials-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">USER</button>
+      </div>
+      <button class="fleet-btn c-purple-active" type="button" id="vault-editor-add" aria-controls="vault-editor-status" disabled aria-disabled="true" title="Unavailable in this read-only entry">ADD CREDENTIAL</button>
+      <button type="button" class="fleet-btn" id="vault-metadata-read" aria-controls="vault-credentials-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ VAULT METADATA</button>
+    </div>
+    <div id="vault-alert" class="d-none"></div>
+    <div id="vault-credentials-c" class="vault-credential-grid">Read metadata to inspect this response. Credential actions are currently unavailable.</div>
+  </div>
+</div>
+<div class="section layout-section vault-editor-section" id="vault-editor">
+  <div class="section-header"><h3>Add Credential</h3><span class="chev">▾</span></div>
+  <div class="section-body"><p>New credentials only. A server acknowledgement does not verify durability, atomicity or credential usability.</p><div id="vault-editor-status" role="status">No credential request made.</div>
+    <div class="vault-editor-grid">
+      <label class="vault-field"><span>Scope</span><select id="vault-scope" class="input" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="user">User credential</option><option value="global">Global credential</option></select></label>
+      <label class="vault-field"><span>Name</span><input id="vault-label" class="input" placeholder="pfSense admin" disabled aria-disabled="true" title="Unavailable in this read-only entry"></label>
+      <label class="vault-field"><span>Username</span><input id="vault-username" class="input" autocomplete="off" placeholder="root" disabled aria-disabled="true" title="Unavailable in this read-only entry"></label>
+      <label class="vault-field"><span>Password / secret</span><input id="vault-secret" class="input" type="password" autocomplete="new-password" placeholder="Stored encrypted" disabled aria-disabled="true" title="Unavailable in this read-only entry"></label>
+      <label class="vault-field"><span>URL</span><input id="vault-url" class="input" placeholder="https://service.example.com" disabled aria-disabled="true" title="Unavailable in this read-only entry"></label>
+      <label class="vault-field"><span>Tags</span><input id="vault-tags" class="input" placeholder="pve, firewall, prod" disabled aria-disabled="true" title="Unavailable in this read-only entry"></label>
+      <label class="vault-field vault-notes"><span>Notes</span><textarea id="vault-notes" class="input" rows="3" placeholder="Operator notes" disabled aria-disabled="true" title="Unavailable in this read-only entry"></textarea></label>
+    </div>
+    <div class="vault-editor-actions">
+      <input type="hidden" id="vault-edit-id" value="" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn c-purple-active" type="button" id="vault-editor-save" aria-controls="vault-editor-status" disabled aria-disabled="true" title="Unavailable in this read-only entry">SAVE CREDENTIAL</button>
+      <button class="fleet-btn" type="button" id="vault-editor-clear" aria-controls="vault-editor-status" disabled aria-disabled="true" title="Unavailable in this read-only entry">CLEAR</button>
+    </div>
+  </div>
+</div>
+</div><!-- close vault-view -->
+
+<!-- SECURITY — Compliance -->
+<div id="sec-compliance-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-sec-compliance" data-subnav-group="security" data-subnav-active="sec-compliance"></div>
+<div class="section">
+  <div class="section-header"><h3>Policy Compliance</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <input class="input w-240" id="policy-name" aria-label="Policy name" placeholder="Policy name (optional)" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn" data-action="policyAction" data-arg="check" disabled aria-disabled="true" title="Unavailable in this read-only entry">CHECK COMPLIANCE</button>
+      <button class="fleet-btn" data-action="policyAction" data-arg="diff" disabled aria-disabled="true" title="Unavailable in this read-only entry">SHOW DRIFT</button>
+      <button class="fleet-btn c-red" data-action="policyAction" data-arg="fix" disabled aria-disabled="true" title="Unavailable in this read-only entry">APPLY FIX</button>
+    </div>
+    <div class="exec-out" id="policy-out">Run a compliance check to see policy status.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Compliance Scan</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" data-action="runSweepDry" disabled aria-disabled="true" title="Unavailable in this read-only entry">DRY RUN</button>
+      <button class="fleet-btn c-red" data-action="runSweepFix" disabled aria-disabled="true" title="Unavailable in this read-only entry">SWEEP + FIX</button>
+    </div>
+    <div class="exec-out" id="sweep-out">Compliance scans and fixes are unavailable on this page.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Continuous Monitoring</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <button class="fleet-btn" data-action="loadPatrolStatus" disabled aria-disabled="true" title="Unavailable in this read-only entry">CHECK STATUS</button>
+    <button class="fleet-btn ml-4" data-action="loadPatchCompliance" disabled aria-disabled="true" title="Unavailable in this read-only entry">PATCH COMPLIANCE</button>
+    <div class="exec-out" id="patrol-out">Click to check current compliance status.</div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Saved Baselines</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <button class="fleet-btn" data-action="loadSecurityBaselines" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH RECORDS</button>
+    <div class="exec-out" id="sec-baselines">Saved baseline records have not been read.</div>
+  </div>
+</div>
+</div><!-- close sec-compliance-view -->
+
+<!-- ============================================================
+     SYSTEM VIEW — Overview page with system utility tools
+     Sub-tabs: Overview | Playbooks | Config Sync | Chaos
+     Sections: Diagnostics, Logs, Storage, Network Scanner
+     ============================================================ -->
+<div id="tools-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-tools" data-subnav-group="system" data-subnav-active="tools"></div>
+<!-- Diagnostics — health checks and host diagnosis -->
+<div class="section">
+  <div class="section-header"><h3>Diagnostics</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" data-action="runDoctor" disabled aria-disabled="true" title="Unavailable in this read-only entry">RUN DOCTOR</button>
+      <select id="diag-host" class="input-field w-180" aria-label="Diagnostic host" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Select host...</option></select>
+      <button class="fleet-btn" data-action="runDiagnose" disabled aria-disabled="true" title="Unavailable in this read-only entry">DIAGNOSE HOST</button>
+    </div>
+    <div class="exec-out" id="diag-out">Run self-diagnostic or diagnose a specific host.</div>
+  </div>
+</div>
+<!-- Logs — fleet-wide log viewer -->
+<div class="section">
+  <div class="section-header"><h3>Logs</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <select id="log-host" class="input-field w-180" aria-label="Log host" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Select host...</option></select>
+      <input type="text" id="log-unit" aria-label="Systemd unit" placeholder="Unit (optional)..." class="input-field w-180" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <input type="number" id="log-lines" aria-label="Log line count" placeholder="Lines" value="50" class="input-field w-80" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn" data-action="fetchLogs" disabled aria-disabled="true" title="Unavailable in this read-only entry">FETCH LOGS</button>
+    </div>
+    <div class="exec-out" id="log-out">Enter a host to view its logs.</div>
+  </div>
+</div>
+<!-- Storage — ZFS pools + backup status (grouped: disk health) -->
+<div class="section">
+  <div class="section-header"><h3>Storage</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="mb-16">
+      <h4 class="helptext-mb8">TRUENAS SYSTEM STATUS</h4>
+      <button type="button" class="fleet-btn" data-action="loadZfs" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ SYSTEM STATUS</button>
+      <div class="exec-out mt-8" id="zfs-out">Read configured TrueNAS system status. Pool inventory and health are not observed.</div>
+    </div>
+    <div>
+      <h4 class="helptext-mb8">BACKUPS</h4>
+      <div class="flex-wrap-8-mb12">
+        <button class="fleet-btn" data-action="loadBackups" data-arg="list" disabled aria-disabled="true" title="Unavailable in this read-only entry">LIST</button>
+        <button class="fleet-btn" data-action="loadBackups" data-arg="status" disabled aria-disabled="true" title="Unavailable in this read-only entry">STATUS</button>
+      </div>
+      <div class="exec-out" id="backup-out">Legacy backup listing and status are unavailable from these controls. No provider read has been performed.</div>
+    </div>
+  </div>
+</div>
+<!-- Host Discovery & Onboarding -->
+<div class="section">
+  <div class="section-header"><h3>Host Discovery & Onboarding</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="helptext-mb12">Discover hosts on your network, add them to the fleet, and onboard with SSH key deployment.</div>
+    <div class="flex-wrap-8-mb12">
+      <input type="text" id="discover-subnet" aria-label="Subnet to discover" placeholder="Subnet (e.g. 192.168.1)" class="input-field w-200" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn c-purple-active" disabled aria-disabled="true" title="Unavailable in this read-only entry">DISCOVERY UNAVAILABLE</button>
+    </div>
+    <div class="exec-out" id="discover-out">Discovery observations are unavailable from this entry. No network scan was requested.</div>
+    <div class="card-block-bg2">
+      <h4 class="helptext-mb8">ADD HOST MANUALLY</h4>
+      <div class="flex-gap-8-center-wrap">
+        <input class="input w-140" id="add-host-ip" aria-label="Host IP address" placeholder="IP address" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+        <input class="input w-140" id="add-host-label" aria-label="Host label" placeholder="Label (e.g. web-01)" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+        <select class="input w-120" id="add-host-type" aria-label="Host type" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          <option value="vm">VM</option>
+          <option value="ct">Container</option>
+          <option value="physical">Physical</option>
+          <option value="firewall">Firewall</option>
+          <option value="switch">Switch</option>
+          <option value="storage">Storage</option>
+          <option value="bmc">BMC</option>
+        </select>
+        <input class="input w-160" id="add-host-groups" aria-label="Host groups" placeholder="Groups (optional)" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+        <button class="fleet-btn" data-action="addHostManual" disabled aria-disabled="true" title="Unavailable in this read-only entry">ADD HOST</button>
+        <span id="add-host-msg" class="text-meta"></span>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Fleet Inventory (CMDB) -->
+<div class="section">
+  <div class="section-header"><h3>Fleet Inventory</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadInventory" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn c-purple-active" data-action="loadInventory" disabled aria-disabled="true" title="Unavailable in this read-only entry">FULL CMDB</button>
+      <button class="fleet-btn" data-action="loadInventoryView" data-arg="hosts" disabled aria-disabled="true" title="Unavailable in this read-only entry">HOSTS ONLY</button>
+      <button class="fleet-btn" data-action="loadInventoryView" data-arg="vms" disabled aria-disabled="true" title="Unavailable in this read-only entry">VMS ONLY</button>
+      <button class="fleet-btn" data-action="loadInventoryView" data-arg="containers" disabled aria-disabled="true" title="Unavailable in this read-only entry">CONTAINERS ONLY</button>
+      <button class="fleet-btn" data-action="generateReport" disabled aria-disabled="true" title="Unavailable in this read-only entry">FLEET REPORT</button>
+    </div>
+    <div id="inventory-out"><div class="exec-out">Click to load fleet inventory.</div></div>
+  </div>
+</div>
+<!-- System Info — DB, logs, proxies, pools -->
+<div class="section">
+  <div class="section-header"><h3>System Info</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button type="button" class="fleet-btn" data-action="loadSysInfo" data-arg="db" disabled aria-disabled="true" title="Unavailable in this read-only entry">DB STATUS</button>
+      <button type="button" class="fleet-btn" data-action="loadSysInfo" data-arg="logs" disabled aria-disabled="true" title="Unavailable in this read-only entry">LOG STATS</button>
+      <button type="button" class="fleet-btn" data-action="loadSysInfo" data-arg="proxy" disabled aria-disabled="true" title="Unavailable in this read-only entry">PROXY LIST</button>
+      <button type="button" class="fleet-btn" data-action="loadSysInfo" data-arg="pool" disabled aria-disabled="true" title="Unavailable in this read-only entry">RESOURCE POOLS</button>
+      <button type="button" class="fleet-btn" data-action="loadSysInfo" data-arg="setup" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH SETUP STATUS</button>
+    </div>
+    <p class="helptext-sm">DB, log and pool reads query configured systems. Proxy reads saved routes. Setup refreshes reported configuration and workflow status; it does not run the reported next step.</p>
+    <div id="sysinfo-out"><div class="exec-out">Select a category above.</div></div>
+    <div id="system-catalog-reads">
+    <section id="catalog-info" class="mt-16" aria-labelledby="catalog-info-heading">
+      <h4 id="catalog-info-heading">Installation information</h4>
+      <p class="helptext-sm">Installation metadata only; no diagnostic checks run.</p>
+      <button id="system-installation-read" type="button" class="fleet-btn" data-action="runSysInfo" aria-controls="doctor-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ INSTALLATION INFO</button>
+      <div id="doctor-c" role="status" aria-live="polite">Installation metadata has not been read.</div>
+    </section>
+    <section id="catalog-distros" class="mt-16" aria-labelledby="catalog-distros-heading">
+      <h4 id="catalog-distros-heading">Configured image catalog</h4>
+      <p class="helptext-sm">Configured entries only; downloads and image validity are not verified.</p>
+      <button id="system-distros-read" type="button" class="fleet-btn" data-action="loadDistros" aria-controls="distro-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ IMAGE CATALOG</button>
+      <div id="distro-c" role="status" aria-live="polite">Configured image catalog has not been read.</div>
+    </section>
+    <section id="catalog-groups" class="mt-16" aria-labelledby="catalog-groups-heading">
+      <h4 id="catalog-groups-heading">Configured host groups</h4>
+      <p class="helptext-sm">Configured membership only; reachability and current membership are not verified.</p>
+      <button id="system-groups-read" type="button" class="fleet-btn" data-action="loadGroups" aria-controls="groups-c" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ HOST GROUPS</button>
+      <div id="groups-c" role="status" aria-live="polite">Configured host groups have not been read.</div>
+    </section>
+    </div>
+    <section id="system-journal-read-section" class="mt-16" aria-labelledby="system-journal-heading">
+      <h4 id="system-journal-heading">Retained operation journal</h4>
+      <button id="system-journal-read" type="button" data-action="readRetainedJournal" aria-controls="journal-c" class="fleet-btn" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ RETAINED JOURNAL</button>
+      <div id="journal-c" role="status" aria-live="polite">Retained journal has not been read.</div>
+    </section>
+  </div>
+</div>
+<!-- Host Compare -->
+<div class="section">
+  <div class="section-header"><h3>Host Compare</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="helptext-sm-mb8">Live host comparison is unavailable on this page.</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <select id="compare-host-a" class="input-field w-180" aria-label="First host to compare" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Host A...</option></select>
+      <span class="text-dim">vs</span>
+      <select id="compare-host-b" class="input-field w-180" aria-label="Second host to compare" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Host B...</option></select>
+      <button class="fleet-btn" data-action="runHostCompare" disabled aria-disabled="true" title="Unavailable in this read-only entry">COMPARE</button>
+    </div>
+    <div id="compare-out"><div class="exec-out">Use COMPARE to view availability. No hosts will be contacted.</div></div>
+  </div>
+</div>
+<!-- Fleet Costs -->
+<div class="section">
+  <div class="section-header"><h3>Fleet Costs</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-between-mb12">
+      <span class="helptext">Track infrastructure costs across the fleet.</span>
+      <div style="display:flex;gap:4px"><button class="fleet-btn" data-action="showCostConfig" disabled aria-disabled="true" title="Unavailable in this read-only entry">CONFIG</button><button class="fleet-btn" data-action="loadCosts" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button></div>
+    </div>
+    <div id="cost-summary" class="flex-gap-16-wrap-mb16"></div>
+    <div id="cost-table"></div>
+  </div>
+</div>
+<!-- Cost Analysis -->
+<div class="section">
+  <div class="section-header"><h3>Cost Analysis</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" data-action="loadCostAnalysis" data-arg="compare" disabled aria-disabled="true" title="Unavailable in this read-only entry">COMPARE COSTS</button>
+      <button class="fleet-btn" data-action="loadCostAnalysis" data-arg="waste" disabled aria-disabled="true" title="Unavailable in this read-only entry">WASTE DETECTION</button>
+    </div>
+    <div id="cost-analysis-out"><div class="exec-out">Analyze fleet costs — find waste and compare spending.</div></div>
+  </div>
+</div>
+</div><!-- close tools-view -->
+
+<!-- ============================================================
+     LAB VIEW — Lab Tools (plugin framework)
+     ============================================================ -->
+<div id="lab-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-lab">
+  <button class="sub-tab active-sub" data-view="lab" disabled aria-disabled="true" title="Unavailable in this read-only entry">Tools</button>
+  <button class="sub-tab" data-action="openManageTools" disabled aria-disabled="true" title="Unavailable in this read-only entry">Manage</button>
+  <button class="sub-tab text-green" data-action="openAddTool" disabled aria-disabled="true" title="Unavailable in this read-only entry">+ Add Tool</button>
+</div>
+<div id="lab-tools-container"></div>
+</div><!-- close lab-view -->
+
+<!-- PLAYBOOKS VIEW -->
+<div id="playbooks-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-playbooks" data-subnav-group="system" data-subnav-active="playbooks"></div>
+<div class="card-block-thick">
+  <div class="flex-between-mb12">
+    <h3 class="section-label-pl-h3">Incident Playbooks</h3>
+    <button class="fleet-btn" data-action="loadPlaybooks" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button>
+  </div>
+  <div id="pb-list"></div>
+  <div id="pb-runner" class="d-none mt-16">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h4 id="pb-runner-title"></h4>
+      <button class="fleet-btn" data-action="closePbRunner" disabled aria-disabled="true" title="Unavailable in this read-only entry">CLOSE</button>
+    </div>
+    <div id="pb-steps"></div>
+  </div>
+  <div class="card-block-bg2">
+    <h4 class="helptext-mb8">CREATE PLAYBOOK</h4>
+    <div class="flex-gap-8-center-wrap">
+      <input class="input w-180" id="pb-create-name" aria-label="Playbook name" placeholder="Playbook name" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <input class="input w-240" id="pb-create-desc" aria-label="Playbook description" placeholder="Description" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <input class="input w-160" id="pb-create-trigger" aria-label="Playbook trigger" placeholder="Trigger (optional)" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn" data-action="createPlaybook" disabled aria-disabled="true" title="Unavailable in this read-only entry">CREATE</button>
+      <span id="pb-create-msg" class="text-meta"></span>
+    </div>
+  </div>
+</div>
+</div><!-- close playbook-view -->
+
+<!-- COSTS VIEW — REMOVED: absorbed into SYSTEM > Fleet Costs -->
+<!-- FEDERATION VIEW — REMOVED: absorbed into SETTINGS > Sites -->
+
+<!-- CHAOS VIEW -->
+<div id="chaos-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-chaos" data-subnav-group="system" data-subnav-active="chaos"></div>
+<div class="card-block-thick">
+  <div class="flex-between-mb12">
+    <h3 style="font-size:14px;color:var(--red)">Chaos Engineering</h3>
+    <button class="fleet-btn" data-action="loadChaos" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button>
+  </div>
+  <div class="destructive-banner">
+    Chaos experiments intentionally disrupt services to test recovery. Production hosts are blocked by safety gates. Use only on lab/dev infrastructure.
+  </div>
+  <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--input-border)">
+    <h4 class="helptext-mb8">NEW EXPERIMENT</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <input id="chaos-name" aria-label="Experiment name" placeholder="Experiment name" class="freq-input flex-min-120" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <select id="chaos-type" class="freq-input flex-min-120" aria-label="Experiment type" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+        <option value="">Select type...</option>
+        <option value="service_kill">service_kill — Stop a Docker container</option>
+        <option value="service_restart">service_restart — Restart a systemd service</option>
+        <option value="network_delay">network_delay — Add network latency</option>
+        <option value="disk_fill">disk_fill — Simulate disk pressure</option>
+        <option value="cpu_stress">cpu_stress — Spike CPU load</option>
+      </select>
+      <select id="chaos-target" class="freq-input flex-min-100" aria-label="Experiment target" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="">Select host...</option></select>
+      <input id="chaos-service" aria-label="Service or container" placeholder="Service/container" class="freq-input flex-min-100" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <input id="chaos-duration" aria-label="Experiment duration in seconds" placeholder="Duration (s)" type="number" value="60" class="freq-input w-100" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn" style="background:var(--red);color:#fff" id="chaos-run" data-action="chaosRun" disabled aria-disabled="true" title="Unavailable in this read-only entry">INJECT</button>
+    </div>
+  </div>
+  <h4 class="helptext-mb8">EXPERIMENT LOG</h4>
+  <div id="chaos-result" role="status" aria-live="polite" class="helptext"></div>
+  <div id="chaos-log"></div>
+</div>
+</div><!-- close chaos-view -->
+
+<!-- ============================================================
+     SETTINGS VIEW — Dashboard configuration and management
+     Sections: Dashboard Layout, Sites (Federation), Device Assignment,
+               User Preferences
+     ============================================================ -->
+<div id="settings-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+  <!-- Dashboard Layout — widget and section configuration -->
+  <div class="section">
+    <div class="section-header"><h3>Dashboard Layout</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="helptext-mb12">Configure which widgets appear on your HOME dashboard and reorder sections on any view.</div>
+      <div class="flex-wrap-8-mb12">
+        <button class="fleet-btn" data-action="openHomeWidgetConfig" disabled aria-disabled="true" title="Unavailable in this read-only entry">CONFIGURE HOME WIDGETS</button>
+        <button class="fleet-btn" data-action="openLayoutConfig" disabled aria-disabled="true" title="Unavailable in this read-only entry">CONFIGURE CURRENT VIEW</button>
+      </div>
+    </div>
+  </div>
+  <!-- Sites — multi-site federation (moved from Planning) -->
+  <div class="section">
+    <div class="section-header"><h3>Sites</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="flex-between-mb12">
+        <span class="helptext">Connect and manage multiple FREQ instances.</span>
+        <div class="flex-gap-8">
+          <button class="fleet-btn" data-action="fedPoll" disabled aria-disabled="true" title="Unavailable in this read-only entry">POLL ALL</button>
+          <button class="fleet-btn" data-action="loadFederation" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button>
+        </div>
+      </div>
+      <div id="fed-summary" class="flex-gap-16-wrap-mb16"></div>
+      <div id="fed-sites"></div>
+      <div id="fed-result" role="status" aria-live="polite" class="helptext"></div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--input-border)">
+        <h4 class="helptext-mb8">REGISTER NEW SITE</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="fed-name" aria-label="Federated site name" placeholder="Site name" class="freq-input flex-min-100" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          <input id="fed-url" aria-label="Federated site URL" placeholder="https://freq.example.com:8888" class="freq-input" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          <input id="fed-secret" aria-label="Federated site shared secret" placeholder="Shared secret (optional)" type="password" class="freq-input flex-min-100" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          <button class="fleet-btn" data-action="fedRegister" disabled aria-disabled="true" title="Unavailable in this read-only entry">REGISTER</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Device Assignment — classify fleet members for UI grouping -->
+  <div class="section">
+    <div class="section-header"><h3>Device Assignment</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="helptext-mb12">Classify hosts and existing VMs as PROD, LAB, TEMP, or OOC (out of contract). Name physical devices and keep raw labels visible as secondary identity. Unmanaged inventory-only devices stay visible without alerts or doctor degradation.</div>
+      <div id="lab-assign-list"><div class="skeleton"></div></div>
+      <div id="device-admin-mount" class="device-admin-mount"></div>
+    </div>
+  </div>
+  <!-- OPNsense — API-only managed enrollment; bootstrap secrets are ephemeral. -->
+  <div class="section" id="opn-enrollment-section">
+    <div class="section-header"><h3>OPNsense Enrollment</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="helptext-mb12">Enroll OPNsense through its WebGUI or API only. FREQ never uses SSH here. Bootstrap credentials are sent for one transaction, never displayed, and cleared from this form after every attempt.</div>
+      <div id="opn-enrollment-state" class="opn-state-grid" aria-live="polite"><div class="skeleton"></div></div>
+      <form id="opn-enrollment-form" class="opn-enrollment-form" novalidate>
+        <div class="opn-form-grid">
+          <label for="opn-host">OPNsense host
+            <input id="opn-host" class="input-field w-full" autocomplete="off" data-opn-field="host" placeholder="firewall.example.com:443" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          </label>
+          <label for="opn-bootstrap-mode">Bootstrap route
+            <select id="opn-bootstrap-mode" class="input-field w-full" data-opn-field="bootstrap_mode" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+              <option value="web">WebGUI username + password</option>
+              <option value="api">Existing API key + secret</option>
+            </select>
+          </label>
+          <label data-opn-mode-fields="web" for="opn-bootstrap-username">WebGUI username
+            <input id="opn-bootstrap-username" class="input-field w-full" autocomplete="username" data-opn-field="username" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          </label>
+          <label data-opn-mode-fields="web" for="opn-bootstrap-password">WebGUI password
+            <input id="opn-bootstrap-password" type="password" class="input-field w-full" autocomplete="new-password" data-opn-field="password" data-opn-secret disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          </label>
+          <label data-opn-mode-fields="api" for="opn-bootstrap-api-key" hidden>API key
+            <input id="opn-bootstrap-api-key" type="password" class="input-field w-full" autocomplete="new-password" data-opn-field="api_key" data-opn-secret disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          </label>
+          <label data-opn-mode-fields="api" for="opn-bootstrap-api-secret" hidden>API secret
+            <input id="opn-bootstrap-api-secret" type="password" class="input-field w-full" autocomplete="new-password" data-opn-field="api_secret" data-opn-secret disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          </label>
+        </div>
+        <fieldset class="opn-trust-choice">
+          <legend>TLS trust decision</legend>
+          <label for="opn-tls-sha256">Expected SHA-256 fingerprint
+            <input id="opn-tls-sha256" class="input-field w-full opn-pin" autocomplete="off" spellcheck="false" data-opn-field="tls_sha256" placeholder="64 hex characters" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+          </label>
+          <label class="opn-check-row" for="opn-trust-on-first-use">
+            <input id="opn-trust-on-first-use" type="checkbox" data-opn-field="trust_on_first_use" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+            Deliberately trust the certificate observed on this first transaction (TOFU)
+          </label>
+        </fieldset>
+        <div id="opn-enrollment-error" class="opn-form-error" role="alert" aria-live="assertive" hidden></div>
+        <div id="opn-retrust-compare" class="opn-retrust-compare" aria-live="polite" hidden></div>
+        <div class="opn-actions">
+          <button type="button" class="fleet-btn" data-action="opnEnrollmentSubmit" disabled aria-disabled="true" title="Unavailable in this read-only entry">ENROLL / REPAIR MANAGED IDENTITY</button>
+          <button type="button" class="fleet-btn" data-action="opnRetrustSubmit" disabled aria-disabled="true" title="Unavailable in this read-only entry">CHECK CERTIFICATE TRUST</button>
+          <button type="button" class="fleet-btn pill-warn-sm" data-action="opnRetrustReplace" hidden disabled aria-disabled="true" title="Unavailable in this read-only entry">REPLACE BOUND CERTIFICATE</button>
+        </div>
+        <div class="opn-remove-gate">
+          <div>
+            <strong>Remove managed identity</strong>
+            <p>Re-enter credentials above. FREQ verifies this exact managed device and removes the remote identity before clearing local keys.</p>
+          </div>
+          <label class="opn-check-row" for="opn-remove-confirm">
+            <input id="opn-remove-confirm" type="checkbox" disabled aria-disabled="true" title="Unavailable in this read-only entry"> I understand this removes FREQ's managed OPNsense access.
+          </label>
+          <button type="button" class="fleet-btn pill-danger-sm" data-action="opnRemoveSubmit" disabled aria-disabled="true" title="Unavailable in this read-only entry">REMOVE MANAGED IDENTITY</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <!-- API Documentation -->
+  <div class="section">
+    <div class="section-header"><h3>API</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="flex-wrap-8-mb12">
+        <button type="button" class="fleet-btn" data-action="openApiDocs" disabled aria-disabled="true" title="Unavailable in this read-only entry">API DOCS</button>
+        <button type="button" class="fleet-btn" data-action="loadOpenApi" disabled aria-disabled="true" title="Unavailable in this read-only entry">OPENAPI SPEC</button>
+        <button type="button" class="fleet-btn" data-action="loadPrometheus" disabled aria-disabled="true" title="Unavailable in this read-only entry">PROMETHEUS METRICS</button>
+      </div>
+      <div id="api-docs-out"><div class="exec-out">View API documentation, OpenAPI spec, or Prometheus metrics.</div></div>
+    </div>
+  </div>
+  <!-- User Preferences -->
+  <div class="section">
+    <div class="section-header"><h3>Preferences</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+        <div>
+          <label class="helptext-mb4-block" for="pref-refresh">Auto-Refresh Interval</label>
+          <select id="pref-refresh" class="input-field w-full" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+            <option value="0">Disabled</option>
+            <option value="10">10 seconds</option>
+            <option value="30" selected>30 seconds</option>
+            <option value="60">60 seconds</option>
+            <option value="120">2 minutes</option>
+          </select>
+        </div>
+        <div>
+          <label class="helptext-mb4-block" for="pref-density">UI Density</label>
+          <select id="pref-density" class="input-field w-full" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+            <option value="compact">Compact</option>
+            <option value="normal" selected>Normal</option>
+            <option value="comfortable">Comfortable</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="section" id="settings-loaded-config">
+    <div class="section-header"><h3 id="settings-loaded-config-title">Loaded configuration</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <p id="settings-config-help">Read a description of loaded configuration. Effective state, enforcement and freshness are not assessed.</p>
+      <button type="button" class="fleet-btn" id="settings-config-read" data-action="readLoadedConfiguration" aria-describedby="settings-config-help" aria-controls="settings-config-output" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ LOADED CONFIGURATION</button>
+      <div id="settings-config-output" role="status" aria-live="polite" aria-labelledby="settings-loaded-config-title">No configuration description requested.</div>
+      <h4 id="settings-notification-title">Notification configuration</h4>
+      <p id="settings-notification-help">Read provider configuration presence. Validity, enablement, connectivity and delivery are not assessed.</p>
+      <button type="button" class="fleet-btn" id="settings-notification-read" data-action="readNotificationPresence" aria-describedby="settings-notification-help" aria-controls="settings-notification-output" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ NOTIFICATION CONFIGURATION</button>
+      <div id="settings-notification-output" role="status" aria-live="polite" aria-labelledby="settings-notification-title">No provider configuration observation requested.</div>
+    </div>
+  </div>
+</div><!-- close settings-view -->
+
+<!-- ============================================================
+     NETWORK VIEW — Switch management, SNMP, topology intelligence
+     ============================================================ -->
+<div id="network-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-network" data-subnav-group="fleet" data-subnav-active="network"></div>
+<div class="section">
+  <div class="section-header"><h3>Config Backups</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" data-action="loadConfigHistory" disabled aria-disabled="true" title="Unavailable in this read-only entry">BACKUP HISTORY</button>
+      <input type="text" id="config-search-input" aria-label="Search configuration files" placeholder="Search configs (regex)..." class="input-field w-200" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn" data-action="searchConfigs" disabled aria-disabled="true" title="Unavailable in this read-only entry">SEARCH</button>
+    </div>
+    <div class="exec-out" id="config-backup-out">View config backup history or search across saved configs.</div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Dependency Map</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn c-purple-active" data-action="loadDepMap" disabled aria-disabled="true" title="Unavailable in this read-only entry">LOAD MAP</button>
+      <input type="text" id="impact-host-input" aria-label="Host for impact analysis" placeholder="Host for impact analysis..." class="input-field w-200" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn" data-action="runImpactAnalysis" disabled aria-disabled="true" title="Unavailable in this read-only entry">IMPACT ANALYSIS</button>
+    </div>
+    <div id="dep-map-out"><div class="exec-out">Load the dependency map to see infrastructure relationships.</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Network Monitoring</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <button class="fleet-btn" type="button" disabled aria-disabled="true" title="Unavailable in this read-only entry">POLL DATA</button>
+    <button class="fleet-btn" type="button" disabled aria-disabled="true" title="Unavailable in this read-only entry">INTERFACES</button>
+    <div class="exec-out mt-8" id="network-netmon-out">Use the Network Monitoring controls in Fleet to read observations.</div>
+  </div>
+</div>
+<div class="section" id="network-snmp-setup-section" data-network-role="snmp-setup-section">
+  <div class="section-header"><h3>SNMP Setup</h3><div class="flex-1"></div><button class="fleet-btn mr-4" type="button" disabled aria-disabled="true" title="Unavailable in this read-only entry">PROBE UNAVAILABLE</button><button class="fleet-btn" data-action="snmpSetupRefresh" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="network-snmp-setup-stats" data-network-role="snmp-setup-stats"></div>
+    <div id="network-snmp-setup-main" data-network-role="snmp-setup-main"><p>Read-only SNMP metadata and saved records. Credential setup, probing and changes are unavailable here. Expand this section and use original Refresh to read.</p></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>SNMP Discovery</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" data-action="runNetScan" data-arg="snmp" disabled aria-disabled="true" title="Unavailable in this read-only entry">SCAN SNMP</button>
+      <button class="fleet-btn" data-action="runNetScan" data-arg="mac" disabled aria-disabled="true" title="Unavailable in this read-only entry">FIND MAC</button>
+      <button class="fleet-btn" data-action="runNetScan" data-arg="arp" disabled aria-disabled="true" title="Unavailable in this read-only entry">ARP TABLE</button>
+    </div>
+    <div class="exec-out" id="net-snmp-out">Network discovery is unavailable on this page.</div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     FIREWALL VIEW — Rules, NAT, states, interfaces
+     ============================================================ -->
+<div id="firewall-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-firewall" data-subnav-group="security" data-subnav-active="firewall"></div>
+<div class="section">
+  <div class="section-header"><h3>Firewall Overview</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadFirewallPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="fw-stats"></div>
+    <div id="fw-interfaces"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Filter Rules</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" data-action="loadFwRules" disabled aria-disabled="true" title="Unavailable in this read-only entry">LOAD RULES</button>
+      <button class="fleet-btn" data-action="loadFwNat" disabled aria-disabled="true" title="Unavailable in this read-only entry">NAT RULES</button>
+      <button class="fleet-btn" data-action="loadFwStates" disabled aria-disabled="true" title="Unavailable in this read-only entry">ACTIVE STATES</button>
+    </div>
+    <div id="fw-rules-content"><div class="exec-out">Click to load firewall rules.</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     CERTIFICATES VIEW — SSL lifecycle manager
+     ============================================================ -->
+<div id="certs-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-certs" data-subnav-group="security" data-subnav-active="certs"></div>
+<div class="cert-manager">
+  <div class="section cert-overview-section">
+    <div class="section-header"><h3>SSL Manager</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadCertsPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+    <div class="section-body">
+      <div class="stats" id="cert-stats"></div>
+      <div id="cert-overview"></div>
+    </div>
+  </div>
+  <div class="two cert-manager-grid">
+    <div class="section">
+      <div class="section-header"><h3>Onboarding Choices</h3><span class="chev">&#9662;</span></div>
+      <div class="section-body" id="cert-setup"></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><h3>Preview / Apply</h3><span class="chev">&#9662;</span></div>
+      <div class="section-body" id="cert-actions"></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header"><h3>Targets</h3><span class="chev">&#9662;</span></div>
+    <div class="section-body" id="cert-targets"></div>
+  </div>
+  <div class="two cert-manager-grid">
+    <div class="section">
+      <div class="section-header"><h3>DNS Plan</h3><span class="chev">&#9662;</span></div>
+      <div class="section-body" id="cert-dns"></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><h3>Result Evidence</h3><span class="chev">&#9662;</span></div>
+      <div class="section-body" id="cert-result"><div class="exec-out">Run a preview or verification action to see exact backend evidence here.</div></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header"><h3>TLS Inventory</h3><span class="chev">&#9662;</span></div>
+    <div class="section-body">
+      <div id="cert-inventory"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     DNS VIEW — Records, health checks, resolution
+     ============================================================ -->
+<div id="dns-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-dns" data-subnav-group="system" data-subnav-active="dns"></div>
+<div class="section">
+  <div class="section-header"><h3>DNS Health</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDnsPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="dns-stats"></div>
+    <div id="dns-records"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Internal DNS</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <input type="text" id="dns-query-input" aria-label="Domain to check" placeholder="Domain to check..." class="input-field w-240" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+      <button class="fleet-btn" data-action="runDnsCheck" disabled aria-disabled="true" title="Unavailable in this read-only entry">CHECK</button>
+    </div>
+    <div class="exec-out" id="dns-check-out">DNS checks are unavailable on this page. No lookup has been performed.</div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>DNS Inventory</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDnsInventory" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ SAVED</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="dns-inventory-out"><div class="exec-out">Read the saved DNS inventory; no DNS scan is performed.</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     VPN VIEW — WireGuard and OpenVPN tunnel status
+     ============================================================ -->
+<div id="vpn-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-vpn" data-subnav-group="security" data-subnav-active="vpn"></div>
+<div class="section">
+  <div class="section-header"><h3>VPN Tunnels</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadVpnPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="vpn-stats"></div>
+    <h4 class="helptext-section-tight">WIREGUARD</h4>
+    <div id="vpn-wg-content"><div class="exec-out">Loading WireGuard status...</div></div>
+    <h4 class="helptext-section">OPENVPN</h4>
+    <div id="vpn-ovpn-content"><div class="exec-out">Loading OpenVPN status...</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     DR VIEW — Disaster recovery, backup policies, runbooks
+     ============================================================ -->
+<div id="dr-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-dr" data-subnav-group="system" data-subnav-active="dr"></div>
+<div class="section">
+  <div class="section-header"><h3>Backup Status</h3><div class="flex-1"></div><button type="button" class="fleet-btn" id="dr-overview-availability" data-action="loadDrPage" aria-controls="dr-stats dr-backup-tbl dr-policies dr-runbooks" disabled aria-disabled="true" title="Unavailable in this read-only entry">CHECK OVERVIEW AVAILABILITY</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="dr-stats" role="status">DR overview unavailable. Host, protected, stale and policy counts are unknown.</div>
+    <table><thead><tr><th>Host</th><th>Last Backup</th><th>Size</th><th>Policy</th><th>Status</th></tr></thead><tbody id="dr-backup-tbl"><tr><td colspan="5">Backup overview unavailable. No empty inventory, protection or recoverability result is established.</td></tr></tbody></table>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Recovery Policies</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="dr-policies">Recovery policy overview unavailable. Saved Backup Policies are shown separately.</div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Runbooks</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="dr-runbooks">Runbook overview unavailable. No loaded runbook inventory is established.</div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Migration Planning</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" data-action="loadMigratePlan" disabled aria-disabled="true" title="Unavailable in this read-only entry">MIGRATION PLAN</button>
+      <button class="fleet-btn" data-action="loadVmwareMigration" disabled aria-disabled="true" title="Unavailable in this read-only entry">VMWARE STATUS</button>
+    </div>
+    <div id="migrate-plan-out"><div class="exec-out">Click to load migration planning data.</div></div>
+    <div id="capacity-estimates" role="region" aria-labelledby="capacity-estimates-title">
+      <h4 id="capacity-estimates-title">Capacity estimates</h4>
+      <p id="capacity-estimates-help">Read advisory estimates from retained samples. Current device state and host identity are unverified. These reads do not authorize a migration or take a snapshot.</p>
+      <button type="button" class="fleet-btn" id="capacity-projection-read" data-action="readCapacityEstimates" aria-controls="capacity-projection-output" aria-describedby="capacity-estimates-help" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ CAPACITY ESTIMATES</button>
+      <div id="capacity-projection-output" role="status" aria-live="polite">Capacity estimates have not been read.</div>
+      <button type="button" class="fleet-btn" id="capacity-recommendation-read" data-action="readCapacitySuggestions" aria-controls="capacity-recommendation-output" aria-describedby="capacity-estimates-help" disabled aria-disabled="true" title="Unavailable in this read-only entry">READ ADVISORY SUGGESTIONS</button>
+      <div id="capacity-recommendation-output" role="status" aria-live="polite">Advisory suggestions have not been read.</div>
+    </div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Backup Policies</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadBackupPolicies" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="backup-policy-stats" class="mb-12"></div>
+    <div id="backup-policy-list"><div class="exec-out">Loading backup policies...</div></div>
+  </div>
+</div>
+<div class="section" id="backup-availability-section">
+  <div class="section-header"><h3>Backup availability</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <p id="backup-availability-help">Explain which backup inventories are available. This does not refresh inventory or start a backup.</p>
+    <button type="button" class="fleet-btn" id="backup-availability-show" aria-controls="backup-availability-output" aria-describedby="backup-availability-help" disabled aria-disabled="true" title="Unavailable in this read-only entry">CHECK AVAILABILITY</button>
+    <div id="backup-availability-output" role="status" aria-live="polite">Backup inventory has not been checked.</div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     INCIDENTS VIEW — Incident management, change tracking
+     ============================================================ -->
+<div id="incidents-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-incidents" data-subnav-group="system" data-subnav-active="incidents"></div>
+<div class="section">
+  <div class="section-header"><h3>Active Incidents</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadIncidentsPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="incident-stats"><p>Expand Active Incidents and Change Log, then use Active Incidents Refresh. No incident observations are established.</p></div>
+    <table><thead><tr><th>ID</th><th>Severity</th><th>Summary</th><th>Opened</th><th>Status</th></tr></thead><tbody id="incident-tbl"></tbody></table>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>On-Call</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadOncallSchedule" disabled aria-disabled="true" title="Unavailable in this read-only entry">FULL SCHEDULE</button><button class="fleet-btn ml-4" data-action="loadOncall" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="oncall-info"><div class="exec-out">Loading on-call info...</div></div>
+    <div id="oncall-schedule-detail" class="mt-8"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>On-Call Incidents</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="oncall-incidents"><div class="exec-out">Loading...</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Change Log</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="change-log"><div class="exec-out">Change history is unavailable. Expand Active Incidents and Change Log, then use Active Incidents Refresh.</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     METRICS VIEW — Observability metrics, synthetic monitors
+     ============================================================ -->
+<div id="metrics-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-metrics" data-subnav-group="system" data-subnav-active="metrics"></div>
+<div class="section">
+  <div class="section-header"><h3>Fleet Metrics</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadMetricsPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="metrics-top-stats"></div>
+    <div id="metrics-charts"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Synthetic Monitors</h3><div class="flex-1"></div><button class="fleet-btn" data-action="runMonitorCheck" disabled aria-disabled="true" title="Unavailable in this read-only entry">CHECK NOW</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="synth-monitors"><div class="exec-out">HTTP/TCP endpoint monitors will display here.</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Alert Rules</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadMetricAlerts" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><button class="fleet-btn ml-4" data-action="runAlertCheck" disabled aria-disabled="true" title="Unavailable in this read-only entry">EVALUATE</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="metric-alert-rules"><div class="exec-out">Loading alert rules...</div></div>
+    <div id="metric-alert-triggered" class="mt-12"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Alert History</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="metric-alert-history"><div class="exec-out">Loading...</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>SLA / Uptime</h3><div class="flex-1"></div><button class="fleet-btn" data-action="recordSlaCheck" disabled aria-disabled="true" title="Unavailable in this read-only entry">RECORD CHECK</button><button class="fleet-btn ml-4" data-action="loadSlaData" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="sla-data"><div class="exec-out">Loading SLA data...</div></div>
+    <pre id="sla-receipt" class="exec-out" role="status" style="white-space:pre-wrap">No SLA check submitted in this view.</pre>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     AUTOMATION VIEW — Reactors, workflows, scheduled jobs
+     ============================================================ -->
+<div id="automation-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-automation" data-subnav-group="system" data-subnav-active="automation"></div>
+<div class="section">
+  <div class="section-header"><h3>Automation Engine</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadAutomationPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="auto-stats"><p>Automation overview observations are unavailable. Expand Automation Engine or use its original Refresh to read capability status.</p></div>
+    <h4 class="helptext-section-tight">ACTIVE REACTORS</h4>
+    <div id="auto-reactors"><div class="exec-out">Reactor observations are unavailable; no active automation is established.</div></div>
+    <h4 class="helptext-section">WORKFLOWS</h4>
+    <div id="auto-workflows"></div>
+    <h4 class="helptext-section">SCHEDULED JOBS</h4>
+    <div id="auto-jobs"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Job Scheduler</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadScheduleJobs" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="schedule-jobs"><div class="exec-out">Loading scheduled jobs...</div></div>
+    <h4 class="helptext-section">JOB TEMPLATES</h4>
+    <div id="schedule-templates"></div>
+    <h4 class="helptext-section">EXECUTION LOG</h4>
+    <div id="schedule-log"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Webhooks</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadWebhooks" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="webhook-list"><div class="exec-out">Loading webhooks...</div></div>
+    <h4 class="helptext-section">WEBHOOK LOG</h4>
+    <div id="webhook-log"></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     PLUGIN VIEW — Installed plugins, management
+     ============================================================ -->
+<div id="plugins-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="sub-tabs" id="subtabs-plugins" data-subnav-group="system" data-subnav-active="plugins"></div>
+<div class="section">
+  <div class="section-header"><h3>Installed Plugins</h3><div class="flex-1"></div><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="plugin-stats"><p>Installed plugin inventory is unavailable; no installed counts are established.</p></div>
+    <div id="plugin-list"><p>Installed plugin inventory is unavailable. Automatic discovery is not performed by this view.</p></div>
+  </div>
+</div>
+<div class="section" id="plugin-registry-section"><div class="section-header"><h3>Plugin registry records</h3><div class="flex-1"></div><button type="button" class="fleet-btn" data-action="readPluginRegistryRecords" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH REGISTRY RECORDS</button></div><div class="section-body"><p>Reported registry metadata for this server. File presence, installation, enabled state and callable capability are not verified.</p><p>Expanding this section does not read registry records. Use its Refresh button.</p><div id="plugin-registry-records" aria-live="polite"><p>Registry records have not been read. Use Refresh registry records to request an observation.</p></div></div></div>
+<div class="section">
+  <div class="section-header"><h3>Plugin Types</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadPluginsPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <p>Built-in type definitions describe categories, not installed, enabled or callable plugins. Use the original Refresh here after expanding to read the catalog.</p><div id="plugin-types"><p>Built-in type catalog is unavailable until read.</p></div>
+  </div>
+</div>
+</div>
+
+<!-- ════════ INFRA COMPATIBILITY VIEW ════════ -->
+<div id="infra-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="flex-row-8-mb16-center">
+  <button class="fleet-btn c-purple-active" data-view="home"  disabled aria-disabled="true" title="Unavailable in this read-only entry">&#9664; HOME</button>
+  <button class="fleet-btn" data-action="loadInfraPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Overview</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="stats" id="infra-stats"></div>
+    <table><thead><tr><th>Host</th><th>Type</th><th>OS</th><th>CPU</th><th>RAM</th><th>Disk</th><th>Containers</th><th>Services</th><th>Status</th></tr></thead><tbody id="infra-tbl"></tbody></table>
+    <div id="infra-vms" class="mt-8"></div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>pfSense <span id="pf-meta" class="fs-12-dim">FIREWALL</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <p class="c-dim">Monitoring controls in this compatibility view are unavailable.</p>
+    <div class="exec-out" id="pf-out">Click an action above.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>TrueNAS <span id="tn-meta" class="fs-12-dim">NETWORK STORAGE</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <p class="c-dim">Monitoring controls in this compatibility view are unavailable.</p>
+    <div class="exec-out" id="tn-out">Click an action above.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>iDRAC <span class="fs-12-dim">BMC Management</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <p class="c-dim">Monitoring controls in this compatibility view are unavailable.</p>
+    <div id="idrac-out"></div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Switch <span id="sw-meta" class="fs-12-dim">L3 SWITCH</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <p class="c-dim">Monitoring controls in this compatibility view are unavailable.</p>
+    <div class="exec-out" id="sw-out">Click an action above.</div>
+  </div>
+</div>
+</div>
+
+<!-- ════════ SYSTEM COMPATIBILITY VIEW ════════ -->
+<div id="system-view" class="d-none" inert hidden data-cluster-pilot-deferred>
+<div class="flex-row-8-mb16-center">
+  <button class="fleet-btn c-purple-active" data-view="home"  disabled aria-disabled="true" title="Unavailable in this read-only entry">&#9664; HOME</button>
+  <button class="fleet-btn" data-action="loadSystemPage" disabled aria-disabled="true" title="Unavailable in this read-only entry">REFRESH</button>
+</div>
+<!-- Global Settings -->
+<div class="section" id="sys-settings-section">
+  <div class="section-header"><h3>Global Settings</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="global-settings-body"></div>
+  </div>
+</div>
+<!-- Fleet Admin — admin role only, root tax -->
+<div class="section d-none" id="fleet-admin-section" >
+  <div class="section-header"><h3>Fleet Admin <span style="font-size:11px;font-weight:400;color:var(--yellow);margin-left:8px">ADMIN ONLY</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="fleet-admin-body"><div class="skeleton"></div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Configuration</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="config-c"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Installation Information</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn" data-action="runBackup" disabled aria-disabled="true" title="Unavailable in this read-only entry">CONFIG BACKUP STATUS</button></div>
+    <div id="backup-c" class="mt-12" role="status"></div>
+  </div>
+</div>
+
+
+
+<div class="section">
+  <div class="section-header"><h3>Alert Rules</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="rules-list"><div class="skeleton"></div></div>
+    <div style="margin-top:16px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+      <h4 style="font-size:13px;margin-bottom:12px;color:var(--purple-light)">Create Rule</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="label-sub-10" for="rule-name">Name</label><input id="rule-name" class="input-sm w-full" placeholder="my-rule" disabled aria-disabled="true" title="Unavailable in this read-only entry"></div>
+        <div><label class="label-sub-10" for="rule-cond">Condition</label><select id="rule-cond" class="input-sm w-full" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="host_unreachable">Host Unreachable</option><option value="cpu_above">CPU Above</option><option value="ram_above">RAM Above %</option><option value="disk_above">Disk Above %</option><option value="docker_down">Docker Down</option></select></div>
+        <div><label class="label-sub-10" for="rule-target">Target</label><input id="rule-target" class="input-sm w-full" value="*" placeholder="* or hostname" disabled aria-disabled="true" title="Unavailable in this read-only entry"></div>
+        <div><label class="label-sub-10" for="rule-threshold">Threshold</label><input id="rule-threshold" class="input-sm w-full" value="0" type="number" disabled aria-disabled="true" title="Unavailable in this read-only entry"></div>
+        <div><label class="label-sub-10" for="rule-duration">Duration (s)</label><input id="rule-duration" class="input-sm w-full" value="0" type="number" disabled aria-disabled="true" title="Unavailable in this read-only entry"></div>
+        <div><label class="label-sub-10" for="rule-cooldown">Cooldown (s)</label><input id="rule-cooldown" class="input-sm w-full" value="300" type="number" disabled aria-disabled="true" title="Unavailable in this read-only entry"></div>
+        <div><label class="label-sub-10" for="rule-severity">Severity</label><select id="rule-severity" class="input-sm w-full" disabled aria-disabled="true" title="Unavailable in this read-only entry"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></div>
+      </div>
+      <button class="fleet-btn mt-12" data-action="createRule" disabled aria-disabled="true" title="Unavailable in this read-only entry">CREATE RULE</button>
+      <div id="rule-create-msg" class="mt-8"></div>
+    </div>
+    <div class="mt-16">
+      <h4 style="font-size:13px;margin-bottom:8px;color:var(--purple-light)">Recent Alerts</h4>
+      <div id="alert-history">System alert history unavailable. Retained alert counts, coverage and current alert state are unknown. No history read was performed.</div>
+    </div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Notifications</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="notify-status"></div>
+    <button class="fleet-btn mt-12" data-action="testNotify"  disabled aria-disabled="true" title="Unavailable in this read-only entry">SEND TEST</button>
+    <div id="notify-result" class="mt-8"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>About</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="crd" style="margin-bottom:24px;border-left:3px solid var(--purple)">
+      <h3 class="fs-16">About PVE FREQ</h3>
+      <p class="mt-8">PVE FREQ is an infrastructure-management project for Proxmox and connected services. Some workflows are still under development and are not available in this dashboard.</p>
+      <p class="mt-8">Available observations depend on configured providers, account permissions, and successful reads. An empty or unavailable report does not establish that a resource is healthy or absent.</p>
+      <p class="section-label-pl-mt12"><em>"freq did not come to play."</em></p>
+    </div>
+    <h3 style="color:var(--purple-light);font-size:14px;margin-bottom:16px">Project scope</h3>
+    <div class="timeline">
+      <div class="timeline-item"><h3>Fleet observations</h3><div class="meta">Availability varies</div><p>Inspect available host and guest observations. Snapshot management and other unfinished workflows remain unavailable where their required integrations are missing.</p></div>
+      <div class="timeline-item"><h3>Operations</h3><div class="meta">Workflow-specific</div><p>Read each workflow's status and limitations before using it. A displayed record does not by itself establish current state or permission to change a resource.</p></div>
+      <div class="timeline-item"><h3>Web dashboard</h3><div class="meta">This page</div><p>Navigate configured resources and available reports. Unavailable entries identify work that this dashboard cannot currently perform.</p></div>
+      <div class="timeline-item" style="border-left-color:var(--purple)"><h3>Deployment</h3><div class="meta">Environment-specific</div><p>Installation and provider access must be verified for the selected environment. This page does not certify production readiness.</p></div>
+    </div>
+    <div class="crd" style="margin-top:24px;text-align:center">
+      <p id="about-credits">PVE FREQ</p>
+      <p style="font-size:12px;color:var(--purple-light);margin-top:8px;font-style:italic">"things are gonna get easier"</p>
+    </div>
+  </div>
+</div>
+</div>
+
+</div><!-- close dashboard-root -->
+</main></div><!-- close mn-body and mn -->
+
+<!-- ═══ HOST DETAIL OVERLAY ═══ -->
+<div id="host-overlay" class="host-overlay" role="dialog" aria-modal="true" aria-labelledby="hd-title">
+  <div class="ho-header"><div class="ho-header-inner">
+    <div>
+      <h1 id="hd-title"></h1>
+      <div id="hd-subtitle"></div>
+    </div>
+    <button class="ho-close" data-action="closeCard" aria-label="Close host details">&#10005;</button>
+  </div></div>
+  <div class="ho-body">
+    <div id="hd-loading">
+      <div style="font-size:28px;margin-bottom:12px;opacity:0.6">&#9881;</div>
+      <div style="font-size:13px">Loading Host Details...</div>
+    </div>
+    <div id="hd-content" class="d-none"></div>
+  </div>
+</div>
+
+<!-- ═══ TOAST + MODAL ═══ -->
+<div id="toast-container" class="toast-container"></div>
+<div id="modal-container" class="modal-overlay d-none" role="dialog" aria-modal="true" aria-label="Action dialog"></div>
+
+<!-- Terminal Overlay -->
+<div id="terminal-overlay" role="dialog" aria-modal="true" aria-labelledby="terminal-title">
+  <div class="term-shell-col">
+    <div id="terminal-header">
+      <div class="term-shell-title-row">
+        <span class="term-shell-tag">&#9679; TERMINAL</span>
+        <span id="terminal-title"></span>
+      </div>
+      <div class="term-shell-btn-row">
+        <button class="fleet-btn fs-9-px-2-8" data-action="termCopy" disabled aria-disabled="true" title="Unavailable in this read-only entry">COPY</button>
+        <button class="fleet-btn fs-9-px-2-8" data-action="termPaste" disabled aria-disabled="true" title="Unavailable in this read-only entry">PASTE</button>
+        <button class="fleet-btn term-shell-close" data-action="closeTerminal" disabled aria-disabled="true" title="Unavailable in this read-only entry">CLOSE</button>
+      </div>
+    </div>
+    <div id="terminal-container"></div>
+  </div>
+</div>
+
+<!-- Global Search Overlay -->
+<div id="search-overlay" data-action="closeSearch" role="dialog" aria-modal="true" aria-label="Global search">
+  <div class="search-overlay-card" data-action="modalNoop">
+    <div class="search-overlay-input-row">
+      <input id="search-input" type="text" aria-label="Search or run an action" placeholder="Search or type > for actions..." class="search-overlay-input" disabled aria-disabled="true" title="Unavailable in this read-only entry">
+    </div>
+    <div id="search-results"></div>
+    <div class="search-overlay-footer">
+      <span><kbd class="kbd-mono-10">&#8593;&#8595;</kbd> navigate</span>
+      <span><kbd class="kbd-mono-10">&#9166;</kbd> select</span>
+      <span><kbd class="kbd-mono-10">esc</kbd> close</span>
+      <span class="ml-auto"><kbd class="kbd-mono-10">&gt;</kbd> actions</span>
+    </div>
+  </div>
+</div>
+
+<!-- Keyboard Shortcuts Help -->
+<div id="shortcuts-modal" data-action="hideShortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-heading">
+  <div class="shortcuts-card" data-action="modalNoop">
+    <h3 class="shortcuts-heading" id="shortcuts-heading">Keyboard Shortcuts</h3>
+    <div class="shortcuts-grid">
+      <kbd class="kbd-tag">Ctrl+K</kbd><span>Search unavailable in this entry</span>
+      <kbd class="kbd-tag">1-2</kbd><span>Home / Fleet</span>
+      <kbd class="kbd-tag">Esc</kbd><span>Close overlay</span>
+      <kbd class="kbd-tag">?</kbd><span>This help</span>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/router.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/presentation.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/quick-ct.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/pve-inventory.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/pve-source-config.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/cockpit-workspaces.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/registered-lab-panel.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/registered-lab-controller.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/lab-window-panel.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/lab-window-controller.js?v=pve-lab-window-20261113-r1"></script>
+<script src="/static/js/app.js?v=pve-lab-window-20261113-r1"></script>
+</body>
+</html>

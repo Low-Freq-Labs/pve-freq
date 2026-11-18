@@ -1,0 +1,76 @@
+[chromium] › accessibility-semantics.spec.js:15:3 › dashboard accessibility semantics › visible form controls have explicit programmatic names on every view
+[chromium] › accessibility-semantics.spec.js:33:3 › dashboard accessibility semantics › symbol-only close controls expose names and work from the keyboard
+[chromium] › all-pages-safe-read-buttons.spec.js:118:3 › all-page safe read buttons › Security read buttons render real output
+[chromium] › all-pages-safe-read-buttons.spec.js:134:3 › all-page safe read buttons › Network read buttons render real output
+[chromium] › all-pages-safe-read-buttons.spec.js:144:3 › all-page safe read buttons › Settings read buttons render real output
+[chromium] › all-pages-safe-read-buttons.spec.js:59:3 › all-page safe read buttons › Docker read buttons render real output
+[chromium] › all-pages-safe-read-buttons.spec.js:76:3 › all-page safe read buttons › System/tools read buttons render real output
+[chromium] › docker-live-controls.spec.js:42:3 › live Docker controls › Plex logs button returns real output
+[chromium] › docker-live-controls.spec.js:61:3 › live Docker controls › Plex restart button reports success and service comes back
+[chromium] › hermetic-dashboard.spec.js:111:3 › hermetic dashboard behavior oracle › bad password is rejected
+[chromium] › hermetic-dashboard.spec.js:117:3 › hermetic dashboard behavior oracle › empty password is rejected
+[chromium] › hermetic-dashboard.spec.js:124:3 › hermetic dashboard behavior oracle › successful login returns a session token and csrf token
+[chromium] › hermetic-dashboard.spec.js:133:3 › hermetic dashboard behavior oracle › login rejects GET
+[chromium] › hermetic-dashboard.spec.js:137:3 › hermetic dashboard behavior oracle › browser login reveals the real dashboard shell
+[chromium] › hermetic-dashboard.spec.js:143:3 › hermetic dashboard behavior oracle › Network actions render into the active view instead of hidden Fleet panels
+[chromium] › hermetic-dashboard.spec.js:210:3 › hermetic dashboard behavior oracle › expanding a data panel fetches fresh data and stamps only successful responses
+[chromium] › hermetic-dashboard.spec.js:260:3 › hermetic dashboard behavior oracle › verified Fleet writes stamp both sections and cache-only renders do not
+[chromium] › hermetic-dashboard.spec.js:292:3 › hermetic dashboard behavior oracle › chaos injection uses the styled non-blocking confirmation flow
+[chromium] › hermetic-dashboard.spec.js:29:3 › hermetic dashboard behavior oracle › unauthenticated dashboard shows the login form
+[chromium] › hermetic-dashboard.spec.js:330:3 › hermetic dashboard behavior oracle › authenticated fleet overview returns cache truth
+[chromium] › hermetic-dashboard.spec.js:341:3 › hermetic dashboard behavior oracle › authenticated health returns host state
+[chromium] › hermetic-dashboard.spec.js:350:3 › hermetic dashboard behavior oracle › mutation endpoint rejects GET
+[chromium] › hermetic-dashboard.spec.js:358:3 › hermetic dashboard behavior oracle › dashboard sends content-type protection
+[chromium] › hermetic-dashboard.spec.js:35:3 › hermetic dashboard behavior oracle › unauthenticated dashboard keeps fleet content covered
+[chromium] › hermetic-dashboard.spec.js:363:3 › hermetic dashboard behavior oracle › dashboard denies framing
+[chromium] › hermetic-dashboard.spec.js:368:3 › hermetic dashboard behavior oracle › dashboard sends a content security policy
+[chromium] › hermetic-dashboard.spec.js:373:3 › hermetic dashboard behavior oracle › json api responses carry security headers
+[chromium] › hermetic-dashboard.spec.js:378:3 › hermetic dashboard behavior oracle › anonymous fleet access is forbidden
+[chromium] › hermetic-dashboard.spec.js:382:3 › hermetic dashboard behavior oracle › fleet response exposes explicit freshness state
+[chromium] › hermetic-dashboard.spec.js:390:3 › hermetic dashboard behavior oracle › health score is numeric and graded
+[chromium] › hermetic-dashboard.spec.js:401:3 › hermetic dashboard behavior oracle › logout invalidates the browser session
+[chromium] › hermetic-dashboard.spec.js:408:3 › hermetic dashboard behavior oracle › unknown api endpoint returns json
+[chromium] › hermetic-dashboard.spec.js:418:3 › hermetic dashboard behavior oracle › served javascript is the checked-in application bundle
+[chromium] › hermetic-dashboard.spec.js:41:3 › hermetic dashboard behavior oracle › generated Fleet, Security, and System subnav strips stay complete and self-active
+[chromium] › hermetic-dashboard.spec.js:425:3 › hermetic dashboard behavior oracle › served router is the checked-in zero-dependency view module
+[chromium] › hermetic-dashboard.spec.js:432:3 › hermetic dashboard behavior oracle › probe failure renders a visible transport failure indicator
+[chromium] › hermetic-dashboard.spec.js:82:3 › hermetic dashboard behavior oracle › one view router owns direct, alias, back, and forward navigation
+[chromium] › live-safe.spec.js:130:3 › live dashboard safe E2E › doctor and infra quick are clean
+[chromium] › live-safe.spec.js:164:5 › live dashboard safe E2E › core system card opens and reads bmc-10
+[chromium] › live-safe.spec.js:164:5 › live dashboard safe E2E › core system card opens and reads bmc-11
+[chromium] › live-safe.spec.js:164:5 › live dashboard safe E2E › core system card opens and reads firewall
+[chromium] › live-safe.spec.js:164:5 › live dashboard safe E2E › core system card opens and reads switch
+[chromium] › live-safe.spec.js:164:5 › live dashboard safe E2E › core system card opens and reads truenas
+[chromium] › live-safe.spec.js:185:3 › live dashboard safe E2E › visible core system cards are clickable
+[chromium] › live-safe.spec.js:207:5 › live dashboard safe E2E › safe core endpoint returns real data: TrueNAS pools
+[chromium] › live-safe.spec.js:207:5 › live dashboard safe E2E › safe core endpoint returns real data: bmc-10 status
+[chromium] › live-safe.spec.js:207:5 › live dashboard safe E2E › safe core endpoint returns real data: bmc-11 status
+[chromium] › live-safe.spec.js:207:5 › live dashboard safe E2E › safe core endpoint returns real data: pfSense status
+[chromium] › live-safe.spec.js:207:5 › live dashboard safe E2E › safe core endpoint returns real data: switch status
+[chromium] › live-safe.spec.js:215:3 › live dashboard safe E2E › truenas alerts render as operator-readable output
+[chromium] › live-safe.spec.js:232:3 › live dashboard safe E2E › expanded core read actions render readable output without toast spam
+[chromium] › live-safe.spec.js:267:3 › live dashboard safe E2E › terminal sessions open and close without touching power state
+[chromium] › live-safe.spec.js:287:3 › live dashboard safe E2E › network device terminals return real websocket output
+[chromium] › live-safe.spec.js:303:3 › live dashboard safe E2E › truenas terminal returns real websocket output
+[chromium] › live-safe.spec.js:313:3 › live dashboard safe E2E › idrac terminal returns real websocket output
+[chromium] › live-safe.spec.js:333:3 › live dashboard safe E2E › dashboard does not emit page errors during safe navigation
+[chromium] › operator-truth.spec.js:25:3 › operator-facing truth › device assignment is read-only and makes no admin request for operators
+[chromium] › operator-truth.spec.js:47:3 › operator-facing truth › hardening remediation requires an explicit host or fleet target
+[chromium] › operator-truth.spec.js:70:3 › operator-facing truth › shortcut help names the exact implemented key map
+[chromium] › responsive-layout-sweep.spec.js:129:5 › responsive layout sweep › desktop-1440x1000: main pages and nested tabs stay contained
+[chromium] › responsive-layout-sweep.spec.js:129:5 › responsive layout sweep › laptop-1366x768: main pages and nested tabs stay contained
+[chromium] › responsive-layout-sweep.spec.js:129:5 › responsive layout sweep › narrow-desktop-1100x820: main pages and nested tabs stay contained
+[chromium] › responsive-layout-sweep.spec.js:129:5 › responsive layout sweep › phone-390x844: main pages and nested tabs stay contained
+[chromium] › responsive-layout-sweep.spec.js:129:5 › responsive layout sweep › tablet-820x1180: main pages and nested tabs stay contained
+[chromium] › responsive-layout-sweep.spec.js:129:5 › responsive layout sweep › wide-1920x1080: main pages and nested tabs stay contained
+[chromium] › responsive-layout-sweep.spec.js:129:5 › responsive layout sweep › wide-short-1980x900: main pages and nested tabs stay contained
+[chromium] › responsive-layout-sweep.spec.js:167:1 › fleet activity endpoints are not duplicated during initial home/fleet render
+[chromium] › ui-polish.spec.js:124:3 › UI polish regressions › mobile global nav remains available after login
+[chromium] › ui-polish.spec.js:161:3 › UI polish regressions › mobile tables and controls stay inside dark shell
+[chromium] › ui-polish.spec.js:227:3 › UI polish regressions › Fleet optional enrichment degrades without stale loading rows
+[chromium] › ui-polish.spec.js:33:3 › UI polish regressions › mobile login card stays inside the viewport
+[chromium] › ui-polish.spec.js:55:3 › UI polish regressions › Fleet keeps LXC grouped with PVE nodes and sparklines pinned
+[chromium] › vm-controls-destructive.spec.js:126:3 › destructive VM control acceptance › sandbox clone exercises VM controls and host tools without touching owned VMs
+[chromium] › zero-state-web-ux.spec.js:212:1 › complete state without both durable markers never reveals completion
+[chromium] › zero-state-web-ux.spec.js:228:1 › successful empty discovery can freeze an explicit empty contract
+[chromium] › zero-state-web-ux.spec.js:40:1 › browser-only wizard builds an explicit fleet contract and verifies completion

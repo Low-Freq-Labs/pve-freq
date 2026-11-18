@@ -1,0 +1,4143 @@
+{
+  "baseline_coverage_identity": {
+    "branch": true,
+    "exclude_lines": [
+      "pragma: no cover",
+      "if __name__ == .__main__.",
+      "raise NotImplementedError"
+    ],
+    "omit": [
+      "freq/data/*",
+      "freq/tui/*"
+    ],
+    "sha256": "e1fd69568ff2a400049a08922ca07f312e194e6b37cbabe5baab5da7322fa74c",
+    "source": [
+      "freq"
+    ]
+  },
+  "baseline_denominators": {
+    "num_branches": 18204,
+    "num_statements": 52806
+  },
+  "browser": {
+    "definitions": 76,
+    "node_ids_file": "tests/manifests/b94321f-browser-nodeids.txt",
+    "node_ids_sha256": "72741fdcdc9848aa72ca6bb4617e02935100b812516eac7d82eb99dd652b4fb1"
+  },
+  "coverage": {
+    "branch_ratio": 0.3271259063941991,
+    "combined_ratio": 0.3884664131812421,
+    "covered_branches": 5955,
+    "covered_lines": 21630,
+    "num_branches": 18204,
+    "num_statements": 52806,
+    "statement_ratio": 0.4096125440290876
+  },
+  "coverage_identity": {
+    "branch": true,
+    "exclude_lines": [
+      "pragma: no cover",
+      "if __name__ == .__main__.",
+      "raise NotImplementedError"
+    ],
+    "omit": [
+      "freq/data/*",
+      "freq/tui/*"
+    ],
+    "sha256": "e1fd69568ff2a400049a08922ca07f312e194e6b37cbabe5baab5da7322fa74c",
+    "source": [
+      "freq"
+    ]
+  },
+  "coverage_provenance": {
+    "artifact_sha256": "7ecea83c947bd54c2444d05768513067a7b42bdf27062a942a7d55f62231841f",
+    "canonical": true,
+    "clean": true,
+    "command": ".venv/bin/python -m coverage json -o /tmp/pve-freq-stage0-coverage.json",
+    "schema_version": 1,
+    "source_sha": "b94321f968d1f2601b40404c3aff242e5858ced7",
+    "totals_sha256": "d74644948d34f9c0eb1d07a8c0ce9ab4946718bcb42fa40d5db5f36b56333913"
+  },
+  "delivery_targets": {
+    "branch_ratio": 0.6,
+    "combined_ratio": 0.67,
+    "default_cases": 2700,
+    "hard_case_ceiling": 3000,
+    "reserved_cases": 300,
+    "runtime_hard_median_seconds": 300.0,
+    "runtime_max_seconds": 330.0,
+    "runtime_median_seconds": 270.0,
+    "skipped": 0,
+    "statement_ratio": 0.7,
+    "warnings": 0
+  },
+  "module_contract": [
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/__main__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/agent_collector.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/api/auth.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/auto.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/backup_verify.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/bench.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/cert_lifecycle.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/ct.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/docker_api.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/dr.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/fleet.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/fw.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/api/helpers.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/host.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/hw.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/ipmi.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/logs.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/net.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/observe.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/opnsense.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/ops.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/plugin.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/redfish.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/secure.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/snmp.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/state.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/store.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/synology.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/terminal.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/user.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/v1_stubs.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/api/vm.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/cli.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/audit.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/core/compat.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/core/config.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/device_credentials.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/core/doctor.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/exitcodes.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/fmt.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/core/health_state.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/host_scope.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/http_query.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/log.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/packages.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/personality.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/platform.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/plugins.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/preflight.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/remote_platform.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/resolve.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/core/service_units.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/services.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/setup_contract.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/setup_discovery.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/core/setup_state.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/ssh.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/truenas_api.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/types.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/core/validate.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/data/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/data/conf-templates/plugins/example_ping.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/data/web/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/bmc/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/bmc/idrac.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/bmc/ilo.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/firewall/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/firewall/opnsense.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/firewall/pfsense.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/nas/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/nas/truenas.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/server/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/server/linux.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/switch/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/switch/cisco.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/deployers/switch/ubiquiti.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/engine/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/engine/policies/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/engine/policies/ntp_sync.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/engine/policies/rpcbind.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/engine/policies/ssh_hardening.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/engine/policy.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/engine/runner.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/agent.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/capacity.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/chaos.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/cost.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/federation.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/gitops.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/learn.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/notify.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/patrol.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/playbook.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/provision.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/risk.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/rules.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/jarvis/sweep.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/agent_deployment.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/agent_health.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/alert.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/audit.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/automation.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/modules/backup.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/backup_policy.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/baseline.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/benchmark.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/bootstrap.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/cert.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/cert_management.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/comms.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/compare.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/comply.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/config_management.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/cost_analysis.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/db.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/demo.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/deploy_agent.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/depmap.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/discover.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/distros.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/dns.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/dns_management.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/docker_mgmt.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/docs.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/dr.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/engine_cmds.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/event_network.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/fim.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/firewall.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/fleet.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/gwipe.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/harden.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/hardware.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/health.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/hosts.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/iac.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/incident.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/infrastructure.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/modules/init_cmd.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/inventory.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/ipam.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/journal.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/lab.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/logs.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/media.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/metrics.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/migrate_plan.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/migrate_vmware.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/net_intelligence.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/netmon.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/oncall.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/patch.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/plan.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/plugin_manager.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/proxy.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/proxy_management.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/pve.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/report.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/rollback.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/schedule.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/secrets.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/modules/selfupdate.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/modules/serve.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/sla.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/snmp.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/specialist.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/stack.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/storage.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/switch_orchestration.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/synthetic_monitors.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/topology.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/trend.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/users.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/vault.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.6,
+      "classification": "RETAINED",
+      "critical": true,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/vm.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/vpn.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/vuln.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/watchdog.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/web_ui.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/webhook.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/why.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/modules/wol.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/dashboard_events.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/dashboard_state.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/idrac_session.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/pve_discovery.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/pve_inventory.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/pve_tags.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/pve_transport.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/services/vm_visibility.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "UNKNOWN_KEEP",
+      "critical": false,
+      "evidence": [
+        "UNKNOWN defaults KEEP"
+      ],
+      "path": "freq/tui/__init__.py",
+      "zero_branch_statement_floor": 0.7
+    },
+    {
+      "branch_floor": 0.4,
+      "classification": "RETAINED",
+      "critical": false,
+      "evidence": [
+        "public-surface/lifecycle direct reference"
+      ],
+      "path": "freq/tui/menu.py",
+      "zero_branch_statement_floor": 0.7
+    }
+  ],
+  "module_contract_sha256": "f3a68f994bc55508eae10dc5f56b0a0764340748e7f2337496ddcf756e58c739",
+  "module_coverage": [
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 2,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 2,
+      "path": "freq/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 2,
+      "num_statements": 8,
+      "path": "freq/__main__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 48,
+      "covered_lines": 168,
+      "critical": false,
+      "num_branches": 58,
+      "num_statements": 186,
+      "path": "freq/agent_collector.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 5,
+      "covered_lines": 18,
+      "critical": false,
+      "num_branches": 6,
+      "num_statements": 18,
+      "path": "freq/api/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 96,
+      "covered_lines": 304,
+      "critical": true,
+      "num_branches": 120,
+      "num_statements": 392,
+      "path": "freq/api/auth.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 21,
+      "covered_lines": 98,
+      "critical": false,
+      "num_branches": 90,
+      "num_statements": 318,
+      "path": "freq/api/auto.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 20,
+      "covered_lines": 54,
+      "critical": false,
+      "num_branches": 64,
+      "num_statements": 151,
+      "path": "freq/api/backup_verify.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 9,
+      "covered_lines": 41,
+      "critical": false,
+      "num_branches": 56,
+      "num_statements": 195,
+      "path": "freq/api/bench.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 36,
+      "covered_lines": 132,
+      "critical": false,
+      "num_branches": 138,
+      "num_statements": 412,
+      "path": "freq/api/cert_lifecycle.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 33,
+      "covered_lines": 107,
+      "critical": false,
+      "num_branches": 184,
+      "num_statements": 441,
+      "path": "freq/api/ct.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 19,
+      "covered_lines": 70,
+      "critical": false,
+      "num_branches": 106,
+      "num_statements": 285,
+      "path": "freq/api/docker_api.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 6,
+      "covered_lines": 45,
+      "critical": false,
+      "num_branches": 56,
+      "num_statements": 219,
+      "path": "freq/api/dr.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 74,
+      "covered_lines": 343,
+      "critical": true,
+      "num_branches": 282,
+      "num_statements": 910,
+      "path": "freq/api/fleet.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 25,
+      "covered_lines": 80,
+      "critical": false,
+      "num_branches": 156,
+      "num_statements": 358,
+      "path": "freq/api/fw.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 9,
+      "covered_lines": 51,
+      "critical": false,
+      "num_branches": 14,
+      "num_statements": 71,
+      "path": "freq/api/helpers.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 10,
+      "critical": false,
+      "num_branches": 2,
+      "num_statements": 23,
+      "path": "freq/api/host.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 29,
+      "covered_lines": 128,
+      "critical": false,
+      "num_branches": 128,
+      "num_statements": 352,
+      "path": "freq/api/hw.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 9,
+      "covered_lines": 42,
+      "critical": false,
+      "num_branches": 56,
+      "num_statements": 169,
+      "path": "freq/api/ipmi.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 6,
+      "covered_lines": 31,
+      "critical": false,
+      "num_branches": 40,
+      "num_statements": 121,
+      "path": "freq/api/logs.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 9,
+      "covered_lines": 69,
+      "critical": false,
+      "num_branches": 116,
+      "num_statements": 374,
+      "path": "freq/api/net.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 9,
+      "covered_lines": 87,
+      "critical": false,
+      "num_branches": 62,
+      "num_statements": 288,
+      "path": "freq/api/observe.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 28,
+      "covered_lines": 98,
+      "critical": false,
+      "num_branches": 156,
+      "num_statements": 378,
+      "path": "freq/api/opnsense.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 12,
+      "critical": false,
+      "num_branches": 2,
+      "num_statements": 32,
+      "path": "freq/api/ops.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 8,
+      "critical": false,
+      "num_branches": 10,
+      "num_statements": 38,
+      "path": "freq/api/plugin.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 3,
+      "covered_lines": 30,
+      "critical": false,
+      "num_branches": 70,
+      "num_statements": 200,
+      "path": "freq/api/redfish.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 42,
+      "covered_lines": 175,
+      "critical": false,
+      "num_branches": 104,
+      "num_statements": 366,
+      "path": "freq/api/secure.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 19,
+      "critical": false,
+      "num_branches": 18,
+      "num_statements": 69,
+      "path": "freq/api/snmp.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 15,
+      "covered_lines": 62,
+      "critical": false,
+      "num_branches": 30,
+      "num_statements": 185,
+      "path": "freq/api/state.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 24,
+      "covered_lines": 86,
+      "critical": false,
+      "num_branches": 174,
+      "num_statements": 409,
+      "path": "freq/api/store.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 34,
+      "critical": false,
+      "num_branches": 76,
+      "num_statements": 177,
+      "path": "freq/api/synology.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 40,
+      "covered_lines": 161,
+      "critical": true,
+      "num_branches": 206,
+      "num_statements": 519,
+      "path": "freq/api/terminal.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 38,
+      "covered_lines": 107,
+      "critical": false,
+      "num_branches": 68,
+      "num_statements": 195,
+      "path": "freq/api/user.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 30,
+      "critical": false,
+      "num_branches": 2,
+      "num_statements": 49,
+      "path": "freq/api/v1_stubs.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 534,
+      "covered_lines": 1359,
+      "critical": true,
+      "num_branches": 1022,
+      "num_statements": 2254,
+      "path": "freq/api/vm.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 19,
+      "covered_lines": 1579,
+      "critical": false,
+      "num_branches": 76,
+      "num_statements": 2216,
+      "path": "freq/cli.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/core/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 4,
+      "covered_lines": 37,
+      "critical": false,
+      "num_branches": 20,
+      "num_statements": 71,
+      "path": "freq/core/audit.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 1,
+      "covered_lines": 5,
+      "critical": false,
+      "num_branches": 2,
+      "num_statements": 7,
+      "path": "freq/core/compat.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 205,
+      "covered_lines": 637,
+      "critical": false,
+      "num_branches": 292,
+      "num_statements": 735,
+      "path": "freq/core/config.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 50,
+      "covered_lines": 119,
+      "critical": false,
+      "num_branches": 80,
+      "num_statements": 163,
+      "path": "freq/core/device_credentials.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 175,
+      "covered_lines": 515,
+      "critical": false,
+      "num_branches": 322,
+      "num_statements": 813,
+      "path": "freq/core/doctor.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 5,
+      "path": "freq/core/exitcodes.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 25,
+      "covered_lines": 198,
+      "critical": false,
+      "num_branches": 30,
+      "num_statements": 210,
+      "path": "freq/core/fmt.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 25,
+      "covered_lines": 71,
+      "critical": false,
+      "num_branches": 28,
+      "num_statements": 74,
+      "path": "freq/core/health_state.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 21,
+      "covered_lines": 50,
+      "critical": false,
+      "num_branches": 24,
+      "num_statements": 57,
+      "path": "freq/core/host_scope.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 8,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 8,
+      "path": "freq/core/http_query.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 23,
+      "covered_lines": 146,
+      "critical": false,
+      "num_branches": 44,
+      "num_statements": 204,
+      "path": "freq/core/log.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 6,
+      "covered_lines": 29,
+      "critical": false,
+      "num_branches": 8,
+      "num_statements": 34,
+      "path": "freq/core/packages.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 19,
+      "covered_lines": 90,
+      "critical": false,
+      "num_branches": 24,
+      "num_statements": 98,
+      "path": "freq/core/personality.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 18,
+      "covered_lines": 70,
+      "critical": false,
+      "num_branches": 40,
+      "num_statements": 92,
+      "path": "freq/core/platform.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 9,
+      "covered_lines": 26,
+      "critical": false,
+      "num_branches": 10,
+      "num_statements": 30,
+      "path": "freq/core/plugins.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 24,
+      "covered_lines": 67,
+      "critical": false,
+      "num_branches": 38,
+      "num_statements": 84,
+      "path": "freq/core/preflight.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 27,
+      "covered_lines": 66,
+      "critical": false,
+      "num_branches": 42,
+      "num_statements": 83,
+      "path": "freq/core/remote_platform.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 28,
+      "covered_lines": 66,
+      "critical": false,
+      "num_branches": 38,
+      "num_statements": 72,
+      "path": "freq/core/resolve.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 14,
+      "covered_lines": 29,
+      "critical": true,
+      "num_branches": 18,
+      "num_statements": 33,
+      "path": "freq/core/service_units.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 10,
+      "covered_lines": 39,
+      "critical": true,
+      "num_branches": 14,
+      "num_statements": 43,
+      "path": "freq/core/services.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 85,
+      "covered_lines": 245,
+      "critical": true,
+      "num_branches": 120,
+      "num_statements": 293,
+      "path": "freq/core/setup_contract.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 50,
+      "covered_lines": 166,
+      "critical": true,
+      "num_branches": 88,
+      "num_statements": 229,
+      "path": "freq/core/setup_discovery.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 13,
+      "covered_lines": 73,
+      "critical": true,
+      "num_branches": 16,
+      "num_statements": 84,
+      "path": "freq/core/setup_state.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 40,
+      "covered_lines": 125,
+      "critical": false,
+      "num_branches": 54,
+      "num_statements": 169,
+      "path": "freq/core/ssh.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 5,
+      "covered_lines": 34,
+      "critical": false,
+      "num_branches": 52,
+      "num_statements": 136,
+      "path": "freq/core/truenas_api.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 6,
+      "covered_lines": 205,
+      "critical": false,
+      "num_branches": 6,
+      "num_statements": 209,
+      "path": "freq/core/types.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 30,
+      "covered_lines": 90,
+      "critical": false,
+      "num_branches": 30,
+      "num_statements": 90,
+      "path": "freq/core/validate.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "OMITTED_OR_MISSING",
+      "covered_branches": null,
+      "covered_lines": null,
+      "critical": false,
+      "num_branches": null,
+      "num_statements": null,
+      "path": "freq/data/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "OMITTED_OR_MISSING",
+      "covered_branches": null,
+      "covered_lines": null,
+      "critical": false,
+      "num_branches": null,
+      "num_statements": null,
+      "path": "freq/data/conf-templates/plugins/example_ping.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "OMITTED_OR_MISSING",
+      "covered_branches": null,
+      "covered_lines": null,
+      "critical": false,
+      "num_branches": null,
+      "num_statements": null,
+      "path": "freq/data/web/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 8,
+      "covered_lines": 24,
+      "critical": false,
+      "num_branches": 10,
+      "num_statements": 29,
+      "path": "freq/deployers/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/deployers/bmc/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 6,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 10,
+      "path": "freq/deployers/bmc/idrac.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 7,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 12,
+      "path": "freq/deployers/bmc/ilo.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/deployers/firewall/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 7,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 13,
+      "path": "freq/deployers/firewall/opnsense.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 6,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 10,
+      "path": "freq/deployers/firewall/pfsense.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/deployers/nas/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 8,
+      "covered_lines": 38,
+      "critical": false,
+      "num_branches": 22,
+      "num_statements": 58,
+      "path": "freq/deployers/nas/truenas.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/deployers/server/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 6,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 10,
+      "path": "freq/deployers/server/linux.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/deployers/switch/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 99,
+      "covered_lines": 229,
+      "critical": false,
+      "num_branches": 206,
+      "num_statements": 394,
+      "path": "freq/deployers/switch/cisco.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 7,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 12,
+      "path": "freq/deployers/switch/ubiquiti.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/engine/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 4,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 4,
+      "path": "freq/engine/policies/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 1,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 1,
+      "path": "freq/engine/policies/ntp_sync.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 1,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 1,
+      "path": "freq/engine/policies/rpcbind.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 1,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 1,
+      "path": "freq/engine/policies/ssh_hardening.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 34,
+      "covered_lines": 87,
+      "critical": false,
+      "num_branches": 38,
+      "num_statements": 88,
+      "path": "freq/engine/policy.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 11,
+      "critical": false,
+      "num_branches": 62,
+      "num_statements": 134,
+      "path": "freq/engine/runner.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/jarvis/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 4,
+      "covered_lines": 53,
+      "critical": false,
+      "num_branches": 104,
+      "num_statements": 355,
+      "path": "freq/jarvis/agent.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 80,
+      "covered_lines": 178,
+      "critical": false,
+      "num_branches": 120,
+      "num_statements": 257,
+      "path": "freq/jarvis/capacity.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 25,
+      "covered_lines": 114,
+      "critical": false,
+      "num_branches": 86,
+      "num_statements": 227,
+      "path": "freq/jarvis/chaos.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 32,
+      "covered_lines": 118,
+      "critical": false,
+      "num_branches": 48,
+      "num_statements": 173,
+      "path": "freq/jarvis/cost.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 23,
+      "covered_lines": 123,
+      "critical": false,
+      "num_branches": 48,
+      "num_statements": 193,
+      "path": "freq/jarvis/federation.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 40,
+      "covered_lines": 167,
+      "critical": false,
+      "num_branches": 72,
+      "num_statements": 242,
+      "path": "freq/jarvis/gitops.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 14,
+      "covered_lines": 79,
+      "critical": false,
+      "num_branches": 34,
+      "num_statements": 128,
+      "path": "freq/jarvis/learn.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 6,
+      "covered_lines": 44,
+      "critical": false,
+      "num_branches": 38,
+      "num_statements": 185,
+      "path": "freq/jarvis/notify.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 27,
+      "critical": false,
+      "num_branches": 32,
+      "num_statements": 100,
+      "path": "freq/jarvis/patrol.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 17,
+      "covered_lines": 74,
+      "critical": false,
+      "num_branches": 38,
+      "num_statements": 124,
+      "path": "freq/jarvis/playbook.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 28,
+      "critical": false,
+      "num_branches": 52,
+      "num_statements": 148,
+      "path": "freq/jarvis/provision.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 24,
+      "critical": false,
+      "num_branches": 24,
+      "num_statements": 85,
+      "path": "freq/jarvis/risk.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 97,
+      "covered_lines": 234,
+      "critical": false,
+      "num_branches": 142,
+      "num_statements": 338,
+      "path": "freq/jarvis/rules.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 22,
+      "num_statements": 73,
+      "path": "freq/jarvis/sweep.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/modules/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 11,
+      "covered_lines": 44,
+      "critical": true,
+      "num_branches": 16,
+      "num_statements": 56,
+      "path": "freq/modules/agent_deployment.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 5,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 5,
+      "path": "freq/modules/agent_health.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 26,
+      "covered_lines": 72,
+      "critical": false,
+      "num_branches": 140,
+      "num_statements": 401,
+      "path": "freq/modules/alert.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 62,
+      "num_statements": 141,
+      "path": "freq/modules/audit.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 4,
+      "covered_lines": 46,
+      "critical": false,
+      "num_branches": 30,
+      "num_statements": 130,
+      "path": "freq/modules/automation.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 58,
+      "num_statements": 163,
+      "path": "freq/modules/backup.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 40,
+      "critical": false,
+      "num_branches": 58,
+      "num_statements": 224,
+      "path": "freq/modules/backup_policy.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 9,
+      "covered_lines": 50,
+      "critical": false,
+      "num_branches": 60,
+      "num_statements": 209,
+      "path": "freq/modules/baseline.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 26,
+      "num_statements": 91,
+      "path": "freq/modules/benchmark.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 18,
+      "num_statements": 108,
+      "path": "freq/modules/bootstrap.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 37,
+      "critical": false,
+      "num_branches": 70,
+      "num_statements": 239,
+      "path": "freq/modules/cert.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 233,
+      "covered_lines": 709,
+      "critical": false,
+      "num_branches": 526,
+      "num_statements": 1402,
+      "path": "freq/modules/cert_management.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 20,
+      "num_statements": 95,
+      "path": "freq/modules/comms.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 4,
+      "covered_lines": 22,
+      "critical": false,
+      "num_branches": 36,
+      "num_statements": 106,
+      "path": "freq/modules/compare.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 4,
+      "covered_lines": 37,
+      "critical": false,
+      "num_branches": 36,
+      "num_statements": 174,
+      "path": "freq/modules/comply.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 19,
+      "covered_lines": 58,
+      "critical": false,
+      "num_branches": 112,
+      "num_statements": 333,
+      "path": "freq/modules/config_management.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 6,
+      "covered_lines": 32,
+      "critical": false,
+      "num_branches": 58,
+      "num_statements": 192,
+      "path": "freq/modules/cost_analysis.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 9,
+      "critical": false,
+      "num_branches": 26,
+      "num_statements": 93,
+      "path": "freq/modules/db.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 23,
+      "covered_lines": 183,
+      "critical": false,
+      "num_branches": 26,
+      "num_statements": 187,
+      "path": "freq/modules/demo.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 5,
+      "covered_lines": 39,
+      "critical": false,
+      "num_branches": 14,
+      "num_statements": 74,
+      "path": "freq/modules/deploy_agent.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 8,
+      "covered_lines": 42,
+      "critical": false,
+      "num_branches": 74,
+      "num_statements": 197,
+      "path": "freq/modules/depmap.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 14,
+      "covered_lines": 40,
+      "critical": false,
+      "num_branches": 48,
+      "num_statements": 146,
+      "path": "freq/modules/discover.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 9,
+      "covered_lines": 28,
+      "critical": false,
+      "num_branches": 10,
+      "num_statements": 33,
+      "path": "freq/modules/distros.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 39,
+      "critical": false,
+      "num_branches": 60,
+      "num_statements": 176,
+      "path": "freq/modules/dns.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 27,
+      "critical": false,
+      "num_branches": 24,
+      "num_statements": 120,
+      "path": "freq/modules/dns_management.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 10,
+      "critical": false,
+      "num_branches": 36,
+      "num_statements": 95,
+      "path": "freq/modules/docker_mgmt.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 8,
+      "covered_lines": 55,
+      "critical": false,
+      "num_branches": 66,
+      "num_statements": 231,
+      "path": "freq/modules/docs.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 57,
+      "covered_lines": 223,
+      "critical": false,
+      "num_branches": 124,
+      "num_statements": 349,
+      "path": "freq/modules/dr.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 55,
+      "covered_lines": 153,
+      "critical": false,
+      "num_branches": 68,
+      "num_statements": 170,
+      "path": "freq/modules/engine_cmds.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 40,
+      "covered_lines": 130,
+      "critical": false,
+      "num_branches": 162,
+      "num_statements": 435,
+      "path": "freq/modules/event_network.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 3,
+      "covered_lines": 22,
+      "critical": false,
+      "num_branches": 38,
+      "num_statements": 118,
+      "path": "freq/modules/fim.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 17,
+      "covered_lines": 45,
+      "critical": false,
+      "num_branches": 102,
+      "num_statements": 245,
+      "path": "freq/modules/firewall.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 56,
+      "covered_lines": 262,
+      "critical": true,
+      "num_branches": 358,
+      "num_statements": 1057,
+      "path": "freq/modules/fleet.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 7,
+      "covered_lines": 40,
+      "critical": false,
+      "num_branches": 50,
+      "num_statements": 156,
+      "path": "freq/modules/gwipe.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 20,
+      "num_statements": 63,
+      "path": "freq/modules/harden.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 9,
+      "critical": false,
+      "num_branches": 44,
+      "num_statements": 115,
+      "path": "freq/modules/hardware.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 42,
+      "num_statements": 137,
+      "path": "freq/modules/health.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 161,
+      "covered_lines": 358,
+      "critical": false,
+      "num_branches": 280,
+      "num_statements": 617,
+      "path": "freq/modules/hosts.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 12,
+      "covered_lines": 62,
+      "critical": false,
+      "num_branches": 28,
+      "num_statements": 100,
+      "path": "freq/modules/iac.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 4,
+      "covered_lines": 54,
+      "critical": false,
+      "num_branches": 18,
+      "num_statements": 110,
+      "path": "freq/modules/incident.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 42,
+      "num_statements": 141,
+      "path": "freq/modules/infrastructure.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 1112,
+      "covered_lines": 2841,
+      "critical": true,
+      "num_branches": 2940,
+      "num_statements": 6820,
+      "path": "freq/modules/init_cmd.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 4,
+      "covered_lines": 32,
+      "critical": false,
+      "num_branches": 74,
+      "num_statements": 199,
+      "path": "freq/modules/inventory.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 28,
+      "covered_lines": 64,
+      "critical": false,
+      "num_branches": 112,
+      "num_statements": 239,
+      "path": "freq/modules/ipam.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 14,
+      "num_statements": 57,
+      "path": "freq/modules/journal.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 18,
+      "critical": false,
+      "num_branches": 68,
+      "num_statements": 243,
+      "path": "freq/modules/lab.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 11,
+      "covered_lines": 46,
+      "critical": false,
+      "num_branches": 72,
+      "num_statements": 189,
+      "path": "freq/modules/logs.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 616,
+      "num_statements": 1542,
+      "path": "freq/modules/media.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 13,
+      "covered_lines": 45,
+      "critical": false,
+      "num_branches": 44,
+      "num_statements": 132,
+      "path": "freq/modules/metrics.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 12,
+      "covered_lines": 30,
+      "critical": false,
+      "num_branches": 42,
+      "num_statements": 115,
+      "path": "freq/modules/migrate_plan.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 35,
+      "critical": false,
+      "num_branches": 66,
+      "num_statements": 248,
+      "path": "freq/modules/migrate_vmware.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 11,
+      "critical": false,
+      "num_branches": 112,
+      "num_statements": 261,
+      "path": "freq/modules/net_intelligence.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 6,
+      "covered_lines": 38,
+      "critical": false,
+      "num_branches": 58,
+      "num_statements": 211,
+      "path": "freq/modules/netmon.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 5,
+      "covered_lines": 55,
+      "critical": false,
+      "num_branches": 50,
+      "num_statements": 253,
+      "path": "freq/modules/oncall.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 44,
+      "critical": false,
+      "num_branches": 60,
+      "num_statements": 247,
+      "path": "freq/modules/patch.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 31,
+      "covered_lines": 85,
+      "critical": false,
+      "num_branches": 126,
+      "num_statements": 298,
+      "path": "freq/modules/plan.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 37,
+      "critical": false,
+      "num_branches": 106,
+      "num_statements": 335,
+      "path": "freq/modules/plugin_manager.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 29,
+      "critical": false,
+      "num_branches": 38,
+      "num_statements": 165,
+      "path": "freq/modules/proxy.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 14,
+      "critical": false,
+      "num_branches": 46,
+      "num_statements": 143,
+      "path": "freq/modules/proxy_management.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 44,
+      "covered_lines": 141,
+      "critical": false,
+      "num_branches": 114,
+      "num_statements": 329,
+      "path": "freq/modules/pve.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 11,
+      "covered_lines": 43,
+      "critical": false,
+      "num_branches": 56,
+      "num_statements": 207,
+      "path": "freq/modules/report.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 9,
+      "critical": false,
+      "num_branches": 44,
+      "num_statements": 120,
+      "path": "freq/modules/rollback.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 46,
+      "critical": false,
+      "num_branches": 58,
+      "num_statements": 264,
+      "path": "freq/modules/schedule.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 49,
+      "critical": false,
+      "num_branches": 44,
+      "num_statements": 210,
+      "path": "freq/modules/secrets.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 7,
+      "covered_lines": 39,
+      "critical": true,
+      "num_branches": 34,
+      "num_statements": 105,
+      "path": "freq/modules/selfupdate.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 728,
+      "covered_lines": 2293,
+      "critical": true,
+      "num_branches": 1748,
+      "num_statements": 4728,
+      "path": "freq/modules/serve.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 10,
+      "covered_lines": 37,
+      "critical": false,
+      "num_branches": 46,
+      "num_statements": 164,
+      "path": "freq/modules/sla.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 76,
+      "covered_lines": 311,
+      "critical": false,
+      "num_branches": 208,
+      "num_statements": 718,
+      "path": "freq/modules/snmp.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 30,
+      "num_statements": 163,
+      "path": "freq/modules/specialist.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 32,
+      "critical": false,
+      "num_branches": 66,
+      "num_statements": 220,
+      "path": "freq/modules/stack.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 7,
+      "covered_lines": 28,
+      "critical": false,
+      "num_branches": 82,
+      "num_statements": 222,
+      "path": "freq/modules/storage.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 21,
+      "covered_lines": 73,
+      "critical": false,
+      "num_branches": 298,
+      "num_statements": 774,
+      "path": "freq/modules/switch_orchestration.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 7,
+      "covered_lines": 57,
+      "critical": false,
+      "num_branches": 40,
+      "num_statements": 185,
+      "path": "freq/modules/synthetic_monitors.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 13,
+      "covered_lines": 66,
+      "critical": false,
+      "num_branches": 64,
+      "num_statements": 195,
+      "path": "freq/modules/topology.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 3,
+      "covered_lines": 39,
+      "critical": false,
+      "num_branches": 42,
+      "num_statements": 197,
+      "path": "freq/modules/trend.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 37,
+      "covered_lines": 124,
+      "critical": false,
+      "num_branches": 112,
+      "num_statements": 342,
+      "path": "freq/modules/users.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 39,
+      "covered_lines": 131,
+      "critical": false,
+      "num_branches": 86,
+      "num_statements": 257,
+      "path": "freq/modules/vault.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 107,
+      "covered_lines": 386,
+      "critical": true,
+      "num_branches": 508,
+      "num_statements": 1228,
+      "path": "freq/modules/vm.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 14,
+      "covered_lines": 34,
+      "critical": false,
+      "num_branches": 74,
+      "num_statements": 171,
+      "path": "freq/modules/vpn.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 11,
+      "critical": false,
+      "num_branches": 12,
+      "num_statements": 64,
+      "path": "freq/modules/vuln.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 63,
+      "covered_lines": 239,
+      "critical": false,
+      "num_branches": 130,
+      "num_statements": 406,
+      "path": "freq/modules/watchdog.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 5,
+      "covered_lines": 19,
+      "critical": false,
+      "num_branches": 6,
+      "num_statements": 21,
+      "path": "freq/modules/web_ui.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 46,
+      "critical": false,
+      "num_branches": 42,
+      "num_statements": 203,
+      "path": "freq/modules/webhook.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 7,
+      "covered_lines": 49,
+      "critical": false,
+      "num_branches": 10,
+      "num_statements": 49,
+      "path": "freq/modules/why.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 10,
+      "num_statements": 40,
+      "path": "freq/modules/wol.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 0,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 0,
+      "path": "freq/services/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 4,
+      "covered_lines": 34,
+      "critical": false,
+      "num_branches": 4,
+      "num_statements": 36,
+      "path": "freq/services/dashboard_events.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 0,
+      "covered_lines": 11,
+      "critical": false,
+      "num_branches": 0,
+      "num_statements": 11,
+      "path": "freq/services/dashboard_state.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 2,
+      "covered_lines": 16,
+      "critical": false,
+      "num_branches": 2,
+      "num_statements": 16,
+      "path": "freq/services/idrac_session.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 27,
+      "covered_lines": 74,
+      "critical": false,
+      "num_branches": 30,
+      "num_statements": 76,
+      "path": "freq/services/pve_discovery.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 16,
+      "covered_lines": 44,
+      "critical": false,
+      "num_branches": 16,
+      "num_statements": 44,
+      "path": "freq/services/pve_inventory.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 24,
+      "covered_lines": 65,
+      "critical": false,
+      "num_branches": 26,
+      "num_statements": 65,
+      "path": "freq/services/pve_tags.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 14,
+      "covered_lines": 65,
+      "critical": false,
+      "num_branches": 14,
+      "num_statements": 65,
+      "path": "freq/services/pve_transport.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "MEASURED",
+      "covered_branches": 30,
+      "covered_lines": 69,
+      "critical": false,
+      "num_branches": 30,
+      "num_statements": 69,
+      "path": "freq/services/vm_visibility.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "OMITTED_OR_MISSING",
+      "covered_branches": null,
+      "covered_lines": null,
+      "critical": false,
+      "num_branches": null,
+      "num_statements": null,
+      "path": "freq/tui/__init__.py",
+      "retained_public": true
+    },
+    {
+      "coverage_status": "OMITTED_OR_MISSING",
+      "covered_branches": null,
+      "covered_lines": null,
+      "critical": false,
+      "num_branches": null,
+      "num_statements": null,
+      "path": "freq/tui/menu.py",
+      "retained_public": true
+    }
+  ],
+  "python": {
+    "default_cases": 4886,
+    "node_ids_file": "tests/manifests/b94321f-default-nodeids.txt",
+    "node_ids_sha256": "4b42a0f56023d4b47bbca1dc7ce863bcd4992a286e077d12d2f7852720daa9ac",
+    "passed": 4862,
+    "pollution": {
+      "canonical": false,
+      "host": "VM999",
+      "results": {
+        "agent_home": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        },
+        "etc_freq": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        },
+        "git_worktree": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        },
+        "persistent_temp_paths": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        },
+        "processes": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        },
+        "project_root": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        },
+        "root_init_inputs": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        },
+        "sockets": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        },
+        "threads": {
+          "after": null,
+          "before": null,
+          "clean": false,
+          "measured": false
+        }
+      },
+      "schema_version": 2,
+      "source_sha": "b94321f968d1f2601b40404c3aff242e5858ced7"
+    },
+    "runtime": {
+      "canonical": false,
+      "host": "VM999",
+      "runs": [
+        {
+          "clean": false,
+          "seconds": 327.54
+        }
+      ],
+      "schema_version": 1,
+      "source_sha": "b94321f968d1f2601b40404c3aff242e5858ced7"
+    },
+    "skipped": 24,
+    "warnings": 17
+  },
+  "schema_version": 2,
+  "source_sha": "b94321f968d1f2601b40404c3aff242e5858ced7"
+}

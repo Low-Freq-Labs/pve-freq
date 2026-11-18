@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE FREQ | Browser Setup</title>
+<link rel="stylesheet" href="/static/css/setup.css?v={{VERSION}}">
+</head>
+<body>
+<main class="setup-shell">
+  <header class="setup-hero">
+    <div>
+      <p class="eyebrow">first-run · browser and programmatic init</p>
+      <h1>PVE FREQ</h1>
+      <p class="hero-copy">Browser and programmatic setup share one first-admin boundary. Connect the cluster, review what discovery finds, and build the fleet contract without opening a shell, hand-editing config files, or typing VMID ranges.</p>
+    </div>
+    <aside class="status-card" aria-live="polite">
+      <span class="status-label">setup truth</span>
+      <strong id="setup-health">checking</strong>
+      <p id="setup-reason">Reading the current setup state.</p>
+      <span id="session-state" class="session-state">session unknown</span>
+    </aside>
+  </header>
+
+  <nav class="wizard-rail" aria-label="Setup progress">
+    <button type="button" data-step-target="operator" aria-current="step"><span>01</span><b>Operator</b><small>Secure this setup</small></button>
+    <button type="button" data-step-target="connect" disabled><span>02</span><b>Connect</b><small>Cluster access</small></button>
+    <button type="button" data-step-target="discover" disabled><span>03</span><b>Discover</b><small>Review the scan</small></button>
+    <button type="button" data-step-target="credentials" disabled><span>04</span><b>Credentials</b><small>Owned devices</small></button>
+    <button type="button" data-step-target="launch" disabled><span>05</span><b>Launch</b><small>Service identity</small></button>
+    <button type="button" data-step-target="progress" disabled><span>06</span><b>Verify</b><small>Honest completion</small></button>
+  </nav>
+
+  <div id="form-error" class="blocker" role="alert" hidden></div>
+
+  <section id="step-operator" class="panel panel-operator" data-step="operator" aria-labelledby="operator-title" tabindex="-1">
+    <div class="step-kicker"><span>Step 01</span><span>only unauthenticated mutation</span></div>
+    <div class="panel-head">
+      <div>
+        <p>Operator</p>
+        <h2 id="operator-title">First web operator</h2>
+      </div>
+      <span class="truth-chip">cookie + CSRF</span>
+    </div>
+    <p class="panel-copy">Create the human admin who owns this setup session. The fleet service account is separate runtime identity and full init deploys it later.</p>
+    <form id="operator-form" class="step-form" method="post" autocomplete="off" novalidate>
+      <div class="field-row two-up">
+        <label for="operator-user">Operator username
+          <input id="operator-user" name="operator_user" type="text" value="admin" autocomplete="username" required>
+        </label>
+        <div></div>
+        <label for="operator-pass">Password
+          <input id="operator-pass" name="operator_pass" type="password" autocomplete="new-password" required>
+        </label>
+        <label for="operator-pass2">Confirm password
+          <input id="operator-pass2" name="operator_pass2" type="password" autocomplete="new-password" required>
+        </label>
+        <label for="operator-claim">First-boot claim secret
+          <input id="operator-claim" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="operator-claim-help" data-api-field="claim_secret" required>
+          <small id="operator-claim-help">On the FREQ host, use the newest one-time claim emitted for the currently running first-boot service. Read it from the current console output or the latest pve-freq-setup journal delivery, then paste it here. It is accepted once and is never shown by this page.</small>
+        </label>
+      </div>
+      <div class="action-row">
+        <button id="create-operator" class="btn-primary" type="submit">Create operator &amp; continue</button>
+      </div>
+    </form>
+    <div id="resume-session" class="resume-card" hidden>
+      <div><strong>Existing setup detected</strong><p>The first operator already exists. Sign in through the dashboard, then return here to resume the same setup.</p></div>
+      <a id="resume-sign-in" class="btn-secondary button-link" href="/">Open sign in</a>
+      <button id="retry-session" class="btn-secondary" type="button">Check session</button>
+    </div>
+  </section>
+
+  <section id="step-connect" class="panel panel-connect" data-step="connect" aria-labelledby="connect-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 02</span><span>declared targets only</span></div>
+    <div class="panel-head">
+      <div><p>Connect</p><h2 id="connect-title">Point discovery at the cluster</h2></div>
+      <span class="truth-chip">1–16 literal IPs</span>
+    </div>
+    <p class="panel-copy">Enter PVE node addresses and the operator's existing SSH login. It is used only to reach the declared nodes; the PVE-FREQ service identity is created separately. The password is sent as a value into the setup vault—never as a server path.</p>
+    <form id="discovery-form" class="step-form" autocomplete="off">
+      <div class="field-row two-up compact-fields">
+        <label for="cluster-name">Cluster name
+          <input id="cluster-name" name="cluster_name" type="text" placeholder="dc01" required>
+        </label>
+        <label for="bootstrap-user">Bootstrap SSH user
+          <input id="bootstrap-user" name="bootstrap_user" type="text" value="root" autocomplete="username" required>
+        </label>
+        <label for="bootstrap-pass">Bootstrap SSH password
+          <input id="bootstrap-pass" name="bootstrap_password" type="password" autocomplete="current-password" required>
+        </label>
+      </div>
+      <div class="subhead-row">
+        <div><h3>PVE nodes</h3><p>Names are optional; discovery replaces them with cluster truth when available.</p></div>
+        <button class="mini-btn" type="button" data-action="add-node">Add node</button>
+      </div>
+      <div id="pve-node-list" class="stack-list"></div>
+      <div class="action-row split-actions">
+        <button class="btn-secondary" type="button" data-action="back" data-back="operator">Back</button>
+        <button id="start-discovery" class="btn-primary" type="submit">Start bounded discovery</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="step-discover" class="panel panel-discover" data-step="discover" aria-labelledby="discover-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 03</span><span id="discovery-as-of">not run</span></div>
+    <div class="panel-head">
+      <div><p>Fleet contract</p><h2 id="discover-title">Review every discovered row</h2></div>
+      <span id="review-count" class="truth-chip">0 of 0 decided</span>
+    </div>
+    <p class="panel-copy">Suggestions are shown as hints, never accepted for you. Mark every virtual resource and device as owned or acknowledged; owned rows also need production or lab placement.</p>
+    <div id="discovery-progress" class="job-progress" aria-live="polite">
+      <div><strong id="discovery-phase">Waiting</strong><span id="discovery-count">0 / 0</span></div>
+      <div class="progress-track"><span id="discovery-bar"></span></div>
+      <p id="discovery-message">Discovery has not started.</p>
+    </div>
+    <div id="discovery-warnings" class="warning-list" hidden></div>
+    <div id="review-surface" hidden>
+      <div id="node-truth" class="node-truth"></div>
+      <div class="review-toolbar">
+        <div class="review-filters" role="group" aria-label="Filter discovered resources">
+          <button class="filter-btn is-active" type="button" data-filter="all" aria-pressed="true">All</button>
+          <button class="filter-btn" type="button" data-filter="virtual" aria-pressed="false">VMs &amp; templates</button>
+          <button class="filter-btn" type="button" data-filter="device" aria-pressed="false">Devices</button>
+          <button class="filter-btn" type="button" data-filter="undecided" aria-pressed="false">Undecided</button>
+        </div>
+        <span>Every choice is explicit</span>
+      </div>
+      <div class="resource-table-wrap">
+        <table class="resource-table">
+          <thead><tr><th>Resource</th><th>Discovery truth</th><th>Contract</th><th>Placement</th></tr></thead>
+          <tbody id="resource-rows"></tbody>
+        </table>
+      </div>
+      <div class="action-row split-actions">
+        <button class="btn-secondary" type="button" data-action="rediscover">Run discovery again</button>
+        <button id="save-contract" class="btn-primary" type="button" disabled>Freeze selected contract</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="step-credentials" class="panel panel-credentials" data-step="credentials" aria-labelledby="credentials-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 04</span><span>presence only after save</span></div>
+    <div class="panel-head">
+      <div><p>Device access</p><h2 id="credentials-title">Credentials for owned devices</h2></div>
+      <span id="credential-count" class="truth-chip">0 required</span>
+    </div>
+    <p class="panel-copy">Only server-requested fields appear. Secrets write directly to the setup vault and never return to this page.</p>
+    <form id="credentials-form" class="step-form" autocomplete="off">
+      <div id="credential-list" class="credential-list"></div>
+      <div class="action-row split-actions">
+        <button class="btn-secondary" type="button" data-action="back" data-back="discover">Back to contract</button>
+        <button id="save-credentials" class="btn-primary" type="submit">Store device credentials</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="step-launch" class="panel panel-launch" data-step="launch" aria-labelledby="launch-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 05</span><span>frozen discovery + contract</span></div>
+    <div class="panel-head">
+      <div><p>Launch</p><h2 id="launch-title">Deploy the fleet service identity</h2></div>
+      <span class="truth-chip">SSL deferred</span>
+    </div>
+    <p class="panel-copy">This account is the deployed SSH/runtime identity, not a dashboard login, and must differ from the bootstrap SSH user. Optional PDM and certificate lifecycle stay deferred until after base init.</p>
+    <form id="launch-form" class="step-form" autocomplete="off">
+      <div class="field-row two-up">
+        <label for="service-account">Service account
+          <input id="service-account" name="service_account" type="text" value="freq-admin" autocomplete="username" data-api-field="service_account.username" required>
+        </label>
+        <div></div>
+        <label for="service-pass">Service account password
+          <input id="service-pass" name="service_password" type="password" autocomplete="new-password" required>
+        </label>
+        <label for="service-pass2">Confirm password
+          <input id="service-pass2" name="service_password_confirm" type="password" autocomplete="new-password" required>
+        </label>
+      </div>
+      <div id="contract-summary" class="contract-summary"></div>
+      <div class="action-row split-actions">
+        <button class="btn-secondary" type="button" data-action="back" data-back="credentials">Back</button>
+        <button id="start-init" class="btn-primary" type="submit">Start full init</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="step-progress" class="panel panel-run" data-step="progress" aria-labelledby="progress-title" tabindex="-1" hidden>
+    <div class="step-kicker"><span>Step 06</span><span id="init-as-of">not started</span></div>
+    <div class="panel-head">
+      <div><p>Verify</p><h2 id="progress-title">Init progress</h2></div>
+      <span id="progress-state" class="truth-chip">idle</span>
+    </div>
+    <p class="panel-copy">Completion is honest only when the runner exits zero and <code>/api/setup/status</code> reports both initialized/configured markers.</p>
+    <div class="job-progress" aria-live="polite">
+      <div><strong id="progress-phase">Waiting for init</strong><span id="progress-count">0 / 0</span></div>
+      <div class="progress-track"><span id="progress-bar"></span></div>
+      <p id="progress-message">No init run has started in this browser session.</p>
+    </div>
+    <div class="cancellation-card">
+      <div><strong>Cancellation</strong><p id="cancellation-status" role="status" aria-live="polite" aria-atomic="true" data-state="not-requested">Cancellation becomes available while init is queued or running.</p></div>
+      <button id="cancel-init" class="btn-secondary" type="button" aria-describedby="cancellation-status" hidden disabled>Request cancellation</button>
+    </div>
+    <div class="progress-box">
+      <div class="progress-head"><span>Redacted operator log</span><button id="refresh-logs" class="text-btn" type="button">Refresh</button></div>
+      <pre id="phase-log">No log lines returned.</pre>
+    </div>
+    <div id="completion-card" class="completion-card" hidden>
+      <div><strong>Setup verified complete</strong><p>Init exited cleanly and both durable completion markers are present.</p></div>
+      <a class="btn-primary button-link" href="/">Open dashboard</a>
+    </div>
+    <div class="action-row">
+      <button id="retry-init" class="btn-primary" type="button" hidden>Retry init</button>
+      <button id="refresh-status" class="btn-secondary" type="button">Refresh setup truth</button>
+    </div>
+  </section>
+</main>
+
+<script src="/static/js/setup.js?v={{VERSION}}"></script>
+</body>
+</html>

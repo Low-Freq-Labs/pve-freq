@@ -1,0 +1,131 @@
+"""Shared helpers for API domain handlers.
+
+Provides: json_response(), get_params(), get_json_body(), get_cfg()
+
+Common utilities that every API handler needs. Imported by each
+freq/api/<domain>.py module to avoid duplicating HTTP response logic.
+"""
+
+import json
+
+from freq.core import log as logger
+from freq.core.config import load_config
+from freq.core.http_query import parse_query as get_params
+from freq.core.setup_state import SCHEMA as ZERO_STATE_WEB_SCHEMA
+
+
+def json_response(handler, data, status=200):
+    """Send a JSON response through the HTTP handler."""
+    if isinstance(data, dict) and "error" in data and "request_id" not in data:
+        data = dict(data)
+        request_id = getattr(handler, "_request_id", "")
+        if not isinstance(request_id, str):
+            request_id = ""
+        data["request_id"] = request_id
+    body = json.dumps(data).encode()
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+    handler.send_header("Pragma", "no-cache")
+    try:
+        from freq.api.auth import maybe_send_session_refresh_cookie
+
+        maybe_send_session_refresh_cookie(handler)
+    except Exception:
+        pass
+    # M-BLUETEAM-SECURITY-HARDENING-20260413AJ: reflected-origin ACAO
+    # removed — same-origin only, no cross-origin CORS exposure. The shared
+    # response policy deliberately sends no ACAO.
+    handler.send_header("Content-Length", str(len(body)))
+    from freq.api.auth import send_security_headers
+
+    send_security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def setup_error(handler, status, code, message, *, field="", retryable=False, details=None):
+    error = {
+        "code": code,
+        "message": message,
+        "retryable": bool(retryable),
+    }
+    if field:
+        error["field"] = field
+    if details:
+        error["details"] = list(details)[:50]
+    handler._json_response(
+        {
+            "ok": False,
+            "schema": ZERO_STATE_WEB_SCHEMA,
+            "error": error,
+        },
+        status,
+    )
+
+
+def get_param(handler, key, default="") -> str:
+    """Get a single query parameter value."""
+    params = get_params(handler)
+    values = params.get(key, [default])
+    return values[0] if values else default
+
+
+def get_json_body(handler) -> dict:
+    """Read and parse a JSON request body."""
+    try:
+        length = int(handler.headers.get("Content-Length", 0))
+        if length <= 0:
+            return {}
+        raw = handler.rfile.read(length)
+        return json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as e:
+        logger.warn(f"api_helpers: invalid JSON body: {e}")
+        return {}
+
+
+def get_param_int(handler, key, default=0, min_val=None, max_val=None):
+    """Get integer query parameter with bounds checking."""
+    raw = get_param(handler, key, str(default))
+    try:
+        val = int(raw)
+    except (ValueError, TypeError):
+        return default
+    if min_val is not None and val < min_val:
+        return default
+    if max_val is not None and val > max_val:
+        return default
+    return val
+
+
+def require_role(min_role="operator"):
+    """Decorator for API handlers that require authentication."""
+
+    def decorator(handler_func):
+        def wrapper(handler):
+            from freq.api.auth import check_session_role
+
+            role, err = check_session_role(handler, min_role)
+            if err:
+                json_response(handler, {"error": err}, 403)
+                return
+            handler_func(handler)
+
+        wrapper.__name__ = handler_func.__name__
+        wrapper.__doc__ = handler_func.__doc__
+        return wrapper
+
+    return decorator
+
+
+def require_post(handler, action="this operation"):
+    """Reject non-POST requests for destructive operations."""
+    if handler.command != "POST":
+        json_response(handler, {"error": f"{action} requires POST"}, 405)
+        return True
+    return False
+
+
+def get_cfg():
+    """Load FREQ config (convenience wrapper)."""
+    return load_config()

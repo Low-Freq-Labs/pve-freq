@@ -1,0 +1,26 @@
+# FREQ Fleet Registry (TOML format)
+# Preferred format — replaces hosts.toml
+#
+# Add hosts with: freq host add
+# Discover hosts: freq host discover
+#
+# Types: linux, pve, truenas, pfsense, idrac, switch, docker
+
+# [[host]]
+# ip = "192.168.1.10"
+# label = "node1"
+# type = "pve"
+# groups = "prod,cluster"
+
+# [[host]]
+# ip = "192.168.1.20"
+# label = "nas"
+# type = "truenas"
+# groups = "prod,storage"
+
+# [[host]]
+# ip = "192.168.1.50"
+# label = "app-server"
+# type = "docker"
+# groups = "prod,apps"
+# all_ips = ["192.168.1.50", "10.0.0.50"]

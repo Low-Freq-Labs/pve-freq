@@ -1,0 +1,517 @@
+"""Overnight Matrix — Tier 1: Config Loading (Profiles A-D)
+
+Tests 1.1-1.10: Load configs with different profiles and verify correct parsing.
+No network calls. Pure config loading.
+"""
+import os
+import sys
+import unittest
+import tempfile
+import shutil
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tests.case_matrix import run_case_matrix
+
+CONFIGS_DIR = os.path.join(os.path.dirname(__file__), "configs")
+
+
+def load_with_profile(profile: str):
+    """Load config from a test profile directory."""
+    from freq.core.config import load_config
+    profile_dir = os.path.join(CONFIGS_DIR, profile)
+    return load_config(install_dir=profile_dir)
+
+
+class TestTier1ConfigLoading(unittest.TestCase):
+    """Tier 1: Config loading edge cases across profiles A-D."""
+
+    # --- 1.1: Empty/minimal freq.toml (Profile C) ---
+    def _case_1_1_load_config_minimal_toml(self):
+        """Load config with minimal freq.toml — should get defaults, no crash."""
+        cfg = load_with_profile("profile_c")
+        self.assertEqual(cfg.brand, "PVE FREQ")
+        self.assertEqual(cfg.build, "default")
+        self.assertEqual(cfg.ssh_service_account, "freq-admin")
+        self.assertEqual(cfg.vm_default_cores, 2)
+        self.assertEqual(cfg.vm_default_ram, 2048)
+        self.assertEqual(cfg.vm_cpu, "x86-64-v2-AES")
+        self.assertEqual(cfg.vm_gateway, "")
+        self.assertEqual(cfg.vm_nameserver, "1.1.1.1")
+        self.assertEqual(cfg.nic_bridge, "vmbr0")
+
+    # --- 1.2: Missing freq.toml entirely ---
+    def _case_1_2_load_config_missing_toml(self):
+        """Load config with missing freq.toml — should return defaults, no crash."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create conf/ dir but no freq.toml
+            os.makedirs(os.path.join(tmpdir, "conf"))
+            from freq.core.config import load_config
+            cfg = load_config(install_dir=tmpdir)
+            self.assertEqual(cfg.brand, "PVE FREQ")
+            self.assertEqual(cfg.ssh_service_account, "freq-admin")
+            self.assertEqual(cfg.vm_cpu, "x86-64-v2-AES")
+            self.assertEqual(cfg.pve_nodes, [])
+            self.assertEqual(cfg.hosts, [])
+            self.assertEqual(cfg.vlans, [])
+
+    # --- 1.3: Missing vlans.toml ---
+    def _case_1_3_load_config_missing_vlans(self):
+        """Load config with missing vlans.toml — cfg.vlans = [], no crash."""
+        cfg = load_with_profile("profile_c")
+        self.assertEqual(cfg.vlans, [])
+
+    # --- 1.4: Missing hosts.conf ---
+    def _case_1_4_load_config_missing_hosts(self):
+        """Load config with missing hosts.conf — cfg.hosts = [], no crash."""
+        cfg = load_with_profile("profile_c")
+        self.assertEqual(cfg.hosts, [])
+
+    # --- 1.5: /16 VLANs (Profile B) ---
+    def _case_1_5_load_config_16_vlans(self):
+        """Load config with /16 VLANs — parses correctly."""
+        cfg = load_with_profile("profile_b")
+        self.assertEqual(len(cfg.vlans), 4)
+        # Check VLAN attributes
+        vlan_names = {v.name for v in cfg.vlans}
+        self.assertIn("MGMT", vlan_names)
+        self.assertIn("SERVERS", vlan_names)
+        self.assertIn("STORAGE", vlan_names)
+        self.assertIn("PUBLIC", vlan_names)
+        # Check /16 subnets parsed correctly
+        mgmt = next(v for v in cfg.vlans if v.name == "MGMT")
+        self.assertEqual(mgmt.subnet, "10.0.0.0/16")
+        self.assertEqual(mgmt.id, 10)
+        self.assertEqual(mgmt.gateway, "10.0.0.1")
+
+    # --- 1.6: /23 VLANs (Profile D) ---
+    def _case_1_6_load_config_23_vlans(self):
+        """Load config with /23 VLANs — parses correctly."""
+        cfg = load_with_profile("profile_d")
+        self.assertEqual(len(cfg.vlans), 2)
+        main_vlan = next(v for v in cfg.vlans if v.name == "MAIN")
+        self.assertEqual(main_vlan.subnet, "172.16.0.0/23")
+        self.assertEqual(main_vlan.id, 100)
+        self.assertEqual(main_vlan.gateway, "172.16.0.1")
+        svc_vlan = next(v for v in cfg.vlans if v.name == "SERVICES")
+        self.assertEqual(svc_vlan.subnet, "172.16.2.0/23")
+        self.assertEqual(svc_vlan.id, 200)
+
+    # --- 1.7: Unknown personality pack ---
+    def _case_1_7_load_config_unknown_personality(self):
+        """Load config with nonexistent personality — falls back to defaults, no crash."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            conf_dir = os.path.join(tmpdir, "conf")
+            os.makedirs(conf_dir)
+            # Write freq.toml with bogus build name
+            with open(os.path.join(conf_dir, "freq.toml"), "w") as f:
+                f.write('[freq]\nbuild = "nonexistent"\n')
+            from freq.core.config import load_config
+            from freq.core.personality import load_pack
+            cfg = load_config(install_dir=tmpdir)
+            self.assertEqual(cfg.build, "nonexistent")
+            pack = load_pack(cfg.conf_dir, cfg.build)
+            self.assertEqual(pack.name, "nonexistent")
+            # Should have default values, not crash
+            self.assertEqual(pack.subtitle, "P V E  F R E Q")
+            self.assertEqual(pack.celebrations, [])
+            self.assertEqual(pack.dashboard_header, "PVE FREQ Dashboard")
+
+    # --- 1.8: Empty pve_nodes ---
+    def _case_1_8_load_config_empty_pve_nodes(self):
+        """Load config with empty nodes list — cfg.pve_nodes = [], no crash."""
+        cfg = load_with_profile("profile_c")
+        self.assertEqual(cfg.pve_nodes, [])
+
+    # --- 1.9: Custom storage pool names ---
+    def _case_1_9_load_config_custom_storage(self):
+        """Load config with custom storage pool names."""
+        cfg = load_with_profile("profile_d")
+        self.assertIn("pve1", cfg.pve_storage)
+        self.assertEqual(cfg.pve_storage["pve1"]["pool"], "ceph-pool")
+        self.assertEqual(cfg.pve_storage["pve1"]["type"], "SSD")
+
+    # --- 1.10: service_account = "root" ---
+    def _case_1_10_load_config_root_service_account(self):
+        """Load config with service_account = root."""
+        cfg = load_with_profile("profile_d")
+        self.assertEqual(cfg.ssh_service_account, "root")
+
+
+class TestTier1ProfileA(unittest.TestCase):
+    """Additional Profile A (Bare Metal Baby) verification."""
+
+    def _case_profile_a_single_node(self):
+        """Profile A: single PVE node loads correctly."""
+        cfg = load_with_profile("profile_a")
+        self.assertEqual(cfg.pve_nodes, ["192.168.1.10"])
+        self.assertEqual(cfg.pve_node_names, ["proxmox1"])
+
+    def _case_profile_a_no_vlans(self):
+        """Profile A: empty vlans.toml means no VLANs."""
+        cfg = load_with_profile("profile_a")
+        self.assertEqual(cfg.vlans, [])
+
+    def _case_profile_a_empty_hosts(self):
+        """Profile A: empty hosts.conf means no hosts."""
+        cfg = load_with_profile("profile_a")
+        self.assertEqual(cfg.hosts, [])
+
+    def _case_profile_a_vm_defaults(self):
+        """Profile A: VM defaults from config."""
+        cfg = load_with_profile("profile_a")
+        self.assertEqual(cfg.vm_cpu, "kvm64")
+        self.assertEqual(cfg.vm_gateway, "192.168.1.1")
+        self.assertEqual(cfg.vm_nameserver, "192.168.1.1")
+        # vm_domain was removed from FreqConfig
+
+    def _case_profile_a_storage(self):
+        """Profile A: local-lvm storage."""
+        cfg = load_with_profile("profile_a")
+        self.assertIn("proxmox1", cfg.pve_storage)
+        self.assertEqual(cfg.pve_storage["proxmox1"]["pool"], "local-lvm")
+
+    def _case_profile_a_infrastructure(self):
+        """Profile A: cluster name, no infra IPs."""
+        cfg = load_with_profile("profile_a")
+        self.assertEqual(cfg.cluster_name, "HomeCluster")
+        self.assertEqual(cfg.truenas_ip, "")
+        self.assertEqual(cfg.pfsense_ip, "")
+
+
+class TestTier1ProfileB(unittest.TestCase):
+    """Additional Profile B (Big Boy /16) verification."""
+
+    def _case_profile_b_three_nodes(self):
+        """Profile B: 3 PVE nodes."""
+        cfg = load_with_profile("profile_b")
+        self.assertEqual(len(cfg.pve_nodes), 3)
+        self.assertEqual(cfg.pve_nodes, ["10.0.1.1", "10.0.1.2", "10.0.1.3"])
+        self.assertEqual(cfg.pve_node_names, ["node1", "node2", "node3"])
+
+    def _case_profile_b_twelve_hosts(self):
+        """Profile B: 12 hosts load correctly."""
+        cfg = load_with_profile("profile_b")
+        self.assertEqual(len(cfg.hosts), 12)
+        # Check types parsed correctly
+        pve_hosts = [h for h in cfg.hosts if h.htype == "pve"]
+        docker_hosts = [h for h in cfg.hosts if h.htype == "docker"]
+        linux_hosts = [h for h in cfg.hosts if h.htype == "linux"]
+        self.assertEqual(len(pve_hosts), 3)
+        self.assertEqual(len(docker_hosts), 2)
+        self.assertEqual(len(linux_hosts), 5)
+
+    def _case_profile_b_infra_ips(self):
+        """Profile B: infrastructure IPs."""
+        cfg = load_with_profile("profile_b")
+        self.assertEqual(cfg.truenas_ip, "10.0.1.100")
+        self.assertEqual(cfg.pfsense_ip, "10.0.0.1")
+
+    def _case_profile_b_storage_per_node(self):
+        """Profile B: different storage per node."""
+        cfg = load_with_profile("profile_b")
+        self.assertEqual(cfg.pve_storage["node1"]["pool"], "zfs-pool")
+        self.assertEqual(cfg.pve_storage["node3"]["pool"], "ceph-pool")
+        self.assertEqual(cfg.pve_storage["node3"]["type"], "HDD")
+
+    def _case_profile_b_vm_defaults(self):
+        """Profile B: larger VM defaults."""
+        cfg = load_with_profile("profile_b")
+        self.assertEqual(cfg.vm_default_cores, 4)
+        self.assertEqual(cfg.vm_default_ram, 4096)
+        self.assertEqual(cfg.vm_default_disk, 64)
+        self.assertEqual(cfg.vm_cpu, "host")
+
+    def _case_profile_b_protected_vmids(self):
+        """Profile B: protected VMIDs list."""
+        cfg = load_with_profile("profile_b")
+        self.assertEqual(cfg.protected_vmids, [100, 200, 300])
+        self.assertEqual(cfg.protected_ranges, [[900, 999]])
+
+
+class TestTier1ProfileD(unittest.TestCase):
+    """Additional Profile D (/23 network) verification."""
+
+    def _case_profile_d_single_node(self):
+        """Profile D: single PVE node."""
+        cfg = load_with_profile("profile_d")
+        self.assertEqual(cfg.pve_nodes, ["172.16.0.5"])
+
+    def _case_profile_d_five_hosts(self):
+        """Profile D: 5 hosts load correctly."""
+        cfg = load_with_profile("profile_d")
+        self.assertEqual(len(cfg.hosts), 5)
+
+    def _case_profile_d_root_ssh(self):
+        """Profile D: SSH as root with root mode."""
+        cfg = load_with_profile("profile_d")
+        self.assertEqual(cfg.ssh_service_account, "root")
+        self.assertEqual(cfg.ssh_mode, "root")
+
+    def _case_profile_d_custom_vm_settings(self):
+        """Profile D: custom VM settings (non-standard scsihw)."""
+        cfg = load_with_profile("profile_d")
+        # vm_bios was removed from FreqConfig
+        self.assertEqual(cfg.vm_scsihw, "virtio-scsi-pci")
+        self.assertEqual(cfg.vm_cpu, "host")
+
+    def _case_profile_d_custom_nic(self):
+        """Profile D: custom NIC bridge."""
+        cfg = load_with_profile("profile_d")
+        self.assertEqual(cfg.nic_bridge, "vmbr1")
+
+
+class TestTier1EdgeCases(unittest.TestCase):
+    """Edge cases not covered by specific profiles."""
+
+    def _case_load_toml_corrupt_file(self):
+        """load_toml with corrupt TOML returns empty dict."""
+        from freq.core.config import load_toml
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write("this is not valid toml {\n!@#$%\n")
+            path = f.name
+        try:
+            data = load_toml(path)
+            self.assertIsInstance(data, dict)
+        finally:
+            os.unlink(path)
+
+    def _case_load_toml_nonexistent(self):
+        """load_toml with nonexistent path returns empty dict."""
+        from freq.core.config import load_toml
+        data = load_toml("/nonexistent/path/freq.toml")
+        self.assertEqual(data, {})
+
+    def _case_hosts_partial_lines(self):
+        """Hosts with incomplete lines (< 3 fields) are skipped."""
+        from freq.core.config import load_hosts
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as f:
+            f.write("# Valid\n")
+            f.write("10.0.0.1  host1  linux  prod\n")
+            f.write("incomplete-line\n")       # Only 1 field
+            f.write("10.0.0.2  host2\n")       # Only 2 fields
+            f.write("10.0.0.3  host3  pve\n")  # 3 fields, valid
+            path = f.name
+        try:
+            hosts = load_hosts(path)
+            self.assertEqual(len(hosts), 2)
+            self.assertEqual(hosts[0].label, "host1")
+            self.assertEqual(hosts[1].label, "host3")
+            self.assertEqual(hosts[1].groups, "")  # No groups
+        finally:
+            os.unlink(path)
+
+    def _case_vlans_empty_toml(self):
+        """Empty vlans.toml returns empty list."""
+        from freq.core.config import load_vlans
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write("# empty\n")
+            path = f.name
+        try:
+            vlans = load_vlans(path)
+            self.assertEqual(vlans, [])
+        finally:
+            os.unlink(path)
+
+    def _case_distros_missing_file(self):
+        """Missing distros.toml returns empty list."""
+        from freq.core.config import load_distros
+        distros = load_distros("/nonexistent/distros.toml")
+        self.assertEqual(distros, [])
+
+    def _case_containers_missing_file(self):
+        """Missing containers.toml returns empty dict."""
+        from freq.core.config import load_containers
+        containers = load_containers("/nonexistent/containers.toml")
+        self.assertEqual(containers, {})
+
+    def _case_fleet_boundaries_missing_file(self):
+        """Missing fleet-boundaries.toml returns default FleetBoundaries."""
+        from freq.core.config import load_fleet_boundaries
+        from freq.core.types import FleetBoundaries
+        fb = load_fleet_boundaries("/nonexistent/fleet-boundaries.toml")
+        self.assertIsInstance(fb, FleetBoundaries)
+        self.assertEqual(fb.tiers, {})
+        self.assertEqual(fb.categories, {})
+
+    def _case_config_paths_resolved(self):
+        """All path fields are resolved relative to install_dir."""
+        cfg = load_with_profile("profile_a")
+        profile_dir = os.path.join(CONFIGS_DIR, "profile_a")
+        self.assertEqual(cfg.conf_dir, os.path.join(profile_dir, "conf"))
+        self.assertTrue(cfg.hosts_file.endswith("hosts.toml"))
+        self.assertTrue(cfg.log_file.endswith("freq.log"))
+
+    def _case_default_freqconfig_values(self):
+        """FreqConfig() with no args has safe defaults."""
+        from freq.core.config import FreqConfig
+        cfg = FreqConfig()
+        import freq
+        self.assertEqual(cfg.version, freq.__version__)
+        self.assertEqual(cfg.brand, "PVE FREQ")
+        self.assertEqual(cfg.build, "default")
+        self.assertFalse(cfg.ascii_mode)
+        self.assertFalse(cfg.debug)
+        self.assertEqual(cfg.ssh_connect_timeout, 5)
+        self.assertEqual(cfg.vm_default_disk, 32)
+        self.assertEqual(cfg.max_failure_percent, 50)
+        self.assertEqual(cfg.nic_bridge, "vmbr0")
+        # nic_mtu was removed from FreqConfig
+        self.assertEqual(cfg.discord_webhook, "")
+        self.assertEqual(cfg.slack_webhook, "")
+
+
+class TestPortabilityConfig(unittest.TestCase):
+    """Portability: service ports and configurable defaults."""
+
+    def _case_default_service_ports(self):
+        """FreqConfig has configurable service port defaults."""
+        from freq.core.config import FreqConfig
+        cfg = FreqConfig()
+        self.assertEqual(cfg.dashboard_port, 8888)
+        self.assertEqual(cfg.watchdog_port, 9900)
+        self.assertEqual(cfg.agent_port, 9990)
+
+    def _case_service_ports_in_defaults(self):
+        """Service ports are in _DEFAULTS dict."""
+        from freq.core.config import _DEFAULTS
+        self.assertIn("dashboard_port", _DEFAULTS)
+        self.assertIn("watchdog_port", _DEFAULTS)
+        self.assertIn("agent_port", _DEFAULTS)
+
+    def _case_service_ports_from_toml(self):
+        """Service ports can be overridden via freq.toml [services] section."""
+        from freq.core.config import FreqConfig, _apply_toml
+        cfg = FreqConfig()
+        data = {
+            "services": {
+                "dashboard_port": 9999,
+                "watchdog_port": 7700,
+                "agent_port": 8800,
+            }
+        }
+        _apply_toml(cfg, data)
+        self.assertEqual(cfg.dashboard_port, 9999)
+        self.assertEqual(cfg.watchdog_port, 7700)
+        self.assertEqual(cfg.agent_port, 8800)
+
+    def _case_service_account_configurable(self):
+        """Service account is configurable via freq.toml, not hardcoded."""
+        from freq.core.config import FreqConfig, _apply_toml
+        cfg = FreqConfig()
+        data = {"ssh": {"service_account": "my-custom-admin"}}
+        _apply_toml(cfg, data)
+        self.assertEqual(cfg.ssh_service_account, "my-custom-admin")
+
+    def _case_service_account_default_from_defaults(self):
+        """Default service account comes from _DEFAULTS dict."""
+        from freq.core.config import _DEFAULTS, FreqConfig
+        cfg = FreqConfig()
+        self.assertEqual(cfg.ssh_service_account, _DEFAULTS["ssh_service_account"])
+
+    def _case_ssh_fallback_uses_defaults_dict(self):
+        """SSH fallback user comes from _DEFAULTS, not a hardcoded string."""
+        from freq.core.config import _DEFAULTS
+        from freq.core.ssh import get_platform_ssh
+        opts = get_platform_ssh("linux", cfg=None)
+        self.assertEqual(opts["user"], _DEFAULTS["ssh_service_account"])
+
+    def _case_no_site_specific_ips_in_source(self):
+        """No site-specific IPs (192.168.x.x) in Python source files."""
+        import glob
+        freq_dir = os.path.join(os.path.dirname(__file__), "..", "freq")
+        violations = []
+        for py_file in glob.glob(os.path.join(freq_dir, "**", "*.py"), recursive=True):
+            # Skip cache files and data files
+            if "/data/cache/" in py_file:
+                continue
+            with open(py_file) as f:
+                for i, line in enumerate(f, 1):
+                    if "192.168." in line and not line.strip().startswith("#"):
+                        # Allow example/placeholder/docstring text
+                        if any(kw in line for kw in ("placeholder", "e.g.", "Example", '"""', "'''")):
+
+                            continue
+                        violations.append(f"{os.path.basename(py_file)}:{i}")
+        self.assertEqual(violations, [], f"Site-specific IPs found in source: {violations}")
+
+    def _case_cache_dir_has_gitkeep(self):
+        """Cache directory has .gitkeep so git tracks the dir but not data files."""
+        cache_dir = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "cache")
+        if os.path.isdir(cache_dir):
+            self.assertTrue(os.path.isfile(os.path.join(cache_dir, ".gitkeep")),
+                            "Cache dir should have .gitkeep for git tracking")
+
+
+TIER1_CONFIG_LOADING_CASES = (
+    "_case_1_1_load_config_minimal_toml", "_case_1_2_load_config_missing_toml",
+    "_case_1_3_load_config_missing_vlans", "_case_1_4_load_config_missing_hosts",
+    "_case_1_5_load_config_16_vlans", "_case_1_6_load_config_23_vlans",
+    "_case_1_7_load_config_unknown_personality",
+    "_case_1_8_load_config_empty_pve_nodes", "_case_1_9_load_config_custom_storage",
+    "_case_1_10_load_config_root_service_account",
+)
+TIER1_PROFILE_A_CASES = (
+    "_case_profile_a_single_node", "_case_profile_a_no_vlans",
+    "_case_profile_a_empty_hosts", "_case_profile_a_vm_defaults",
+    "_case_profile_a_storage", "_case_profile_a_infrastructure",
+)
+TIER1_PROFILE_B_CASES = (
+    "_case_profile_b_three_nodes", "_case_profile_b_twelve_hosts",
+    "_case_profile_b_infra_ips", "_case_profile_b_storage_per_node",
+    "_case_profile_b_vm_defaults", "_case_profile_b_protected_vmids",
+)
+TIER1_PROFILE_D_CASES = (
+    "_case_profile_d_single_node", "_case_profile_d_five_hosts",
+    "_case_profile_d_root_ssh", "_case_profile_d_custom_vm_settings",
+    "_case_profile_d_custom_nic",
+)
+TIER1_EDGE_CASES = (
+    "_case_load_toml_corrupt_file", "_case_load_toml_nonexistent",
+    "_case_hosts_partial_lines", "_case_vlans_empty_toml",
+    "_case_distros_missing_file", "_case_containers_missing_file",
+    "_case_fleet_boundaries_missing_file", "_case_config_paths_resolved",
+    "_case_default_freqconfig_values",
+)
+PORTABILITY_CONFIG_CASES = (
+    "_case_default_service_ports", "_case_service_ports_in_defaults",
+    "_case_service_ports_from_toml", "_case_service_account_configurable",
+    "_case_service_account_default_from_defaults",
+    "_case_ssh_fallback_uses_defaults_dict", "_case_no_site_specific_ips_in_source",
+    "_case_cache_dir_has_gitkeep",
+)
+
+
+class TestTier1ConfigLoadingMatrix(unittest.TestCase):
+    def test_tier1_config_loading_matrix(self):
+        run_case_matrix(self, TestTier1ConfigLoading, TIER1_CONFIG_LOADING_CASES)
+
+
+class TestTier1ProfileAMatrix(unittest.TestCase):
+    def test_tier1_profile_a_matrix(self):
+        run_case_matrix(self, TestTier1ProfileA, TIER1_PROFILE_A_CASES)
+
+
+class TestTier1ProfileBMatrix(unittest.TestCase):
+    def test_tier1_profile_b_matrix(self):
+        run_case_matrix(self, TestTier1ProfileB, TIER1_PROFILE_B_CASES)
+
+
+class TestTier1ProfileDMatrix(unittest.TestCase):
+    def test_tier1_profile_d_matrix(self):
+        run_case_matrix(self, TestTier1ProfileD, TIER1_PROFILE_D_CASES)
+
+
+class TestTier1EdgeCasesMatrix(unittest.TestCase):
+    def test_tier1_edge_cases_matrix(self):
+        run_case_matrix(self, TestTier1EdgeCases, TIER1_EDGE_CASES)
+
+
+class TestPortabilityConfigMatrix(unittest.TestCase):
+    def test_portability_config_matrix(self):
+        run_case_matrix(self, TestPortabilityConfig, PORTABILITY_CONFIG_CASES)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,3 @@
+#!/bin/sh
+[ "$1" = "-p" ] && { echo 'up 1 hour, 2 minutes'; exit 0; }
+exec /usr/bin/uptime "$@"

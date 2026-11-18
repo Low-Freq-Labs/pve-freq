@@ -1,0 +1,706 @@
+""" regression contract.
+
+Translation of pve-freq-product-law.md into enforceable tests:
+
+  - probes must encode expected state, not only current state
+  - health/recovery contracts must distinguish:
+      live / stale / degraded / auth_failed / unreachable / recovering
+  - remediation paths must capture evidence before acting
+  - no boolean-only "healthy" abstractions where reason/timestamp/
+    last-success are required
+
+Pin the six-state contract on every probe return path in:
+  - freq/core/health_state.py (the shared classifier)
+  - freq/modules/serve.py _bg_probe_health (background probe)
+  - freq/api/fleet.py handle_health_api fallback (cold-cache path)
+  - circuit breaker engage / reset must write audit.jsonl evidence
+
+The frontend-compat alias (`status`) must remain set alongside the
+new `state` field. live/recovering stay `healthy` for old green-state
+readers; non-live states preserve their truth token instead of being
+flattened to `unreachable`.
+"""
+import os
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+REPO = Path(__file__).parent.parent
+SERVE_PY = REPO / "freq" / "modules" / "serve.py"
+FLEET_API_PY = REPO / "freq" / "api" / "fleet.py"
+HEALTH_STATE_PY = REPO / "freq" / "core" / "health_state.py"
+PVE_TRANSPORT_PY = REPO / "freq" / "services" / "pve_transport.py"
+
+
+def _assert_pve_metrics_resolution_contract(case):
+    from freq.modules import serve
+
+    handler = serve.FreqHandler.__new__(serve.FreqHandler)
+    handler._json_response = mock.Mock()
+    cfg = SimpleNamespace(
+        pve_nodes=["192.0.2.10", "192.0.2.11", "192.0.2.12"],
+        pve_node_names=["pve-alpha"],
+    )
+
+    with case.subTest("fresh cache avoids config and PVE reads"):
+        cached = {"nodes": [{"name": "cached"}], "ts": 97.0}
+        with (
+            mock.patch.object(serve.FreqHandler, "_pve_metrics_cache", cached),
+            mock.patch.object(serve.FreqHandler, "_pve_metrics_ts", 98.0),
+            mock.patch("freq.modules.serve.time.time", return_value=100.0),
+            mock.patch("freq.modules.serve.load_config") as load_config,
+            mock.patch("freq.modules.pve._pve_api_call") as pve_api_call,
+        ):
+            serve.FreqHandler._serve_pve_metrics(handler)
+        handler._json_response.assert_called_once_with(cached)
+        load_config.assert_not_called()
+        pve_api_call.assert_not_called()
+
+    handler._json_response.reset_mock()
+    gib = 1024**3
+    status = {
+        "cpu": 0.125,
+        "memory": {"used": 2 * gib, "total": 8 * gib},
+        "rootfs": {"used": 10 * gib, "total": 40 * gib},
+        "cpuinfo": {"cpus": 4, "model": "Test CPU"},
+        "loadavg": ["0.1", "0.2", "0.3"],
+        "wait": 0.02,
+        "uptime": 3600,
+    }
+    storage = [
+        {
+            "active": 1,
+            "storage": "local-zfs",
+            "type": "zfspool",
+            "used": 5 * gib,
+            "total": 20 * gib,
+        },
+        {
+            "active": 0,
+            "storage": "offline",
+            "type": "dir",
+            "used": 1,
+            "total": 1,
+        },
+    ]
+
+    def pve_result(_cfg, _ip, path, *, timeout):
+        if path == "/nodes/pve-alpha/status":
+            case.assertEqual(timeout, 5)
+            return status, True
+        if path == "/nodes/pve-alpha/storage":
+            case.assertEqual(timeout, 3)
+            return storage, True
+        case.assertIn(
+            path,
+            {"/nodes/pve02/status", "/nodes/pve03/status"},
+        )
+        case.assertEqual(timeout, 5)
+        return None, False
+
+    with case.subTest("live stale and unreachable truth is deterministic"):
+        with (
+            mock.patch.object(serve.FreqHandler, "_pve_metrics_cache", None),
+            mock.patch.object(serve.FreqHandler, "_pve_metrics_ts", 0),
+            mock.patch.object(
+                serve.FreqHandler,
+                "_pve_last_seen_ts",
+                {"192.0.2.12": 950.0},
+            ),
+            mock.patch("freq.modules.serve.load_config", return_value=cfg) as load_config,
+            mock.patch(
+                "freq.modules.pve._pve_api_call",
+                side_effect=pve_result,
+            ) as pve_api_call,
+            mock.patch(
+                "freq.modules.serve.time.time",
+                side_effect=[1000.0, 1001.0, 1005.0, 1006.0, 1007.0],
+            ),
+        ):
+            serve.FreqHandler._serve_pve_metrics(handler)
+            published_cache = serve.FreqHandler._pve_metrics_cache
+            published_ts = serve.FreqHandler._pve_metrics_ts
+            last_seen = dict(serve.FreqHandler._pve_last_seen_ts)
+
+        load_config.assert_called_once_with()
+        case.assertEqual(
+            pve_api_call.call_args_list,
+            [
+                mock.call(cfg, "192.0.2.10", "/nodes/pve-alpha/status", timeout=5),
+                mock.call(cfg, "192.0.2.10", "/nodes/pve-alpha/storage", timeout=3),
+                mock.call(cfg, "192.0.2.11", "/nodes/pve02/status", timeout=5),
+                mock.call(cfg, "192.0.2.12", "/nodes/pve03/status", timeout=5),
+            ],
+        )
+        expected = {
+            "nodes": [
+                {
+                    "name": "pve-alpha",
+                    "ip": "192.0.2.10",
+                    "online": True,
+                    "state": "live",
+                    "reason": "PVE API responded",
+                    "last_seen_ts": 1001.0,
+                    "age_seconds": 0,
+                    "cpu_pct": 12.5,
+                    "cores": 4,
+                    "model": "Test CPU",
+                    "ram_used_gb": 2.0,
+                    "ram_total_gb": 8.0,
+                    "ram_pct": 25.0,
+                    "iowait": 2.0,
+                    "disk_pct": 25.0,
+                    "disk_used_gb": 10.0,
+                    "disk_total_gb": 40.0,
+                    "uptime": 3600,
+                    "load": ["0.1", "0.2", "0.3"],
+                    "storage": [
+                        {
+                            "name": "local-zfs",
+                            "type": "zfspool",
+                            "used_gb": 5.0,
+                            "total_gb": 20.0,
+                            "pct": 25.0,
+                        }
+                    ],
+                },
+                {
+                    "name": "pve02",
+                    "ip": "192.0.2.11",
+                    "online": False,
+                    "state": "unreachable",
+                    "reason": "PVE API did not respond — node never seen alive",
+                    "last_seen_ts": None,
+                    "age_seconds": None,
+                },
+                {
+                    "name": "pve03",
+                    "ip": "192.0.2.12",
+                    "online": False,
+                    "state": "stale",
+                    "reason": "PVE API did not respond; last seen 55.0s ago",
+                    "last_seen_ts": 950.0,
+                    "age_seconds": 55.0,
+                },
+            ],
+            "ts": 1006.0,
+        }
+        handler._json_response.assert_called_once_with(expected)
+        case.assertEqual(published_cache, expected)
+        case.assertEqual(published_ts, 1007.0)
+        case.assertEqual(last_seen, {"192.0.2.10": 1001.0, "192.0.2.12": 950.0})
+
+
+def _assert_pve_rrd_resolution_contract(case):
+    from freq.modules import serve
+
+    handler = serve.FreqHandler.__new__(serve.FreqHandler)
+    handler._json_response = mock.Mock()
+    cfg = SimpleNamespace(
+        pve_nodes=["192.0.2.10", "192.0.2.11", "192.0.2.12"],
+        pve_node_names=["pve-alpha"],
+    )
+
+    with case.subTest("fresh RRD cache avoids config and PVE reads"):
+        cached = {"nodes": [{"name": "cached"}], "ts": 40.0}
+        with (
+            mock.patch.object(serve.FreqHandler, "_pve_rrd_cache", cached),
+            mock.patch.object(serve.FreqHandler, "_pve_rrd_ts", 50.0),
+            mock.patch("freq.modules.serve.time.time", return_value=100.0),
+            mock.patch("freq.modules.serve.load_config") as load_config,
+            mock.patch("freq.modules.pve._pve_api_call") as pve_api_call,
+        ):
+            serve.FreqHandler._serve_pve_rrd(handler)
+        handler._json_response.assert_called_once_with(cached)
+        load_config.assert_not_called()
+        pve_api_call.assert_not_called()
+
+    handler._json_response.reset_mock()
+    samples = [
+        {
+            "time": point,
+            "cpu": point / 100,
+            "memused": point,
+            "memtotal": 100,
+            "iowait": point / 1000,
+        }
+        for point in range(72)
+    ]
+    samples.extend(
+        [
+            "not-a-dict",
+            {
+                "time": 999,
+                "cpu": None,
+                "memused": 5,
+                "memtotal": 0,
+                "iowait": None,
+            },
+        ]
+    )
+
+    def pve_result(_cfg, _ip, path, *, timeout):
+        case.assertEqual(timeout, 5)
+        if path == "/nodes/pve-alpha/rrddata?timeframe=hour":
+            return samples, True
+        if path == "/nodes/pve02/rrddata?timeframe=hour":
+            return None, False
+        if path == "/nodes/pve03/rrddata?timeframe=hour":
+            return "wrong-shape", True
+        raise AssertionError(path)
+
+    with case.subTest("RRD projection and empty-node truth are deterministic"):
+        with (
+            mock.patch.object(serve.FreqHandler, "_pve_rrd_cache", None),
+            mock.patch.object(serve.FreqHandler, "_pve_rrd_ts", 0),
+            mock.patch("freq.modules.serve.load_config", return_value=cfg) as load_config,
+            mock.patch(
+                "freq.modules.pve._pve_api_call",
+                side_effect=pve_result,
+            ) as pve_api_call,
+            mock.patch(
+                "freq.modules.serve.time.time",
+                side_effect=[1000.0, 1001.0, 1002.0],
+            ),
+        ):
+            serve.FreqHandler._serve_pve_rrd(handler)
+            published_cache = serve.FreqHandler._pve_rrd_cache
+            published_ts = serve.FreqHandler._pve_rrd_ts
+
+        load_config.assert_called_once_with()
+        case.assertEqual(
+            pve_api_call.call_args_list,
+            [
+                mock.call(
+                    cfg,
+                    "192.0.2.10",
+                    "/nodes/pve-alpha/rrddata?timeframe=hour",
+                    timeout=5,
+                ),
+                mock.call(
+                    cfg,
+                    "192.0.2.11",
+                    "/nodes/pve02/rrddata?timeframe=hour",
+                    timeout=5,
+                ),
+                mock.call(
+                    cfg,
+                    "192.0.2.12",
+                    "/nodes/pve03/rrddata?timeframe=hour",
+                    timeout=5,
+                ),
+            ],
+        )
+        expected = {
+            "nodes": [
+                {
+                    "name": "pve-alpha",
+                    "cpu": [
+                        {"t": point, "v": round(point / 100 * 100, 1)}
+                        for point in range(2, 72)
+                    ],
+                    "ram": [
+                        {"t": point, "v": round(point / 100 * 100, 1)}
+                        for point in range(2, 72)
+                    ],
+                    "iowait": [
+                        {"t": point, "v": round(point / 1000 * 100, 1)}
+                        for point in range(2, 72)
+                    ],
+                },
+                {"name": "pve02", "cpu": [], "ram": [], "iowait": []},
+                {"name": "pve03", "cpu": [], "ram": [], "iowait": []},
+            ],
+            "ts": 1001.0,
+        }
+        handler._json_response.assert_called_once_with(expected)
+        case.assertEqual(published_cache, expected)
+        case.assertEqual(published_ts, 1002.0)
+
+
+class TestHealthStateModuleExists(unittest.TestCase):
+    """Shared classifier module must define the six canonical states
+    plus the helpers that callers use to build entries."""
+
+    def test_six_states_defined(self):
+        from freq.core import health_state as hs
+        self.assertEqual(hs.STATE_LIVE, "live")
+        self.assertEqual(hs.STATE_STALE, "stale")
+        self.assertEqual(hs.STATE_DEGRADED, "degraded")
+        self.assertEqual(hs.STATE_AUTH_FAILED, "auth_failed")
+        self.assertEqual(hs.STATE_UNREACHABLE, "unreachable")
+        self.assertEqual(hs.STATE_RECOVERING, "recovering")
+        self.assertEqual(
+            hs.ALL_STATES,
+            frozenset({"live", "stale", "degraded",
+                       "auth_failed", "unreachable", "recovering"}),
+        )
+
+    def test_legacy_status_for_mapping(self):
+        from freq.core import health_state as hs
+        # live + recovering = 'healthy' (frontend compat)
+        self.assertEqual(hs.legacy_status_for("live"), "healthy")
+        self.assertEqual(hs.legacy_status_for("recovering"), "healthy")
+        # Non-live states preserve their truth token so stale/degraded/
+        # auth_failed do not render as false unreachable failures.
+        self.assertEqual(hs.legacy_status_for("stale"), "stale")
+        self.assertEqual(hs.legacy_status_for("degraded"), "degraded")
+        self.assertEqual(hs.legacy_status_for("auth_failed"), "auth_failed")
+        self.assertEqual(hs.legacy_status_for("unreachable"), "unreachable")
+
+
+class TestClassifyProbeFailure(unittest.TestCase):
+    """classify_probe_failure must map real-world ssh failure strings to
+    the correct six-state token + an operator-readable reason."""
+
+    def test_timeout_kill_is_unreachable(self):
+        from freq.core.health_state import classify_probe_failure
+        state, reason = classify_probe_failure(124, "command timed out after 10s", "")
+        self.assertEqual(state, "unreachable")
+        self.assertIn("timed out", reason.lower())
+
+    def test_permission_denied_is_auth_failed(self):
+        from freq.core.health_state import classify_probe_failure
+        state, reason = classify_probe_failure(
+            255, "Permission denied (publickey).\r\n", ""
+        )
+        self.assertEqual(state, "auth_failed")
+        self.assertIn("auth", reason.lower())
+
+    def test_publickey_only_is_auth_failed(self):
+        from freq.core.health_state import classify_probe_failure
+        state, _ = classify_probe_failure(255, "publickey\n", "")
+        self.assertEqual(state, "auth_failed")
+
+    def test_connection_refused_is_unreachable(self):
+        from freq.core.health_state import classify_probe_failure
+        state, reason = classify_probe_failure(
+            255, "ssh: connect to host 10.0.0.9 port 22: Connection refused", ""
+        )
+        self.assertEqual(state, "unreachable")
+        self.assertIn("unreachable", reason.lower())
+
+    def test_no_route_is_unreachable(self):
+        from freq.core.health_state import classify_probe_failure
+        state, _ = classify_probe_failure(
+            255, "ssh: connect to host 10.0.0.9 port 22: No route to host", ""
+        )
+        self.assertEqual(state, "unreachable")
+
+    def test_banner_exchange_is_unreachable(self):
+        from freq.core.health_state import classify_probe_failure
+        state, _ = classify_probe_failure(
+            255, "kex_exchange_identification: Connection timed out during banner exchange", ""
+        )
+        self.assertEqual(state, "unreachable")
+
+    def test_exit_nonzero_empty_output_is_degraded(self):
+        from freq.core.health_state import classify_probe_failure
+        state, reason = classify_probe_failure(1, "bash: racadm: command not found", "")
+        self.assertEqual(state, "degraded")
+        self.assertIn("no output", reason.lower())
+
+
+class TestEntryBase(unittest.TestCase):
+    """entry_base must always emit the operator-required fields: state,
+    reason, probed_at, last_success_at, failure_count, plus the legacy
+    status alias."""
+
+    def _fake_host(self):
+        class H:
+            label = "pve01"
+            ip = "10.25.255.26"
+            htype = "pve"
+        return H()
+
+    def test_live_entry_has_all_fields(self):
+        from freq.core.health_state import entry_base
+        now = time.time()
+        e = entry_base(self._fake_host(), state="live", reason="probe OK",
+                       probed_at=now, last_success_at=now, failure_count=0)
+        self.assertEqual(e["state"], "live")
+        self.assertEqual(e["status"], "healthy")  # legacy alias
+        self.assertEqual(e["reason"], "probe OK")
+        self.assertEqual(e["probed_at"], now)
+        self.assertEqual(e["last_success_at"], now)
+        self.assertEqual(e["failure_count"], 0)
+
+    def test_auth_failed_entry_preserves_status_token(self):
+        from freq.core.health_state import entry_base
+        e = entry_base(self._fake_host(), state="auth_failed",
+                       reason="publickey rejected", probed_at=time.time())
+        self.assertEqual(e["state"], "auth_failed")
+        self.assertEqual(e["status"], "auth_failed")
+        self.assertEqual(e["reason"], "publickey rejected")
+        # Stores None when we have no prior success on record.
+        self.assertIsNone(e["last_success_at"])
+
+    def test_invalid_state_raises(self):
+        """A bogus state must crash the probe at the source instead of
+        silently leaking to the dashboard."""
+        from freq.core.health_state import entry_base
+        with self.assertRaises(ValueError):
+            entry_base(self._fake_host(), state="bogus",
+                       reason="x", probed_at=time.time())
+
+
+class TestMarkStale(unittest.TestCase):
+    """mark_stale must flip a cached entry to state='stale' + attach
+    age_seconds, but preserve the metrics so the dashboard still has
+    something to show."""
+
+    def test_flips_state_and_legacy_status(self):
+        from freq.core.health_state import mark_stale
+        now = time.time()
+        cached = {
+            "label": "pve02", "ip": "10.25.255.27", "type": "pve",
+            "state": "live", "status": "healthy",
+            "reason": "probe OK",
+            "probed_at": now - 300,
+            "cores": "8", "ram": "16/32GB", "disk": "42%",
+            "load": "0.05", "docker": "0",
+        }
+        stale = mark_stale(cached, now, "circuit breaker backoff (120s remaining)")
+        self.assertEqual(stale["state"], "stale")
+        self.assertEqual(stale["status"], "stale")
+        self.assertIn("circuit breaker", stale["reason"])
+        self.assertGreaterEqual(stale["age_seconds"], 299)
+        self.assertLessEqual(stale["age_seconds"], 301)
+        # Metrics preserved so the UI still shows something.
+        self.assertEqual(stale["cores"], "8")
+        self.assertEqual(stale["ram"], "16/32GB")
+
+    def test_handles_missing_probed_at_gracefully(self):
+        from freq.core.health_state import mark_stale
+        cached = {"label": "x", "ip": "10.0.0.1", "type": "linux",
+                  "state": "live", "status": "healthy"}
+        stale = mark_stale(cached, time.time(), "cache without probed_at")
+        self.assertEqual(stale["state"], "stale")
+        self.assertEqual(stale["age_seconds"], 0.0)
+
+
+class TestAggregateProbeState(unittest.TestCase):
+    """aggregate_probe_state feeds the operator-truth banner in the
+    dashboard. Worst state must win; reason must name the worst host."""
+
+    def test_all_live_reports_live(self):
+        from freq.core.health_state import aggregate_probe_state
+        hosts = [
+            {"label": "a", "state": "live"},
+            {"label": "b", "state": "live"},
+        ]
+        state, reason = aggregate_probe_state(hosts)
+        self.assertEqual(state, "live")
+        self.assertIn("all 2", reason)
+
+    def test_auth_failed_wins_over_everything(self):
+        from freq.core.health_state import aggregate_probe_state
+        hosts = [
+            {"label": "a", "state": "live"},
+            {"label": "b", "state": "unreachable", "reason": "host down"},
+            {"label": "c", "state": "auth_failed", "reason": "publickey rejected"},
+        ]
+        state, reason = aggregate_probe_state(hosts)
+        self.assertEqual(state, "auth_failed")
+        self.assertIn("c", reason)
+        self.assertIn("publickey rejected", reason)
+
+    def test_stale_beats_live(self):
+        from freq.core.health_state import aggregate_probe_state
+        hosts = [
+            {"label": "a", "state": "live"},
+            {"label": "b", "state": "stale", "reason": "cache 180s old"},
+        ]
+        state, _ = aggregate_probe_state(hosts)
+        self.assertEqual(state, "stale")
+
+    def test_empty_fleet_is_degraded(self):
+        from freq.core.health_state import aggregate_probe_state
+        state, reason = aggregate_probe_state([])
+        self.assertEqual(state, "degraded")
+        self.assertIn("no hosts", reason)
+
+    def test_legacy_only_entry_falls_back_cleanly(self):
+        """Cache entries from before the six-state contract only carry
+        `status`. Aggregator must not crash on mixed-shape data."""
+        from freq.core.health_state import aggregate_probe_state
+        hosts = [
+            {"label": "old1", "status": "healthy"},  # no `state`
+            {"label": "old2", "status": "unreachable"},
+        ]
+        state, _ = aggregate_probe_state(hosts)
+        self.assertEqual(state, "unreachable")  # worst wins
+
+
+class TestDoctorEmitsReasonAndCheckedAt(unittest.TestCase):
+    """/api/doctor must carry a top-level `reason` + `checked_at` so
+    Morty's post-auth banner can explain *why* FREQ is degraded without
+    re-deriving it from the checks array. Existing shape (status/
+    failed/warnings/checks[].name+status) must remain stable."""
+
+    def test_doctor_source_has_reason_and_checked_at(self):
+        src = (REPO / "freq" / "core" / "doctor.py").read_text()
+        # Narrow to the json_output branch so we don't match unrelated code.
+        idx = src.find("if json_output:")
+        self.assertGreater(idx, 0)
+        tail = src[idx:idx + 4000]
+        self.assertIn('"reason": reason', tail)
+        self.assertIn('"checked_at": time.time()', tail)
+        self.assertIn('"failed_checks":', tail)
+        self.assertIn('"warning_checks":', tail)
+        # Stable shape preserved — do not rename these.
+        self.assertIn('"status": status', tail)
+        self.assertIn('"failed": failed', tail)
+        self.assertIn('"warnings": warnings', tail)
+        self.assertIn('"checks": check_results', tail)
+
+    def test_doctor_live_healthy_payload(self):
+        """A real doctor run with no failures must emit reason='all N
+        checks passed' and a checked_at timestamp within the last
+        few seconds."""
+        import io
+        import contextlib
+        import json as _json
+        import time as _time
+        from freq.core.config import load_config
+        from freq.core import doctor as _doctor
+        cfg = load_config()
+        buf = io.StringIO()
+        t0 = _time.time()
+        with contextlib.redirect_stdout(buf):
+            _doctor.run(cfg, json_output=True)
+        payload = _json.loads(buf.getvalue())
+        self.assertIn("reason", payload)
+        self.assertIn("checked_at", payload)
+        # checked_at must be roughly now, not stale.
+        self.assertGreaterEqual(payload["checked_at"], t0 - 1)
+        self.assertLessEqual(payload["checked_at"], _time.time() + 1)
+        # Stable shape still present.
+        self.assertIn("status", payload)
+        self.assertIn("failed", payload)
+        self.assertIn("warnings", payload)
+        self.assertIn("checks", payload)
+        # Reason is non-empty and actionable.
+        self.assertTrue(payload["reason"])
+
+
+class TestSetupStatusCarriesReason(unittest.TestCase):
+    """/api/setup/status must carry setup_reason naming the missing
+    artifact + checked_at timestamp. The existing setup_health + the
+    individual bool fields (ssh_key_exists, pve_nodes_configured,
+    hosts_configured, initialized) must remain stable for setup wizard
+    compatibility."""
+
+    def test_source_pins_setup_reason(self):
+        src = SERVE_PY.read_text()
+        start = src.find("def _serve_setup_status(self):")
+        self.assertGreater(start, 0)
+        end = src.find("\n    def ", start + 10)
+        window = src[start:end]
+        self.assertIn("setup_reason", window)
+        self.assertIn('"setup_reason": setup_reason', window)
+        self.assertIn('"checked_at": time.time()', window)
+        # Stable fields preserved.
+        self.assertIn('"setup_health": setup_health', window)
+        self.assertIn('"initialized": is_initialized', window)
+        self.assertIn('"ssh_key_exists": key_exists', window)
+
+
+class TestPveMetricsLastSeenTs(unittest.TestCase):
+    """/api/pve/metrics must attach last_seen_ts per node so the
+    dashboard can show 'STALE 47s' instead of a bare offline chip.
+    Online nodes get `state='live'`; offline nodes that were seen
+    previously get `state='stale'` with an age_seconds; nodes never
+    seen alive stay `state='unreachable'`."""
+
+    def test_source_pins_last_seen_tracking_dict(self):
+        from freq.modules import serve
+        from freq.services import pve_transport
+
+        src = SERVE_PY.read_text()
+        self.assertIn("_pve_last_seen_ts", src,
+                      "class-level last-seen tracking dict must exist")
+        self.assertTrue(pve_transport.PveRrdRuntime.__dataclass_params__.frozen)
+        self.assertTrue(pve_transport.PveRrdResolution.__dataclass_params__.frozen)
+        self.assertIs(serve._resolve_pve_rrd.func, pve_transport.resolve_pve_rrd)
+        self.assertNotIn("freq.modules", PVE_TRANSPORT_PY.read_text())
+
+        start = src.find("def _serve_pve_rrd(self):")
+        end = src.find("\n    def ", start + 10)
+        handler = src[start:end]
+        self.assertIn("resolution = _resolve_pve_rrd(", handler)
+        self.assertNotIn("_pve_api_call", handler)
+        self.assertIn("self._json_response(FreqHandler._pve_rrd_cache)", handler)
+        self.assertIn("self._json_response(result)", handler)
+        _assert_pve_rrd_resolution_contract(self)
+
+    def test_source_pins_online_branch_sets_live_and_ts(self):
+        from freq.modules import serve
+        from freq.services import pve_transport
+
+        src = PVE_TRANSPORT_PY.read_text()
+        start = src.find("def resolve_pve_metrics(")
+        self.assertGreater(start, 0)
+        end = src.find("\ndef ", start + 10)
+        window = src[start:end]
+        self.assertIn('"state": "live"', window)
+        self.assertIn('"last_seen_ts": now_wall', window)
+        self.assertIn("last_seen_by_ip[ip] = now_wall", window)
+        self.assertNotIn("freq.modules", src)
+        self.assertTrue(pve_transport.PveMetricsRuntime.__dataclass_params__.frozen)
+        self.assertTrue(pve_transport.PveMetricsResolution.__dataclass_params__.frozen)
+        self.assertIs(serve._resolve_pve_metrics.func, pve_transport.resolve_pve_metrics)
+
+        serve_src = SERVE_PY.read_text()
+        handler_start = serve_src.find("def _serve_pve_metrics(self):")
+        handler_end = serve_src.find("\n    def ", handler_start + 10)
+        handler = serve_src[handler_start:handler_end]
+        self.assertIn("resolution = _resolve_pve_metrics(", handler)
+        self.assertNotIn("_pve_api_call", handler)
+        self.assertIn(
+            "self._json_response(FreqHandler._pve_metrics_cache)",
+            handler,
+        )
+        self.assertIn("self._json_response(result)", handler)
+        _assert_pve_metrics_resolution_contract(self)
+
+    def test_source_pins_offline_branch_distinguishes_stale_vs_unreachable(self):
+        src = PVE_TRANSPORT_PY.read_text()
+        start = src.find("def resolve_pve_metrics(")
+        end = src.find("\ndef ", start + 10)
+        window = src[start:end]
+        self.assertIn("last_seen = last_seen_by_ip.get(ip)", window)
+        self.assertIn('"unreachable" if last_seen is None else "stale"', window)
+        self.assertIn("last seen", window)
+
+
+class TestFleetOverviewTopLevelState(unittest.TestCase):
+    """/api/fleet/overview must carry a top-level fleet_state + reason
+    + per-node state so the silent refresh banner stops guessing from
+    an empty vms list + undefined probe_status."""
+
+    def test_source_pins_per_node_state(self):
+        src = SERVE_PY.read_text()
+        idx = src.find("# PVE nodes — use auto-discovered nodes")
+        self.assertGreater(idx, 0)
+        end = src.find("# Category summaries", idx)
+        window = src[idx:end]
+        self.assertIn('entry["state"]', window)
+        self.assertIn('entry["reason"]', window)
+        self.assertIn('entry["last_seen_ts"]', window)
+        self.assertIn("FreqHandler._pve_last_seen_ts", window)
+
+    def test_source_pins_top_level_fleet_state(self):
+        src = SERVE_PY.read_text()
+        self.assertIn('"fleet_state": _fleet_state', src)
+        self.assertIn('"fleet_reason": _fleet_reason', src)
+
+
+if __name__ == "__main__":
+    unittest.main()

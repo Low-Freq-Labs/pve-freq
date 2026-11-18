@@ -1,0 +1,29 @@
+# FREQ Container Registry
+# Maps Docker host VMs to their containers for monitoring and management.
+#
+# Format:
+#   [vm.<VMID>]                          — Docker host VM
+#   ip = "192.168.1.50"
+#   label = "app-server"
+#   compose_path = "/opt/configs"        — base path for compose files
+#
+#   [vm.<VMID>.containers.<name>]        — individual container
+#   compose = "appstack/docker-compose.yml"
+#   ports = [8080, 443]
+#   critical = true                       — affects risk assessment
+
+# Example:
+# [vm.200]
+# ip = "192.168.1.50"
+# label = "app-server"
+# compose_path = "/opt/configs"
+#
+# [vm.200.containers.nginx]
+# compose = "web/docker-compose.yml"
+# ports = [80, 443]
+# critical = true
+#
+# [vm.200.containers.postgres]
+# compose = "db/docker-compose.yml"
+# ports = [5432]
+# critical = true

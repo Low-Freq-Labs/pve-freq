@@ -1,0 +1,89 @@
+/* Inventory cockpit only. Resource colors reflect literal reported status. */
+.pve-cockpit { --pve-node-color: var(--purple, #a855f7); color: var(--text, #e5e7eb); }
+.pve-cockpit [hidden] { display: none !important; }
+.pve-cockpit .pve-inventory-header { align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.pve-cockpit .pve-inventory-header h2 { margin: 6px 0 0; font-size: 25px; letter-spacing: -.02em; }
+.pve-cockpit .cockpit-eyebrow { display: block; font-size: 10px; font-weight: 800; letter-spacing: .16em; color: var(--purple-light, #c084fc); }
+.pve-cockpit .pve-inventory-status { margin: 12px 0; font-size: 12px; color: var(--text-dim); }
+.pve-cockpit .pve-inventory-filter { max-width: 680px; }
+.pve-cockpit .pve-inventory-filter-summary { color: var(--text-dim); font-size: 12px; }
+.pve-cockpit .cockpit-source { margin: 22px 0; padding: 0; border: 0; background: none; }
+.pve-cockpit .cockpit-source-head { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 12px 0 6px; }
+.pve-cockpit .cockpit-source-head h3 { font-size: 17px; overflow-wrap: anywhere; }
+.pve-cockpit .cockpit-source > .pve-inventory-details-button { margin: 6px 0 14px; }
+.pve-cockpit .cockpit-muted { color: var(--text-dim); font-size: 11px; overflow-wrap: anywhere; }
+.pve-cockpit .cockpit-node-group { margin: 12px 0 24px; box-shadow: 0 12px 28px rgba(0,0,0,.2); }
+.pve-cockpit .pve-node-shell { padding: 20px; }
+.pve-cockpit .pve-node-id h3 { font-size: 22px; letter-spacing: -.02em; margin: 7px 0 9px; overflow-wrap: anywhere; }
+.pve-cockpit .pve-node-main { gap: 16px; }
+.pve-cockpit .pve-node-summary { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.pve-cockpit .pve-node-stat { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 6px; padding: 12px; min-height: 66px; text-align: left; }
+.pve-cockpit .pve-node-stat span { white-space: normal; font-size: 9px; }
+.pve-cockpit .pve-node-stat strong { white-space: normal; overflow-wrap: anywhere; font-size: 15px; }
+.pve-cockpit .pve-node-summary .pve-node-stat strong { font-size: 24px; }
+.pve-cockpit .pve-node-card-actions { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pve-cockpit .pve-node-actions { padding: 0 20px 16px; flex-wrap: wrap; }
+.pve-cockpit .pve-vms { padding: 0 20px 20px; cursor: default; }
+.pve-cockpit .pve-workload-bar { padding: 14px 0; }
+.pve-cockpit .cockpit-workload-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(250px,1fr)); gap: 12px; padding-top: 16px; }
+.pve-cockpit .cockpit-workload { display: flex; flex-direction: column; align-items: stretch; gap: 13px; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: linear-gradient(145deg,rgba(168,85,247,.075),rgba(0,0,0,.24)); }
+.pve-cockpit .cockpit-workload:hover { border-color: rgba(168,85,247,.55); background: linear-gradient(145deg,rgba(168,85,247,.14),rgba(0,0,0,.3)); }
+.pve-cockpit .cockpit-workload-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pve-cockpit .cockpit-badge { display: inline-flex; align-items: center; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 5px; color: var(--text-dim); background: rgba(255,255,255,.035); font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
+.pve-cockpit .cockpit-status-running { color: var(--green, #4ade80); background: rgba(74,222,128,.07); border-color: rgba(74,222,128,.2); }
+.pve-cockpit .cockpit-status-stopped { color: var(--text-dim); }
+.pve-cockpit .cockpit-workload-identity { min-width: 0; }
+.pve-cockpit .pve-workload-name { font-size: 14px; text-transform: none; overflow-wrap: anywhere; margin: 0 0 5px; }
+.pve-cockpit .cockpit-workload-identity > span { color: var(--text-dim); font-size: 10px; overflow-wrap: anywhere; }
+.pve-cockpit .cockpit-workload-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; }
+.pve-cockpit .cockpit-workload-metrics .pve-node-stat { min-height: 54px; padding: 9px; }
+.pve-cockpit .cockpit-workload-metrics strong { font-size: 12px; }
+.pve-cockpit .cockpit-workload-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.pve-cockpit .cockpit-workload-actions button { padding: 6px 8px; font-size: 10px; }
+.pve-cockpit .cockpit-resource-link { flex: 1 1 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.pve-cockpit .cockpit-action:disabled { color: #a6aabb; opacity: .65; cursor: not-allowed; box-shadow: none; transform: none; }
+.pve-cockpit .cockpit-detail { margin: 18px 0 24px; padding: 20px; border: 1px solid rgba(168,85,247,.35); border-radius: 10px; background: linear-gradient(120deg,rgba(168,85,247,.085),rgba(0,0,0,.22)); }
+.pve-cockpit .cockpit-detail-prompt h3 { margin: 8px 0; font-size: 17px; }
+.pve-cockpit .cockpit-detail-prompt p { color: var(--text-dim); font-size: 12px; }
+.pve-cockpit .cockpit-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pve-cockpit .cockpit-detail-head h3 { margin: 0; flex: 1 1 200px; font-size: 21px; overflow-wrap: anywhere; }
+.pve-cockpit .cockpit-detail-close { margin-left: auto; }
+.pve-cockpit .cockpit-actionbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 10px; }
+.pve-cockpit .cockpit-unavailable { margin: 10px 0 18px; color: var(--text-dim); font-size: 11px; }
+.pve-cockpit .cockpit-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.pve-cockpit .cockpit-tab { flex: 0 0 auto; border-color: transparent; background: transparent; }
+.pve-cockpit .cockpit-tab[aria-selected="true"] { color: var(--purple-light); border-color: rgba(168,85,247,.4); background: rgba(168,85,247,.12); }
+.pve-cockpit .cockpit-tab-panel { padding-top: 20px; min-height: 120px; }
+.pve-cockpit .cockpit-tab-panel > p { color: var(--text-dim); margin: 12px 0; }
+.pve-cockpit .cockpit-console { min-height: 170px; padding: 20px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 6px; background: #090b10; font-family: var(--font-mono,monospace); }
+.pve-cockpit .cockpit-console p { margin-top: 18px; color: var(--text-dim); }
+.pve-cockpit .cockpit-empty { padding: 16px 0; color: var(--text-dim); font-size: 12px; }
+.pve-cockpit :is(button,input,[tabindex]):focus-visible { outline: 2px solid var(--purple-light,#c084fc); outline-offset: 3px; }
+.pve-cockpit.cockpit-overview .cockpit-workload-grid { max-height: 290px; overflow-y: auto; padding-right: 8px; }
+@media (max-width: 820px) {
+  .pve-cockpit .pve-node-card-actions { justify-content: flex-start; }
+  .pve-cockpit .pve-node-metrics { grid-template-columns: 1fr 1fr; }
+  .pve-cockpit .pve-node-shell, .pve-cockpit .cockpit-detail { padding: 14px; }
+  .pve-cockpit .pve-vms { padding: 0 14px 14px; }
+  .pve-cockpit .pve-node-actions { padding: 0 14px 12px; }
+  .pve-cockpit .cockpit-workload-grid { grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); }
+}
+@media (max-width: 480px) {
+  .pve-cockpit .cockpit-workload-grid { grid-template-columns: 1fr; }
+  .pve-cockpit .pve-node-summary { grid-template-columns: 1fr; }
+  .pve-cockpit .pve-inventory-fields { grid-template-columns: 90px minmax(0,1fr); }
+}
+
+/* Keep the compact account control in its own mobile header cell. */
+@media (max-width: 480px) {
+  .mn-header { grid-template-areas: "brand user" "title title"; }
+  .mn-header > .flex-gap-16-center:last-child { display: contents; }
+  .mn-header #stream-status, .mn-header #watchdog-status { display: none; }
+  .mn-header #header-user-btn { grid-area: user; }
+  .mn-header #page-title { padding-top: 3px; }
+}
+
+@media (max-width: 768px) {
+  .view-toolbar-row { align-items: flex-start; }
+  #nav-items.nav-toolbar.open { flex: 0 0 100%; }
+}

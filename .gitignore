@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+node_modules/
+test-results/
+playwright-report/
+.playwright/
+
+# Runtime data (not source — top-level only, not freq/data/)
+/data/
+
+# Duplicate configs (source of truth is freq/data/conf-templates/ and freq/data/knowledge/)
+conf/distros.toml
+conf/personality/
+
+# Active configs (only .example files are committed)
+conf/freq.toml
+conf/hosts.conf
+conf/vlans.toml
+conf/fleet-boundaries.toml
+conf/containers.toml
+conf/roles.conf
+conf/users.conf
+conf/.initialized
+
+# Agent workspace (not part of PVE FREQ)
+.claude/
+CLAUDE.md
+memory/
+journal/
+planning/
+workspace/
+cold-storage/
+resume-state.md
+reference/
+scripts/
+!scripts/release.sh
+!scripts/sync-public.sh
+!scripts/public-exclude.txt
+templates/
+
+# Credentials and sensitive data (never commit)
+*.pem
+*.key
+*.bak
+credentials/
+conf/switch-profiles.toml
+
+# Private product continuity; other agent reference directories remain ignored.
+!/internal/reference/
+!/internal/reference/**

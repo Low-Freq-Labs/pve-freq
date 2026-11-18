@@ -1,0 +1,864 @@
+"""Tests for switch orchestration — Cisco deployer parsers and CLI integration.
+
+Covers: Cisco IOS output parsers, target resolution, CLI subcommand registration.
+"""
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from dataclasses import dataclass
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tests.case_matrix import run_case_matrix  # noqa: E402, I001
+
+
+# ---------------------------------------------------------------------------
+# Sample Cisco IOS Output — realistic show command responses
+# ---------------------------------------------------------------------------
+
+SHOW_VERSION = """
+Cisco IOS Software, C3750E Software (C3750E-UNIVERSALK9-M), Version 15.2(4)E10, RELEASE SOFTWARE (fc2)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2020 by Cisco Systems, Inc.
+Compiled Tue 14-Jul-20 07:07 by prod_rel_team
+
+ROM: Bootstrap program is C3750E boot loader
+BOOTLDR: C3750E Boot Loader (C3750E-HBOOT-M) Version 12.2(58r)SE1
+
+DC01-SW01 uptime is 45 days, 12 hours, 33 minutes
+System returned to ROM by power-on
+System restarted at 14:22:31 CDT Mon Mar 15 2026
+System image file is "flash:c3750e-universalk9-mz.152-4.E10.bin"
+
+cisco WS-C3750X-24T-S (PowerPC405) processor (revision W0) with 262144K bytes of memory.
+Processor board ID FDO1234X5Y6
+
+Last reset from power-on
+2 Virtual Ethernet interfaces
+1 FastEthernet interface
+28 Gigabit Ethernet interfaces
+The password-recovery mechanism is enabled.
+
+512K bytes of flash-simulated non-volatile configuration memory.
+"""
+
+SHOW_INTERFACES_STATUS = """
+Port      Name               Status       Vlan       Duplex  Speed Type
+Gi1/0/1   Camera-Lobby       connected    50         a-full  a-1000 10/100/1000BaseTX
+Gi1/0/2   Camera-Hall        connected    50         a-full  a-1000 10/100/1000BaseTX
+Gi1/0/3                      notconnect   1          auto    auto  10/100/1000BaseTX
+Gi1/0/4   Workstation-A      connected    10         a-full  a-1000 10/100/1000BaseTX
+Gi1/0/5                      disabled     1          auto    auto  10/100/1000BaseTX
+Gi1/0/6   AP-Floor2          connected    25         a-full  a-1000 10/100/1000BaseTX
+Gi1/0/7   Server-Rack        err-disabled 2550       full    1000  10/100/1000BaseTX
+Gi1/0/24  Uplink-Core        connected    trunk      a-full  a-10G SFP-10GBase-SR
+"""
+
+SHOW_VLAN_BRIEF = """
+VLAN Name                             Status    Ports
+---- -------------------------------- --------- -------------------------------
+1    default                          active    Gi1/0/3, Gi1/0/5
+5    PUBLIC                           active    Gi1/0/20, Gi1/0/21
+10   DEVLAB                           active    Gi1/0/4
+25   STORAGE                          active    Gi1/0/6
+50   CAMERAS                          active    Gi1/0/1, Gi1/0/2
+2550 MGMT                             active    Gi1/0/7
+1002 fddi-default                     act/unsup
+1003 token-ring-default               act/unsup
+"""
+
+SHOW_MAC_TABLE = """
+          Mac Address Table
+-------------------------------------------
+
+Vlan    Mac Address       Type        Ports
+----    -----------       --------    -----
+  50    aabb.cc00.1111    DYNAMIC     Gi1/0/1
+  50    aabb.cc00.2222    DYNAMIC     Gi1/0/2
+  10    ddee.ff00.3333    DYNAMIC     Gi1/0/4
+2550    1122.3344.5566    STATIC      Gi1/0/7
+Total Mac Addresses for this criterion: 4
+"""
+
+SHOW_ARP = """
+Protocol  Address          Age (min)  Hardware Addr   Type   Interface
+Internet  10.25.255.1      -          aabb.ccdd.ee00  ARPA   Vlan2550
+Internet  10.25.255.5      0          1122.3344.5566  ARPA   Vlan2550
+Internet  10.25.5.100      15         ddee.ff00.1234  ARPA   Vlan5
+Internet  10.25.25.10      3          aabb.cc00.9999  ARPA   Vlan25
+"""
+
+SHOW_CDP_DETAIL = """
+-------------------------
+Device ID: core-switch.dc01.local
+Entry address(es):
+  IP address: 10.25.255.1
+Platform: cisco WS-C9300-48P, Capabilities: Router Switch IGMP
+Interface: GigabitEthernet1/0/24,  Port ID (outgoing port): GigabitEthernet0/0/1
+Holdtime : 131 sec
+
+Version :
+Cisco IOS Software, Catalyst L3 Switch Software
+
+advertisement version: 2
+Duplex: full
+
+-------------------------
+Device ID: access-point-floor2
+Entry address(es):
+  IP address: 10.25.25.50
+Platform: Cisco AIR-AP3802I, Capabilities: Trans-Bridge
+Interface: GigabitEthernet1/0/6,  Port ID (outgoing port): GigabitEthernet0
+Holdtime : 145 sec
+
+Version :
+Cisco AP Software
+"""
+
+
+# ---------------------------------------------------------------------------
+# Cisco Parser Tests
+# ---------------------------------------------------------------------------
+
+class TestCiscoParseShowVersion(unittest.TestCase):
+    """Test _parse_show_version parser."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import _parse_show_version
+        self.parse = _parse_show_version
+
+    def _case_hostname(self):
+        facts = self.parse(SHOW_VERSION)
+        self.assertEqual(facts["hostname"], "DC01-SW01")
+
+    def _case_uptime(self):
+        facts = self.parse(SHOW_VERSION)
+        self.assertIn("45 days", facts["uptime"])
+
+    def _case_model(self):
+        facts = self.parse(SHOW_VERSION)
+        self.assertEqual(facts["model"], "WS-C3750X-24T-S")
+
+    def _case_serial(self):
+        facts = self.parse(SHOW_VERSION)
+        self.assertEqual(facts["serial"], "FDO1234X5Y6")
+
+    def _case_os_version(self):
+        facts = self.parse(SHOW_VERSION)
+        self.assertIn("15.2(4)E10", facts["os_version"])
+
+    def _case_image(self):
+        facts = self.parse(SHOW_VERSION)
+        self.assertIn("c3750e", facts["image"])
+
+    def _case_empty_input(self):
+        facts = self.parse("")
+        self.assertEqual(facts["hostname"], "")
+        self.assertEqual(facts["model"], "")
+
+    def _case_all_keys_present(self):
+        facts = self.parse(SHOW_VERSION)
+        for key in ("hostname", "model", "serial", "os_version", "uptime", "image"):
+            self.assertIn(key, facts)
+
+
+class TestCiscoParseInterfacesStatus(unittest.TestCase):
+    """Test _parse_interfaces_status parser."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import _parse_interfaces_status
+        self.parse = _parse_interfaces_status
+
+    def _case_count(self):
+        ifaces = self.parse(SHOW_INTERFACES_STATUS)
+        self.assertEqual(len(ifaces), 8)
+
+    def _case_connected_port(self):
+        ifaces = self.parse(SHOW_INTERFACES_STATUS)
+        gi1 = next(i for i in ifaces if i["name"] == "Gi1/0/1")
+        self.assertEqual(gi1["status"], "connected")
+        self.assertEqual(gi1["description"], "Camera-Lobby")
+        self.assertEqual(gi1["vlan"], "50")
+
+    def _case_notconnect_port(self):
+        ifaces = self.parse(SHOW_INTERFACES_STATUS)
+        gi3 = next(i for i in ifaces if i["name"] == "Gi1/0/3")
+        self.assertEqual(gi3["status"], "notconnect")
+        self.assertEqual(gi3["description"], "")
+
+    def _case_disabled_port(self):
+        ifaces = self.parse(SHOW_INTERFACES_STATUS)
+        gi5 = next(i for i in ifaces if i["name"] == "Gi1/0/5")
+        self.assertEqual(gi5["status"], "disabled")
+
+    def _case_err_disabled_port(self):
+        ifaces = self.parse(SHOW_INTERFACES_STATUS)
+        gi7 = next(i for i in ifaces if i["name"] == "Gi1/0/7")
+        self.assertEqual(gi7["status"], "err-disabled")
+
+    def _case_trunk_port(self):
+        ifaces = self.parse(SHOW_INTERFACES_STATUS)
+        gi24 = next(i for i in ifaces if i["name"] == "Gi1/0/24")
+        self.assertEqual(gi24["status"], "connected")
+        self.assertEqual(gi24["vlan"], "trunk")
+        self.assertEqual(gi24["description"], "Uplink-Core")
+
+    def _case_empty_input(self):
+        self.assertEqual(self.parse(""), [])
+
+
+class TestCiscoParseVlanBrief(unittest.TestCase):
+    """Test _parse_vlan_brief parser."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import _parse_vlan_brief
+        self.parse = _parse_vlan_brief
+
+    def _case_count(self):
+        vlans = self.parse(SHOW_VLAN_BRIEF)
+        # 6 real VLANs + 2 unsupported
+        self.assertGreaterEqual(len(vlans), 6)
+
+    def _case_vlan_id(self):
+        vlans = self.parse(SHOW_VLAN_BRIEF)
+        ids = [v["id"] for v in vlans]
+        self.assertIn(1, ids)
+        self.assertIn(50, ids)
+        self.assertIn(2550, ids)
+
+    def _case_vlan_name(self):
+        vlans = self.parse(SHOW_VLAN_BRIEF)
+        v50 = next(v for v in vlans if v["id"] == 50)
+        self.assertEqual(v50["name"], "CAMERAS")
+
+    def _case_vlan_ports(self):
+        vlans = self.parse(SHOW_VLAN_BRIEF)
+        v50 = next(v for v in vlans if v["id"] == 50)
+        self.assertIn("Gi1/0/1", v50["ports"])
+        self.assertIn("Gi1/0/2", v50["ports"])
+
+    def _case_empty_input(self):
+        self.assertEqual(self.parse(""), [])
+
+
+class TestCiscoParseMacTable(unittest.TestCase):
+    """Test _parse_mac_table parser."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import _parse_mac_table
+        self.parse = _parse_mac_table
+
+    def _case_count(self):
+        entries = self.parse(SHOW_MAC_TABLE)
+        self.assertEqual(len(entries), 4)
+
+    def _case_entry_fields(self):
+        entries = self.parse(SHOW_MAC_TABLE)
+        e = entries[0]
+        self.assertEqual(e["vlan"], 50)
+        self.assertEqual(e["mac"], "aabb.cc00.1111")
+        self.assertEqual(e["type"], "dynamic")
+        self.assertEqual(e["port"], "Gi1/0/1")
+
+    def _case_static_entry(self):
+        entries = self.parse(SHOW_MAC_TABLE)
+        static = next(e for e in entries if e["type"] == "static")
+        self.assertEqual(static["vlan"], 2550)
+
+    def _case_empty_input(self):
+        self.assertEqual(self.parse(""), [])
+
+
+class TestCiscoParseArpTable(unittest.TestCase):
+    """Test _parse_arp_table parser."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import _parse_arp_table
+        self.parse = _parse_arp_table
+
+    def _case_count(self):
+        entries = self.parse(SHOW_ARP)
+        self.assertEqual(len(entries), 4)
+
+    def _case_entry_fields(self):
+        entries = self.parse(SHOW_ARP)
+        e = next(a for a in entries if a["ip"] == "10.25.255.5")
+        self.assertEqual(e["mac"], "1122.3344.5566")
+        self.assertEqual(e["interface"], "Vlan2550")
+
+    def _case_empty_input(self):
+        self.assertEqual(self.parse(""), [])
+
+
+class TestCiscoParseCdpDetail(unittest.TestCase):
+    """Test _parse_cdp_detail parser."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import _parse_cdp_detail
+        self.parse = _parse_cdp_detail
+
+    def _case_count(self):
+        neighbors = self.parse(SHOW_CDP_DETAIL)
+        self.assertEqual(len(neighbors), 2)
+
+    def _case_neighbor_fields(self):
+        neighbors = self.parse(SHOW_CDP_DETAIL)
+        core = next(n for n in neighbors if "core" in n["device"])
+        self.assertEqual(core["ip"], "10.25.255.1")
+        self.assertIn("9300", core["platform"])
+        self.assertEqual(core["local_port"], "GigabitEthernet1/0/24")
+        self.assertEqual(core["remote_port"], "GigabitEthernet0/0/1")
+
+    def _case_ap_neighbor(self):
+        neighbors = self.parse(SHOW_CDP_DETAIL)
+        ap = next(n for n in neighbors if "access-point" in n["device"])
+        self.assertEqual(ap["ip"], "10.25.25.50")
+
+    def _case_empty_input(self):
+        self.assertEqual(self.parse(""), [])
+
+
+class TestCiscoTransportContract(unittest.TestCase):
+    """Cisco switch transport must preserve configured runtime identity."""
+
+    def _case_cisco_ssh_passes_cfg_to_transport(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from freq.deployers.switch import cisco
+
+        cfg = SimpleNamespace(
+            ssh_rsa_key_path="/tmp/freq_id_rsa",
+            ssh_key_path="/tmp/freq_id_ed25519",
+            ssh_connect_timeout=5,
+            ssh_service_account="dc01-admin",
+        )
+        with patch("freq.deployers.switch.cisco.ssh_run") as mock_run:
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="", stderr="")
+            cisco._ssh("10.25.255.5", "show version", cfg)
+
+        self.assertIs(mock_run.call_args.kwargs["cfg"], cfg)
+        self.assertEqual(mock_run.call_args.kwargs["command"], "show version")
+
+    def _case_cisco_show_command_with_blank_stdout_is_not_ok(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from freq.deployers.switch import cisco
+
+        cfg = SimpleNamespace(
+            ssh_rsa_key_path="/tmp/freq_id_rsa",
+            ssh_key_path="/tmp/freq_id_ed25519",
+            ssh_connect_timeout=5,
+            ssh_service_account="dc01-admin",
+        )
+        with patch("freq.deployers.switch.cisco.ssh_run") as mock_run:
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="", stderr="")
+            output, ok = cisco._ssh("10.25.255.5", "show version", cfg)
+
+        self.assertEqual(output, "")
+        self.assertFalse(ok)
+
+
+# ---------------------------------------------------------------------------
+# Target Resolution Tests
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MockHost:
+    ip: str
+    label: str
+    htype: str
+    groups: str = ""
+
+
+class MockConfig:
+    def __init__(self):
+        self.hosts = [
+            MockHost("10.25.255.5", "switch", "switch"),
+            MockHost("10.25.255.26", "pve01", "pve"),
+        ]
+        self.switch_ip = "10.25.255.5"
+        self.ssh_key_path = "/home/test/.ssh/id_ed25519"
+        self.ssh_rsa_key_path = "/home/test/.ssh/id_rsa"
+        self.ssh_connect_timeout = 5
+        self.conf_dir = "/tmp/freq-test/conf"
+
+
+class TestTargetResolution(unittest.TestCase):
+    """Test switch target resolution."""
+
+    def setUp(self):
+        from freq.modules.switch_orchestration import _resolve_target
+        self.resolve = _resolve_target
+        self.cfg = MockConfig()
+
+    def _case_resolve_by_label(self):
+        ip, label, vendor = self.resolve("switch", self.cfg)
+        self.assertEqual(ip, "10.25.255.5")
+        self.assertEqual(label, "switch")
+
+    def _case_resolve_by_ip(self):
+        ip, label, vendor = self.resolve("10.25.255.5", self.cfg)
+        self.assertEqual(ip, "10.25.255.5")
+
+    def _case_resolve_default(self):
+        ip, label, vendor = self.resolve(None, self.cfg)
+        self.assertEqual(ip, "10.25.255.5")
+
+    def _case_resolve_bare_ip(self):
+        ip, label, vendor = self.resolve("192.168.1.1", self.cfg)
+        self.assertEqual(ip, "192.168.1.1")
+        self.assertEqual(vendor, "cisco")  # default
+
+    def _case_resolve_unknown(self):
+        ip, label, vendor = self.resolve("nonexistent", self.cfg)
+        self.assertIsNone(ip)
+
+    def _case_no_switch_ip_no_target(self):
+        cfg = MockConfig()
+        cfg.switch_ip = ""
+        cfg.hosts = []
+        ip, label, vendor = self.resolve(None, cfg)
+        self.assertIsNone(ip)
+
+
+class TestGetSwitchHosts(unittest.TestCase):
+    """Test switch host filtering."""
+
+    def _case_filters_switches(self):
+        from freq.modules.switch_orchestration import _get_switch_hosts
+        cfg = MockConfig()
+        switches = _get_switch_hosts(cfg)
+        self.assertEqual(len(switches), 1)
+        self.assertEqual(switches[0].label, "switch")
+
+
+# ---------------------------------------------------------------------------
+# CLI Registration Tests
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Deployer Interface Tests
+# ---------------------------------------------------------------------------
+
+class TestCiscoDeployerInterface(unittest.TestCase):
+    """Test that cisco deployer exports all required getter functions."""
+
+    def _case_has_all_getters(self):
+        from freq.deployers.switch import cisco
+        required = [
+            "get_facts", "get_interfaces", "get_vlans", "get_mac_table",
+            "get_arp_table", "get_neighbors", "get_config", "get_environment",
+            "get_port_status", "get_poe_status",
+        ]
+        for fn in required:
+            self.assertTrue(hasattr(cisco, fn), f"Missing getter: {fn}")
+            self.assertTrue(callable(getattr(cisco, fn)), f"Not callable: {fn}")
+
+    def _case_has_setters(self):
+        from freq.deployers.switch import cisco
+        for fn in ("push_config", "save_config", "set_port_vlan",
+                    "set_port_shutdown", "set_port_description", "set_port_poe",
+                    "flap_port", "apply_profile_lines"):
+            self.assertTrue(hasattr(cisco, fn), f"Missing setter: {fn}")
+            self.assertTrue(callable(getattr(cisco, fn)), f"Not callable: {fn}")
+
+    def _case_has_deploy_remove(self):
+        from freq.deployers.switch import cisco
+        self.assertTrue(callable(cisco.deploy))
+        self.assertTrue(callable(cisco.remove))
+
+    def _case_vendor_constants(self):
+        from freq.deployers.switch import cisco
+        self.assertEqual(cisco.CATEGORY, "switch")
+        self.assertEqual(cisco.VENDOR, "cisco")
+        self.assertTrue(cisco.NEEDS_PASSWORD)
+        self.assertTrue(cisco.NEEDS_RSA)
+
+
+# ---------------------------------------------------------------------------
+# Module Import Tests
+# ---------------------------------------------------------------------------
+
+class TestModuleImports(unittest.TestCase):
+    """Test that all new modules import cleanly."""
+
+    def test_cisco_deployer_imports(self):
+        from freq.deployers.switch import cisco
+        self.assertIsNotNone(cisco)
+
+    def test_switch_orchestration_imports(self):
+        from freq.modules import switch_orchestration
+        self.assertIsNotNone(switch_orchestration)
+
+    def test_switch_orchestration_all_commands(self):
+        from freq.modules.switch_orchestration import (
+            cmd_switch_show, cmd_switch_facts, cmd_switch_interfaces,
+            cmd_switch_vlans, cmd_switch_mac, cmd_switch_arp,
+            cmd_switch_neighbors, cmd_switch_config, cmd_switch_environment,
+            cmd_switch_exec,
+        )
+        # All imports succeed
+        self.assertTrue(callable(cmd_switch_show))
+
+    def test_port_commands_import(self):
+        from freq.modules.switch_orchestration import (
+            cmd_port_status, cmd_port_configure, cmd_port_desc,
+            cmd_port_poe, cmd_port_find, cmd_port_flap,
+        )
+        self.assertTrue(callable(cmd_port_status))
+
+    def test_profile_commands_import(self):
+        from freq.modules.switch_orchestration import (
+            cmd_profile_list, cmd_profile_show, cmd_profile_apply,
+            cmd_profile_create, cmd_profile_delete,
+        )
+        self.assertTrue(callable(cmd_profile_list))
+
+
+# ---------------------------------------------------------------------------
+# PoE Parser Tests
+# ---------------------------------------------------------------------------
+
+SHOW_POWER_INLINE = """
+Module   Available     Used     Remaining
+          (Watts)     (Watts)    (Watts)
+------   ---------   --------   ---------
+1          740.0       62.0       678.0
+
+Interface Admin  Oper       Power   Device              Class Max
+                            (Watts)
+--------- ------ ---------- ------- ------------------- ----- ----
+Gi1/0/1   auto   on         7.0     Ieee PD             3     30.0
+Gi1/0/2   auto   on         4.5     Ieee PD             2     30.0
+Gi1/0/3   auto   off        0.0     n/a                 n/a   30.0
+Gi1/0/4   auto   on         15.4    Ieee PD             4     30.0
+Gi1/0/5   auto   off        0.0     n/a                 n/a   30.0
+Gi1/0/6   auto   on         7.0     IP Phone            3     30.0
+"""
+
+
+class TestCiscoParsePowerInline(unittest.TestCase):
+    """Test _parse_power_inline parser."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import _parse_power_inline
+        self.parse = _parse_power_inline
+
+    def _case_count(self):
+        entries = self.parse(SHOW_POWER_INLINE)
+        self.assertEqual(len(entries), 6)
+
+    def _case_powered_port(self):
+        entries = self.parse(SHOW_POWER_INLINE)
+        gi1 = next(e for e in entries if e["port"] == "Gi1/0/1")
+        self.assertEqual(gi1["admin"], "auto")
+        self.assertEqual(gi1["oper"], "on")
+        self.assertEqual(gi1["watts"], 7.0)
+
+    def _case_unpowered_port(self):
+        entries = self.parse(SHOW_POWER_INLINE)
+        gi3 = next(e for e in entries if e["port"] == "Gi1/0/3")
+        self.assertEqual(gi3["oper"], "off")
+        self.assertEqual(gi3["watts"], 0.0)
+
+    def _case_empty_input(self):
+        self.assertEqual(self.parse(""), [])
+
+
+# ---------------------------------------------------------------------------
+# Profile to Config Lines Tests
+# ---------------------------------------------------------------------------
+
+class TestProfileToConfigLines(unittest.TestCase):
+    """Test profile_to_config_lines conversion."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import profile_to_config_lines
+        self.convert = profile_to_config_lines
+
+    def _case_access_profile(self):
+        profile = {"mode": "access", "vlan": 50, "spanning_tree": "portfast"}
+        lines = self.convert(profile)
+        self.assertIn("switchport mode access", lines)
+        self.assertIn("switchport access vlan 50", lines)
+        self.assertIn("spanning-tree portfast", lines)
+        self.assertIn("no shutdown", lines)
+
+    def _case_trunk_profile(self):
+        profile = {"mode": "trunk", "allowed_vlans": [1, 10, 25], "native_vlan": 1}
+        lines = self.convert(profile)
+        self.assertIn("switchport mode trunk", lines)
+        self.assertIn("switchport trunk allowed vlan 1,10,25", lines)
+        self.assertIn("switchport trunk native vlan 1", lines)
+
+    def _case_shutdown_profile(self):
+        profile = {"description": "Unused port", "shutdown": True}
+        lines = self.convert(profile)
+        self.assertIn("shutdown", lines)
+        self.assertIn("description Unused port", lines)
+        self.assertNotIn("no shutdown", lines)
+        # Shutdown profile should be short — no mode/vlan config
+        self.assertNotIn("switchport mode access", lines)
+
+    def _case_poe_enabled(self):
+        profile = {"mode": "access", "vlan": 50, "poe": True}
+        lines = self.convert(profile)
+        self.assertIn("power inline auto", lines)
+
+    def _case_poe_disabled(self):
+        profile = {"mode": "access", "vlan": 50, "poe": False}
+        lines = self.convert(profile)
+        self.assertIn("power inline never", lines)
+
+    def _case_port_security(self):
+        profile = {
+            "mode": "access", "vlan": 50,
+            "port_security": {"max_mac": 1, "violation": "restrict"},
+        }
+        lines = self.convert(profile)
+        self.assertIn("switchport port-security", lines)
+        self.assertIn("switchport port-security maximum 1", lines)
+        self.assertIn("switchport port-security violation restrict", lines)
+
+    def _case_description_included(self):
+        profile = {"description": "Camera-Lobby", "mode": "access", "vlan": 50}
+        lines = self.convert(profile)
+        self.assertIn("description Camera-Lobby", lines)
+
+    def _case_empty_profile(self):
+        lines = self.convert({})
+        # Should at least have no shutdown and mode
+        self.assertIn("no shutdown", lines)
+        self.assertIn("switchport mode access", lines)
+
+
+# ---------------------------------------------------------------------------
+# Port Range Expansion Tests
+# ---------------------------------------------------------------------------
+
+class TestExpandPortRange(unittest.TestCase):
+    """Test _expand_port_range utility."""
+
+    def setUp(self):
+        from freq.modules.switch_orchestration import _expand_port_range
+        self.expand = _expand_port_range
+
+    def _case_single_port(self):
+        self.assertEqual(self.expand("Gi1/0/5"), ["Gi1/0/5"])
+
+    def _case_range(self):
+        ports = self.expand("Gi1/0/1-4")
+        self.assertEqual(len(ports), 4)
+        self.assertEqual(ports[0], "Gi1/0/1")
+        self.assertEqual(ports[3], "Gi1/0/4")
+
+    def _case_comma_separated(self):
+        ports = self.expand("Gi1/0/1,Gi1/0/5")
+        self.assertEqual(len(ports), 2)
+
+    def _case_mixed(self):
+        ports = self.expand("Gi1/0/1-3,Gi1/0/10")
+        self.assertEqual(len(ports), 4)
+        self.assertEqual(ports[3], "Gi1/0/10")
+
+    def _case_full_range_24(self):
+        ports = self.expand("Gi1/0/1-24")
+        self.assertEqual(len(ports), 24)
+
+
+# ---------------------------------------------------------------------------
+# CLI Port + Profile Registration Tests
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Profile Load Tests
+# ---------------------------------------------------------------------------
+
+class TestProfileLoading(unittest.TestCase):
+    """Test profile TOML loading from disk."""
+
+    _FIXTURE_PROFILES = """\
+[profile.access-default]
+description = "Standard access port"
+mode = "access"
+vlan = 1
+spanning_tree = "portfast"
+
+[profile.trunk-uplink]
+description = "Uplink to distribution switch"
+mode = "trunk"
+allowed_vlans = [1, 5, 10, 25, 50, 2550]
+native_vlan = 1
+
+[profile.camera]
+description = "IP camera — isolated VLAN, PoE enabled"
+mode = "access"
+vlan = 50
+poe = true
+port_security = { max_mac = 1, violation = "restrict" }
+spanning_tree = "portfast"
+
+[profile.dead]
+description = "Unused port — shutdown"
+shutdown = true
+"""
+
+    def _make_profile_dir(self):
+        import tempfile
+        tmpdir = tempfile.mkdtemp()
+        with open(os.path.join(tmpdir, "switch-profiles.toml"), "w") as f:
+            f.write(self._FIXTURE_PROFILES)
+        return tmpdir
+
+    def _case_load_profiles_from_conf(self):
+        """Load switch profiles from fixture TOML."""
+        cfg = MockConfig()
+        cfg.conf_dir = self._make_profile_dir()
+
+        from freq.modules.switch_orchestration import _load_profiles
+        profiles = _load_profiles(cfg)
+        self.assertIn("camera", profiles)
+        self.assertIn("dead", profiles)
+        self.assertIn("trunk-uplink", profiles)
+        self.assertIn("access-default", profiles)
+
+    def _case_camera_profile_structure(self):
+        cfg = MockConfig()
+        cfg.conf_dir = self._make_profile_dir()
+
+        from freq.modules.switch_orchestration import _load_profiles
+        profiles = _load_profiles(cfg)
+        cam = profiles["camera"]
+        self.assertEqual(cam["mode"], "access")
+        self.assertEqual(cam["vlan"], 50)
+        self.assertTrue(cam["poe"])
+
+    def _case_load_empty_dir(self):
+        """Missing profiles file returns empty dict."""
+        import tempfile
+        cfg = MockConfig()
+        cfg.conf_dir = tempfile.mkdtemp()
+        from freq.modules.switch_orchestration import _load_profiles
+        profiles = _load_profiles(cfg)
+        self.assertEqual(profiles, {})
+
+
+CISCO_SHOW_VERSION_CASES = (
+    "_case_hostname", "_case_uptime", "_case_model", "_case_serial",
+    "_case_os_version", "_case_image", "_case_empty_input", "_case_all_keys_present",
+)
+CISCO_INTERFACES_STATUS_CASES = (
+    "_case_count", "_case_connected_port", "_case_notconnect_port", "_case_disabled_port",
+    "_case_err_disabled_port", "_case_trunk_port", "_case_empty_input",
+)
+CISCO_VLAN_BRIEF_CASES = (
+    "_case_count", "_case_vlan_id", "_case_vlan_name", "_case_vlan_ports", "_case_empty_input",
+)
+CISCO_MAC_TABLE_CASES = (
+    "_case_count", "_case_entry_fields", "_case_static_entry", "_case_empty_input",
+)
+CISCO_ARP_TABLE_CASES = ("_case_count", "_case_entry_fields", "_case_empty_input")
+CISCO_CDP_DETAIL_CASES = (
+    "_case_count", "_case_neighbor_fields", "_case_ap_neighbor", "_case_empty_input",
+)
+CISCO_TRANSPORT_CASES = (
+    "_case_cisco_ssh_passes_cfg_to_transport",
+    "_case_cisco_show_command_with_blank_stdout_is_not_ok",
+)
+SWITCH_TARGET_RESOLUTION_CASES = (
+    "_case_resolve_by_label", "_case_resolve_by_ip", "_case_resolve_default",
+    "_case_resolve_bare_ip", "_case_resolve_unknown", "_case_no_switch_ip_no_target",
+)
+GET_SWITCH_HOSTS_CASES = ("_case_filters_switches",)
+CISCO_DEPLOYER_INTERFACE_CASES = (
+    "_case_has_all_getters", "_case_has_setters", "_case_has_deploy_remove", "_case_vendor_constants",
+)
+CISCO_POWER_INLINE_CASES = (
+    "_case_count", "_case_powered_port", "_case_unpowered_port", "_case_empty_input",
+)
+PROFILE_TO_CONFIG_CASES = (
+    "_case_access_profile", "_case_trunk_profile", "_case_shutdown_profile", "_case_poe_enabled",
+    "_case_poe_disabled", "_case_port_security", "_case_description_included", "_case_empty_profile",
+)
+EXPAND_PORT_RANGE_CASES = (
+    "_case_single_port", "_case_range", "_case_comma_separated", "_case_mixed", "_case_full_range_24",
+)
+PROFILE_LOADING_CASES = (
+    "_case_load_profiles_from_conf", "_case_camera_profile_structure", "_case_load_empty_dir",
+)
+
+
+class TestCiscoParseShowVersionMatrix(unittest.TestCase):
+    def test_cisco_show_version_matrix(self):
+        run_case_matrix(self, TestCiscoParseShowVersion, CISCO_SHOW_VERSION_CASES)
+
+
+class TestCiscoParseInterfacesStatusMatrix(unittest.TestCase):
+    def test_cisco_interfaces_status_matrix(self):
+        run_case_matrix(self, TestCiscoParseInterfacesStatus, CISCO_INTERFACES_STATUS_CASES)
+
+
+class TestCiscoParseVlanBriefMatrix(unittest.TestCase):
+    def test_cisco_vlan_brief_matrix(self):
+        run_case_matrix(self, TestCiscoParseVlanBrief, CISCO_VLAN_BRIEF_CASES)
+
+
+class TestCiscoParseMacTableMatrix(unittest.TestCase):
+    def test_cisco_mac_table_matrix(self):
+        run_case_matrix(self, TestCiscoParseMacTable, CISCO_MAC_TABLE_CASES)
+
+
+class TestCiscoParseArpTableMatrix(unittest.TestCase):
+    def test_cisco_arp_table_matrix(self):
+        run_case_matrix(self, TestCiscoParseArpTable, CISCO_ARP_TABLE_CASES)
+
+
+class TestCiscoParseCdpDetailMatrix(unittest.TestCase):
+    def test_cisco_cdp_detail_matrix(self):
+        run_case_matrix(self, TestCiscoParseCdpDetail, CISCO_CDP_DETAIL_CASES)
+
+
+class TestCiscoTransportContractMatrix(unittest.TestCase):
+    def test_cisco_transport_matrix(self):
+        run_case_matrix(self, TestCiscoTransportContract, CISCO_TRANSPORT_CASES)
+
+
+class TestTargetResolutionMatrix(unittest.TestCase):
+    def test_switch_target_resolution_matrix(self):
+        run_case_matrix(self, TestTargetResolution, SWITCH_TARGET_RESOLUTION_CASES)
+
+
+class TestGetSwitchHostsMatrix(unittest.TestCase):
+    def test_get_switch_hosts_matrix(self):
+        run_case_matrix(self, TestGetSwitchHosts, GET_SWITCH_HOSTS_CASES)
+
+
+class TestCiscoDeployerInterfaceMatrix(unittest.TestCase):
+    def test_cisco_deployer_interface_matrix(self):
+        run_case_matrix(self, TestCiscoDeployerInterface, CISCO_DEPLOYER_INTERFACE_CASES)
+
+
+class TestCiscoParsePowerInlineMatrix(unittest.TestCase):
+    def test_cisco_power_inline_matrix(self):
+        run_case_matrix(self, TestCiscoParsePowerInline, CISCO_POWER_INLINE_CASES)
+
+
+class TestProfileToConfigLinesMatrix(unittest.TestCase):
+    def test_profile_to_config_matrix(self):
+        run_case_matrix(self, TestProfileToConfigLines, PROFILE_TO_CONFIG_CASES)
+
+
+class TestExpandPortRangeMatrix(unittest.TestCase):
+    def test_expand_port_range_matrix(self):
+        run_case_matrix(self, TestExpandPortRange, EXPAND_PORT_RANGE_CASES)
+
+
+class TestProfileLoadingMatrix(unittest.TestCase):
+    def test_profile_loading_matrix(self):
+        run_case_matrix(self, TestProfileLoading, PROFILE_LOADING_CASES)
+
+
+if __name__ == "__main__":
+    unittest.main()

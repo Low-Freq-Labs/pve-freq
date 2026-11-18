@@ -1,0 +1,15 @@
+# Profile D VLANs — /23 subnets (non-standard)
+
+[vlan.main]
+id = 100
+name = "MAIN"
+subnet = "172.16.0.0/23"
+prefix = "172.16.0"
+gateway = "172.16.0.1"
+
+[vlan.services]
+id = 200
+name = "SERVICES"
+subnet = "172.16.2.0/23"
+prefix = "172.16.2"
+gateway = "172.16.2.1"

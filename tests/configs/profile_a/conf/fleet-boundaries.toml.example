@@ -1,0 +1,43 @@
+# PVE FREQ — Fleet Boundary Definitions
+# This file is the single source of truth for what FREQ can do to each VM.
+# Categories define permission tiers. Tiers define allowed actions.
+# FREQ shows EVERYTHING. It only restricts ACTIONS.
+
+[tiers]
+probe    = ["view"]
+operator = ["view", "start", "stop", "restart", "snapshot", "destroy", "clone", "resize", "migrate", "configure"]
+admin    = ["view", "start", "stop", "restart", "snapshot", "destroy", "clone", "resize", "migrate", "configure"]
+
+# Define categories for your VMs:
+#
+# [categories.personal]
+# description = "Personal VMs — display only"
+# tier = "probe"
+# vmids = [100, 101]
+#
+# [categories.production]
+# description = "Production workloads"
+# tier = "operator"
+# vmids = [200, 201, 202]
+#
+# [categories.lab]
+# description = "Lab/dev playground"
+# tier = "admin"
+# range_start = 5000
+# range_end = 5099
+#
+# [categories.templates]
+# description = "Clone sources — never start directly"
+# tier = "probe"
+# range_start = 9000
+# range_end = 9099
+
+# Physical infrastructure — all read-only for FREQ
+# [physical]
+# firewall = { ip = "192.168.1.1", label = "firewall", type = "pfsense", tier = "probe", detail = "Gateway" }
+# storage  = { ip = "192.168.1.20", label = "nas", type = "truenas", tier = "probe", detail = "Storage server" }
+
+# PVE node inventory
+# [pve_nodes]
+# node1 = { ip = "192.168.1.10", detail = "Proxmox Node 1" }
+# node2 = { ip = "192.168.1.11", detail = "Proxmox Node 2" }

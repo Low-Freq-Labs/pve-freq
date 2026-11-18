@@ -1,0 +1,169 @@
+{
+  "additions": [
+    {
+      "introduced_at": "78133a13ce946470c47d11e69e0415ca2819eaca",
+      "review_status": "ACCEPTED",
+      "surface": {
+        "classification": "UNKNOWN",
+        "default_kind": "literal",
+        "evidence": [
+          "freq/core/config.py:FreqConfig"
+        ],
+        "handler": null,
+        "kind": "config-field",
+        "name": "opnsense_tls_sha256",
+        "schema_type": "<class 'str'>"
+      }
+    },
+    {
+      "introduced_at": "1f0e0641ba88fe34b22478a698742078ba95964a",
+      "review_status": "ACCEPTED",
+      "surface": {
+        "access": "admin",
+        "access_status": "RESOLVED",
+        "classification": "UNKNOWN",
+        "evidence": [
+          "freq/api/__init__.py:build_routes"
+        ],
+        "handler": "freq.api.opnsense.handle_opnsense_enrollment",
+        "kind": "http-v1",
+        "methods": [
+          "GET",
+          "POST"
+        ],
+        "mutation": "mixed",
+        "name": "/api/opnsense/enrollment",
+        "semantics_status": "RESOLVED"
+      }
+    },
+    {
+      "introduced_at": "1f0e0641ba88fe34b22478a698742078ba95964a",
+      "review_status": "ACCEPTED",
+      "surface": {
+        "access": "admin",
+        "access_status": "RESOLVED",
+        "classification": "UNKNOWN",
+        "evidence": [
+          "freq/api/__init__.py:build_routes"
+        ],
+        "handler": "freq.api.opnsense.handle_opnsense_remove",
+        "kind": "http-v1",
+        "methods": [
+          "POST"
+        ],
+        "mutation": "mutation",
+        "name": "/api/opnsense/remove",
+        "semantics_status": "RESOLVED"
+      }
+    },
+    {
+      "introduced_at": "1f0e0641ba88fe34b22478a698742078ba95964a",
+      "review_status": "ACCEPTED",
+      "surface": {
+        "access": "admin",
+        "access_status": "RESOLVED",
+        "classification": "UNKNOWN",
+        "evidence": [
+          "freq/api/__init__.py:build_routes"
+        ],
+        "handler": "freq.api.opnsense.handle_opnsense_retrust",
+        "kind": "http-v1",
+        "methods": [
+          "POST"
+        ],
+        "mutation": "mutation",
+        "name": "/api/opnsense/retrust",
+        "semantics_status": "RESOLVED"
+      }
+    },
+    {
+      "introduced_at": "78133a13ce946470c47d11e69e0415ca2819eaca",
+      "review_status": "ACCEPTED",
+      "surface": {
+        "classification": "UNKNOWN",
+        "endpoint": "/api/opnsense/enrollment",
+        "evidence": [
+          "freq/data/web/js/app.js"
+        ],
+        "handler": null,
+        "kind": "ui-api-consumer",
+        "name": "freq/data/web/js/app.js:/api/opnsense/enrollment"
+      }
+    },
+    {
+      "introduced_at": "78133a13ce946470c47d11e69e0415ca2819eaca",
+      "review_status": "ACCEPTED",
+      "surface": {
+        "classification": "UNKNOWN",
+        "endpoint": "/api/opnsense/remove",
+        "evidence": [
+          "freq/data/web/js/app.js"
+        ],
+        "handler": null,
+        "kind": "ui-api-consumer",
+        "name": "freq/data/web/js/app.js:/api/opnsense/remove"
+      }
+    },
+    {
+      "introduced_at": "78133a13ce946470c47d11e69e0415ca2819eaca",
+      "review_status": "ACCEPTED",
+      "surface": {
+        "classification": "UNKNOWN",
+        "endpoint": "/api/opnsense/retrust",
+        "evidence": [
+          "freq/data/web/js/app.js"
+        ],
+        "handler": null,
+        "kind": "ui-api-consumer",
+        "name": "freq/data/web/js/app.js:/api/opnsense/retrust"
+      }
+    }
+  ],
+  "baseline_source_sha": "b94321f968d1f2601b40404c3aff242e5858ced7",
+  "decision_source": "/opt/freq-devs/shared-memory/sonny_decisions_canonical.md#cut-all-ai-code-out-of-pve-freq",
+  "retirement_review_status": "SONNY_APPROVED",
+  "retirements": [
+    {"kind": "cli-command", "name": "agent", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-command", "name": "learn", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-command", "name": "specialist", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-command", "name": "state gitops", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-option", "name": "agent --agent-name", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-option", "name": "agent --image", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-option", "name": "agent --no-cloud-init", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-option", "name": "specialist --name", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-option", "name": "specialist --role", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-positional", "name": "agent action", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-positional", "name": "agent name", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-positional", "name": "learn query", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-positional", "name": "specialist action", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-positional", "name": "specialist target", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "cli-positional", "name": "state gitops action", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-legacy", "name": "/api/agent/create", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-legacy", "name": "/api/agent/destroy", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-legacy", "name": "/api/learn", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-legacy", "name": "/api/specialists", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-v1", "name": "/api/agents", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-v1", "name": "/api/gitops/apply", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-v1", "name": "/api/gitops/diff", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-v1", "name": "/api/gitops/init", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-v1", "name": "/api/gitops/log", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-v1", "name": "/api/gitops/rollback", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-v1", "name": "/api/gitops/status", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "http-v1", "name": "/api/gitops/sync", "retired_at": "4821a854d65df627ee6433e6759bf0b50d5f169e"},
+    {"kind": "tui-command", "name": "agent", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "tui-command", "name": "learn", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "tui-command", "name": "specialist", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "tui-command", "name": "state gitops", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-api-consumer", "name": "freq/data/web/js/app.js:/api/gitops/apply", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-api-consumer", "name": "freq/data/web/js/app.js:/api/gitops/diff?full=1", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-api-consumer", "name": "freq/data/web/js/app.js:/api/gitops/init", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-api-consumer", "name": "freq/data/web/js/app.js:/api/gitops/log", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-api-consumer", "name": "freq/data/web/js/app.js:/api/gitops/rollback?commit=", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-api-consumer", "name": "freq/data/web/js/app.js:/api/gitops/status", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-api-consumer", "name": "freq/data/web/js/app.js:/api/gitops/sync", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-api-consumer", "name": "freq/data/web/js/app.js:/api/learn", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-navigation", "name": "freq/data/web/js/app.js:gitops", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"},
+    {"kind": "ui-router", "name": "gitops", "retired_at": "f43317d7c5c81e49839185ed6550763ff3597a74"}
+  ],
+  "schema_version": 1
+}

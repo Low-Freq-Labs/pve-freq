@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "base_source_sha": "05eede825ac1934f36a7612af0fbdb268e848cbf",
+  "retirements": [
+    {
+      "audit_id": "I1",
+      "classification": "RETIRED",
+      "approval_required": false,
+      "removed_symbol": "freq.api.v1_stubs.handle_net_switches",
+      "removed_registration": "freq.api.v1_stubs.register:/api/v1/net/switches",
+      "preserved_route": "/api/v1/net/switches",
+      "preserved_handler": "freq.api.net.handle_switches",
+      "public_surface_delta": 0,
+      "tests_removed": 0,
+      "default_python_cases_before": 4908,
+      "default_python_cases_after": 4908,
+      "default_python_case_delta": 0,
+      "baseline_denominator_delta": {
+        "covered_lines": -2,
+        "num_statements": -3,
+        "covered_branches": 0,
+        "num_branches": 0
+      },
+      "post_retirement_denominators": {
+        "num_statements": 52803,
+        "num_branches": 18204
+      },
+      "coverage_credit": "NONE",
+      "ratio_effect": "The baseline statement and combined ratios decrease slightly because the covered function definition and overwritten registration plus the uncovered handler body were removed.",
+      "behavior_proof": "tests/test_serve_helpers.py::TestRouteTable::test_network_switches_route_uses_real_network_handler"
+    }
+  ]
+}
