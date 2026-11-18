@@ -3,7 +3,7 @@
 # PVE FREQ Installer
 #
 # One-line install:
-#  curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq-public/main/install.sh | sudo bash
+#  curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash
 #
 # Manual:
 #  sudo bash install.sh --from-local /path/to/source
@@ -25,7 +25,7 @@ _detect_version() {
 }
 FREQ_VERSION="${FREQ_VERSION:-$(_detect_version)}"
 INSTALL_DIR="${FREQ_DIR:-/opt/pve-freq}"
-REPO_URL="https://github.com/Low-Freq-Labs/pve-freq-public"
+REPO_URL="https://github.com/Low-Freq-Labs/pve-freq"
 MIN_PYTHON_MAJOR=3
 MIN_PYTHON_MINOR=11
 MIN_DISK_MB=50

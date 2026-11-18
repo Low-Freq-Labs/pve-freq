@@ -1,6 +1,6 @@
 # Source snapshot scope
 
-This history-free source snapshot is for `Low-Freq-Labs/pve-freq-public`, based
+This history-free source snapshot is for `Low-Freq-Labs/pve-freq`, based
 on private development main `37d23021b8fb4e9661866e3de245ccff1d66b21b`.
 It shares the project as a work in progress.
 

@@ -1,6 +1,6 @@
 # Security reporting
 
-Use [GitHub private vulnerability reporting](https://github.com/Low-Freq-Labs/pve-freq-public/security/advisories/new)
+Use [GitHub private vulnerability reporting](https://github.com/Low-Freq-Labs/pve-freq/security/advisories/new)
 for this repository. Do not attach credentials, private keys, live configuration
 or unredacted operational captures to a public issue.
 
