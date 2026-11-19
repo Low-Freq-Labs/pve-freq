@@ -2,7 +2,7 @@
 
 365 REST API endpoints served by the host-managed dashboard at `https://localhost:8888`.
 
-All endpoints return JSON. Most require session authentication via `Authorization: Bearer <token>` header or `freq_session` HttpOnly cookie (both set automatically on login).
+Most endpoints return JSON; `/api/events` streams server-sent events and `/api/metrics/prometheus` returns Prometheus text. Most require session authentication via `Authorization: Bearer <token>` header or `freq_session` HttpOnly cookie (both set automatically on login).
 
 ---
 
